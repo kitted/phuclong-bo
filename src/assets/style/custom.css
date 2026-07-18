@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+.text__preview {
+  display: -webkit-box;
+  max-width: 100%;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table__actions button {
+  padding: 6px;
+  border: none;
+  outline: none;
+  background: transparent;
+}
+
+.table__actions button:hover {
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+.file__upload {
+  display: block;
+  padding: 10px;
+  width: 100%;
+  border: 1px dashed darkgray;
+  border-radius: 10px;
+}
+
+.file__upload .file__inner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  color: gray;
+  font-weight: 400;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.file__preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.file__preview.disabled {
+  cursor: auto;
+}
+.css-1h4m66r-MuiPaper-root-MuiCard-root {
+  height: 100% !important;
+}
+.css-b62m3t-container {
+  width: 100% !important;
+}
+.flatpickr-current-month {
+  width: auto !important;
+}
+.css-1i5kgci-multiValue{
+min-width: none !important;  
+}
+
+.customStyle .css-1rhbuit-multiValue {
+  background-color: #3a416f !important;
+  border-radius: 10rem !important;
+  display: -webkit-box !important;
+  display: -webkit-flex !important;
+  display: -ms-flexbox !important;
+  display: flex !important;
+  margin: 0 !important;
+  min-width: max-content !important;
+  box-sizing: border-box !important;
+  margin-right: 0.25rem !important;
+  -webkit-align-items: center !important;
+  -webkit-box-align: center !important;
+  -ms-flex-align: center !important;
+  align-items: center !important;
+  color: #ffffff !important;
+  padding: 0.125rem 0 0.125rem 0.25rem !important;
+}
+.customStyle .css-12jo7m5{
+  border-radius: 2px !important;
+  color: #ffffff !important;
+  font-size: 60% !important;
+  overflow: hidden !important;
+  padding: 3px !important;
+  padding-left: 6px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+}
+
+
+.customStyle .css-1i5kgci-multiValue div:first-of-type {
+  color: #ffffff !important; 
+  padding-top: 0.25rem !important;
+  padding-bottom: 0.125rem !important;
+}
+.customStyle .css-1okebmr-indicatorSeparator{
+display: none !important;
+}
+.customStyle .css-g1d714-ValueContainer{
+  padding: 5px 10px !important;
+  gap:5px !important;
+}
+.customStyle .css-1s2u09g-control{
+border-radius: 10px !important;
+}
+.customStyle .css-14el2xx-placeholder{
+ font-size: 14px;
+}
+.customStyle .css-2613qy-menu {
+  display: block !important;
+}
+/* align-item */
+input[name="thuongDBCaNhan"],
+input[name="thuongDBNhom"],
+input[name="thuongXuatSac"],
+input[name="thuongCoban"],
+input[name="tongThuong"]
+{
+  /* CSS rules */
+  text-align: right;
+}

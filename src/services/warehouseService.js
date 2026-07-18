@@ -1,0 +1,235 @@
+// ============================================================
+// MOCK DATA SERVICE – Phúc Long Warehouse App
+// Thay thế bằng AxiosInstance khi BE sẵn sàng
+// ============================================================
+
+import AxiosInstance from "./api";
+
+const delay = (ms = 300) => new Promise((res) => setTimeout(res, ms));
+
+// ─── MOCK DATA ────────────────────────────────────────────────────────────────
+
+export const MOCK_CATEGORIES = [
+  { id: 1, name: "Trà & Cà phê" },
+  { id: 2, name: "Nước uống đóng chai" },
+  { id: 3, name: "Bánh & Snack" },
+  { id: 4, name: "Nguyên liệu pha chế" },
+];
+
+export const MOCK_UNITS = ["Hộp", "Thùng", "Kg", "Lít", "Chai", "Gói", "Cái"];
+
+export const MOCK_SUPPLIERS = [
+  { id: 1, name: "Phúc Long Trading", phone: "028-1234-5678", address: "Tp.HCM", email: "supply@phuclong.vn" },
+  { id: 2, name: "Đại lý Trà Bắc", phone: "024-9876-5432", address: "Hà Nội", email: "contact@trabac.vn" },
+  { id: 3, name: "NCC Nguyên Liệu Xanh", phone: "0901-234-567", address: "Đà Nẵng", email: "info@nguyenlieuxanh.vn" },
+];
+
+export let MOCK_PRODUCTS = [
+  { id: 1, code: "PLT-001", name: "Trà Oolong Phúc Long", categoryId: 1, unit: "Hộp", costPrice: 85000, sellPrice: 120000, minStock: 20, stock: 145, supplierId: 1 },
+  { id: 2, code: "PLT-002", name: "Trà Xanh Đặc Biệt", categoryId: 1, unit: "Hộp", costPrice: 70000, sellPrice: 98000, minStock: 15, stock: 8, supplierId: 1 },
+  { id: 3, code: "NUO-001", name: "Nước Khoáng Vĩnh Hảo 500ml", categoryId: 2, unit: "Thùng", costPrice: 65000, sellPrice: 85000, minStock: 30, stock: 62, supplierId: 2 },
+  { id: 4, code: "BAK-001", name: "Bánh Quy Bơ Hộp", categoryId: 3, unit: "Hộp", costPrice: 45000, sellPrice: 65000, minStock: 10, stock: 5, supplierId: 2 },
+  { id: 5, code: "NGL-001", name: "Đường Cát Trắng", categoryId: 4, unit: "Kg", costPrice: 22000, sellPrice: 28000, minStock: 50, stock: 120, supplierId: 3 },
+  { id: 6, code: "NGL-002", name: "Sữa Tươi Vinamilk 1L", categoryId: 4, unit: "Thùng", costPrice: 290000, sellPrice: 360000, minStock: 20, stock: 34, supplierId: 3 },
+  { id: 7, code: "PLT-003", name: "Trà Sữa Phúc Long Gói", categoryId: 1, unit: "Gói", costPrice: 35000, sellPrice: 50000, minStock: 25, stock: 3, supplierId: 1 },
+];
+
+export let MOCK_IMPORTS = [
+  { id: 1, code: "NK-2407-001", date: "2024-07-10", supplierId: 1, status: "completed", note: "Nhập hàng tuần", totalAmount: 4250000, items: [{ productId: 1, qty: 30, price: 85000 }, { productId: 7, qty: 50, price: 35000 }] },
+  { id: 2, code: "NK-2407-002", date: "2024-07-12", supplierId: 2, status: "completed", note: "", totalAmount: 2080000, items: [{ productId: 3, qty: 20, price: 65000 }, { productId: 4, qty: 18, price: 45000 }] },
+  { id: 3, code: "NK-2407-003", date: "2024-07-15", supplierId: 3, status: "pending", note: "Chờ xác nhận", totalAmount: 1600000, items: [{ productId: 5, qty: 50, price: 22000 }, { productId: 6, qty: 3, price: 290000 }] },
+];
+
+export let MOCK_EXPORTS = [
+  { id: 1, code: "XK-2407-001", date: "2024-07-11", type: "sale", source: "warehouse", note: "Bán lẻ", totalAmount: 360000, items: [{ productId: 1, qty: 3, price: 120000 }] },
+  { id: 2, code: "XK-2407-002", date: "2024-07-13", type: "load_truck", source: "warehouse", truckId: 1, note: "Xuất lên xe T01", totalAmount: 0, items: [{ productId: 2, qty: 10, price: 0 }, { productId: 3, qty: 5, price: 0 }] },
+];
+
+export let MOCK_TRUCKS = [
+  { id: 1, code: "T01", name: "Xe tải 1", licensePlate: "51C-12345", driver: "Nguyễn Văn A", phone: "0901-111-222", status: "active", inventory: [{ productId: 1, qty: 20 }, { productId: 3, qty: 5 }] },
+  { id: 2, code: "T02", name: "Xe tải 2", licensePlate: "51C-67890", driver: "Trần Thị B", phone: "0902-333-444", status: "active", inventory: [{ productId: 5, qty: 15 }] },
+  { id: 3, code: "T03", name: "Xe dự phòng", licensePlate: "51D-11111", driver: "Lê Văn C", phone: "0903-555-666", status: "inactive", inventory: [] },
+];
+
+export let MOCK_INVOICES = [
+  { id: 1, code: "HD-2407-001", date: "2024-07-14", customer: "Khách lẻ", sourceType: "warehouse", truckId: null, totalAmount: 246000, items: [{ productId: 3, qty: 2, price: 85000 }, { productId: 4, qty: 1, price: 65000 }], note: "" },
+  { id: 2, code: "HD-2407-002", date: "2024-07-14", customer: "Siêu thị Mini", sourceType: "truck", truckId: 1, totalAmount: 600000, items: [{ productId: 1, qty: 5, price: 120000 }], note: "Giao tại cửa hàng" },
+  { id: 3, code: "HD-2407-003", date: "2024-07-15", customer: "Quán Ăn Bình Dân", sourceType: "truck", truckId: 2, totalAmount: 140000, items: [{ productId: 5, qty: 5, price: 28000 }], note: "" },
+];
+
+export let MOCK_TRUCK_RETURNS = [
+  { id: 1, code: "HK-2407-001", date: "2024-07-13", truckId: 1, note: "Hoàn hàng cuối ngày", items: [{ productId: 2, qty: 2 }] },
+];
+
+// ─── PRODUCTS ─────────────────────────────────────────────────────────────────
+
+export const ProductService = {
+  getAll: async () => { await delay(); return { data: MOCK_PRODUCTS }; },
+  getById: async (id) => { await delay(); return { data: MOCK_PRODUCTS.find(p => p.id === id) }; },
+  create: async (payload) => {
+    await delay();
+    const newItem = { ...payload, id: Date.now(), code: `PLT-${Date.now()}`, stock: 0 };
+    MOCK_PRODUCTS.push(newItem);
+    return { data: newItem };
+  },
+  update: async (id, payload) => {
+    await delay();
+    MOCK_PRODUCTS = MOCK_PRODUCTS.map(p => p.id === id ? { ...p, ...payload } : p);
+    return { data: MOCK_PRODUCTS.find(p => p.id === id) };
+  },
+  delete: async (id) => { await delay(); MOCK_PRODUCTS = MOCK_PRODUCTS.filter(p => p.id !== id); return { data: { success: true } }; },
+};
+
+// ─── SUPPLIERS ────────────────────────────────────────────────────────────────
+
+export const SupplierService = {
+  getAll: async () => { await delay(); return { data: MOCK_SUPPLIERS }; },
+};
+
+// ─── IMPORTS ──────────────────────────────────────────────────────────────────
+
+export const ImportService = {
+  getAll: async () => { await delay(); return { data: MOCK_IMPORTS }; },
+  getById: async (id) => { await delay(); return { data: MOCK_IMPORTS.find(i => i.id === id) }; },
+  create: async (payload) => {
+    await delay();
+    const newImport = { ...payload, id: Date.now(), code: `NK-${Date.now()}`, status: "completed" };
+    // Update stock
+    newImport.items.forEach(item => {
+      const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+      if (product) product.stock += item.qty;
+    });
+    MOCK_IMPORTS.push(newImport);
+    return { data: newImport };
+  },
+};
+
+// ─── EXPORTS ──────────────────────────────────────────────────────────────────
+
+export const ExportService = {
+  getAll: async () => { await delay(); return { data: MOCK_EXPORTS }; },
+  getById: async (id) => { await delay(); return { data: MOCK_EXPORTS.find(e => e.id === id) }; },
+  create: async (payload) => {
+    await delay();
+    const newExport = { ...payload, id: Date.now(), code: `XK-${Date.now()}` };
+    // Update stock
+    if (payload.source === "warehouse") {
+      newExport.items.forEach(item => {
+        const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+        if (product) product.stock -= item.qty;
+      });
+    }
+    MOCK_EXPORTS.push(newExport);
+    return { data: newExport };
+  },
+};
+
+// ─── TRUCKS ───────────────────────────────────────────────────────────────────
+
+export const TruckService = {
+  getAll: async () => { await delay(); return { data: MOCK_TRUCKS }; },
+  getById: async (id) => { await delay(); return { data: MOCK_TRUCKS.find(t => t.id === id) }; },
+  create: async (payload) => {
+    await delay();
+    const newTruck = { ...payload, id: Date.now(), inventory: [] };
+    MOCK_TRUCKS.push(newTruck);
+    return { data: newTruck };
+  },
+  update: async (id, payload) => {
+    await delay();
+    MOCK_TRUCKS = MOCK_TRUCKS.map(t => t.id === id ? { ...t, ...payload } : t);
+    return { data: MOCK_TRUCKS.find(t => t.id === id) };
+  },
+  // Xuất hàng từ kho lên xe
+  loadGoods: async (truckId, items) => {
+    await delay();
+    const truck = MOCK_TRUCKS.find(t => t.id === truckId);
+    if (!truck) throw new Error("Xe không tồn tại");
+    items.forEach(item => {
+      const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+      if (product) product.stock -= item.qty;
+      const existing = truck.inventory.find(i => i.productId === item.productId);
+      if (existing) existing.qty += item.qty;
+      else truck.inventory.push({ productId: item.productId, qty: item.qty });
+    });
+    // log export
+    MOCK_EXPORTS.push({ id: Date.now(), code: `XK-${Date.now()}`, date: new Date().toISOString().split("T")[0], type: "load_truck", source: "warehouse", truckId, note: `Xuất lên xe ${truck.code}`, totalAmount: 0, items });
+    return { data: truck };
+  },
+  // Hoàn hàng từ xe về kho
+  returnGoods: async (truckId, items, note = "") => {
+    await delay();
+    const truck = MOCK_TRUCKS.find(t => t.id === truckId);
+    if (!truck) throw new Error("Xe không tồn tại");
+    items.forEach(item => {
+      const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+      if (product) product.stock += item.qty;
+      const existing = truck.inventory.find(i => i.productId === item.productId);
+      if (existing) existing.qty = Math.max(0, existing.qty - item.qty);
+    });
+    const returnRecord = { id: Date.now(), code: `HK-${Date.now()}`, date: new Date().toISOString().split("T")[0], truckId, note, items };
+    MOCK_TRUCK_RETURNS.push(returnRecord);
+    return { data: returnRecord };
+  },
+};
+
+// ─── INVOICES ─────────────────────────────────────────────────────────────────
+
+export const InvoiceService = {
+  getAll: async () => { await delay(); return { data: MOCK_INVOICES }; },
+  getById: async (id) => { await delay(); return { data: MOCK_INVOICES.find(i => i.id === id) }; },
+  create: async (payload) => {
+    await delay();
+    const newInvoice = { ...payload, id: Date.now(), code: `HD-${Date.now()}` };
+    if (payload.sourceType === "warehouse") {
+      payload.items.forEach(item => {
+        const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+        if (product) product.stock -= item.qty;
+      });
+    } else if (payload.sourceType === "truck" && payload.truckId) {
+      const truck = MOCK_TRUCKS.find(t => t.id === payload.truckId);
+      if (truck) {
+        payload.items.forEach(item => {
+          const inv = truck.inventory.find(i => i.productId === item.productId);
+          if (inv) inv.qty = Math.max(0, inv.qty - item.qty);
+        });
+      }
+    }
+    MOCK_INVOICES.push(newInvoice);
+    return { data: newInvoice };
+  },
+};
+
+// ─── DASHBOARD KPIs ───────────────────────────────────────────────────────────
+
+export const DashboardService = {
+  getStats: async () => {
+    await delay();
+    const today = new Date().toISOString().split("T")[0];
+    const todayImports = MOCK_IMPORTS.filter(i => i.date === today);
+    const todayExports = MOCK_EXPORTS.filter(e => e.date === today);
+    const lowStock = MOCK_PRODUCTS.filter(p => p.stock <= p.minStock);
+    const totalStockValue = MOCK_PRODUCTS.reduce((sum, p) => sum + p.stock * p.costPrice, 0);
+    return {
+      data: {
+        totalProducts: MOCK_PRODUCTS.length,
+        totalStockValue,
+        todayImportsCount: todayImports.length,
+        todayExportsCount: todayExports.length,
+        lowStockCount: lowStock.length,
+        activeTrucks: MOCK_TRUCKS.filter(t => t.status === "active").length,
+        recentImports: MOCK_IMPORTS.slice(-5).reverse(),
+        recentInvoices: MOCK_INVOICES.slice(-5).reverse(),
+        weeklyChart: [
+          { day: "T2", imports: 2, exports: 3 },
+          { day: "T3", imports: 1, exports: 2 },
+          { day: "T4", imports: 3, exports: 1 },
+          { day: "T5", imports: 0, exports: 4 },
+          { day: "T6", imports: 2, exports: 2 },
+          { day: "T7", imports: 1, exports: 3 },
+          { day: "CN", imports: 0, exports: 1 },
+        ],
+      }
+    };
+  }
+};

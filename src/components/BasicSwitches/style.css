@@ -1,0 +1,27 @@
+.switches_box {
+  box-sizing: border-box;
+  position: relative;
+  cursor: text;
+  display: -webkit-inline-box;
+  display: -webkit-inline-flex;
+  display: -ms-inline-flexbox;
+  display: inline-flex;
+  -webkit-align-items: center;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  display: grid !important;
+  place-items: start !important;
+  width: 100% !important;
+  height: auto !important;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem !important;
+  font-weight: 400 !important;
+  line-height: 1.4 !important;
+  color: #495057 !important;
+  background-color: #ffffff !important;
+  -webkit-background-clip: padding-box !important;
+  background-clip: padding-box !important;
+  border: 0.0625rem solid #d2d6da;
+  border-radius: 8px;
+}
