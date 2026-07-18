@@ -1,5 +1,5 @@
 {
-  "name": "astraea-admin-panel",
+  "name": "phuclong-bo",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -62,7 +62,7 @@
     "yup": "0.32.11"
   },
   "engines": {
-    "node": "14 || 15 || 16 || 20",
+    "node": "14 || 15 || 16 || 20 || 24",
     "npm": ">=6"
   },
   "scripts": {
