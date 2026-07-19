@@ -14,55 +14,91 @@ import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
-import { MOCK_SUPPLIERS } from "services/warehouseService";
+import { SupplierService } from "services/warehouseService";
 import { toast } from "react-toastify";
 
-let localSuppliers = [...MOCK_SUPPLIERS];
 
 const EMPTY_FORM = { name: "", phone: "", address: "", email: "" };
 
 function NhaCungCap() {
-  const [suppliers, setSuppliers] = useState([]);
-  const [search, setSearch] = useState("");
+const [suppliers, setSuppliers] = useState([]);  const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
+  const [reload, setReload] = useState(0);
 
-  const load = () => setSuppliers([...localSuppliers]);
-  useEffect(() => { load(); }, []);
+ 
+const load = async () => {
+  try {
+    const response = await SupplierService.getAll();
+    
+    // Tùy thuộc vào cấu trúc trả về của API, thường dữ liệu nằm trong response.data
+    // Nếu API trả về mảng trực tiếp, response chính là mảng.
+    const data = response?.data || response; 
+
+    // Đảm bảo dữ liệu set vào state LUÔN LUÔN là một mảng
+    setSuppliers(Array.isArray(data) ? data : []); 
+  } catch (error) {
+    console.error("Lỗi khi tải dữ liệu nhà cung cấp:", error);
+    setSuppliers([]); // Fallback về mảng rỗng nếu lỗi
+  }
+}; 
+  useEffect(() => { load(); }, [reload]);
 
   useEffect(() => {
     if (selected) setForm({ name: selected.name, phone: selected.phone, address: selected.address, email: selected.email });
     else setForm(EMPTY_FORM);
   }, [selected, modalOpen]);
 
-  const handleSave = () => {
+const handleSave = async () => {
     if (!form.name) { toast.error("Vui lòng nhập tên nhà cung cấp"); return; }
+    
     setLoading(true);
-    setTimeout(() => {
+    
+    try {
       if (selected) {
-        localSuppliers = localSuppliers.map(s => s.id === selected.id ? { ...s, ...form } : s);
+        // Thêm await để đợi API update xong
+        await SupplierService.update(selected.id, form);
         toast.success("Cập nhật thành công");
       } else {
-        localSuppliers.push({ ...form, id: Date.now() });
+        // Thêm await để đợi API create xong
+        await SupplierService.create(form);
         toast.success("Thêm nhà cung cấp thành công");
       }
-      load(); setModalOpen(false); setLoading(false);
-    }, 400);
+      
+      setModalOpen(false);
+      setReload(prev => prev + 1); // Trigger useEffect để gọi lại load()
+      
+    } catch (error) {
+      console.error(error);
+      toast.error("Có lỗi xảy ra khi lưu!");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (id) => {
+const handleDelete = async (id) => {
     if (!window.confirm("Xác nhận xóa nhà cung cấp này?")) return;
-    localSuppliers = localSuppliers.filter(s => s.id !== id);
-    load(); toast.success("Đã xóa");
+    
+    try {
+      // Thêm await để đợi API xóa xong
+      await SupplierService.delete(id);
+      toast.success("Đã xóa");
+      
+      setReload(prev => prev + 1); // Trigger useEffect để gọi lại load()
+      
+    } catch (error) {
+      console.error(error);
+      toast.error("Có lỗi xảy ra khi xóa!");
+    }
   };
-
-  const filtered = suppliers.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.phone?.includes(search) ||
-    s.email?.toLowerCase().includes(search.toLowerCase())
-  );
+ 
+const filtered = (Array.isArray(suppliers) ? suppliers : []).filter(s =>
+  s.name?.toLowerCase().includes(search.toLowerCase()) ||
+  s.phone?.includes(search) ||
+  s.email?.toLowerCase().includes(search.toLowerCase())
+);
 
   return (
     <DashboardLayout>

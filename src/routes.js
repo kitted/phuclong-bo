@@ -8,6 +8,7 @@ import Cube from "examples/Icons/Cube";
 
 // Layouts
 import Default from "layouts/dashboards/default";
+import DanhMuc from "layouts/danh-muc"; // <-- Thêm import này
 import HangHoa from "layouts/hang-hoa";
 import NhapKho from "layouts/nhap-kho";
 import HoaDon from "layouts/hoa-don";
@@ -32,6 +33,16 @@ const routes = [
   // ─── Section: Kho hàng ────────────────────────────────────────────────────
   { type: "title", title: "Kho hàng", key: "title-kho", permission: ["admin", "staff"] },
 
+  {
+    type: "collapse",
+    name: "Danh mục", // <-- Route Danh mục mới thêm
+    key: "danh-muc",
+    icon: <Document size="12px" />, 
+    route: "/danh-muc",
+    noCollapse: true,
+    component: <DanhMuc />,
+    permission: ["admin", "staff"], // Hoặc ["admin"] nếu chỉ muốn admin truy cập
+  },
   {
     type: "collapse",
     name: "Hàng hóa",

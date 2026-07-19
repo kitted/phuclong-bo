@@ -8,53 +8,99 @@ import Tooltip from "@mui/material/Tooltip";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
-import InputLabel from "@mui/material/InputLabel";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
-import { ProductService, MOCK_CATEGORIES, MOCK_UNITS, MOCK_SUPPLIERS } from "services/warehouseService";
+
+import { ProductService, CategoryService, SupplierService, MOCK_UNITS } from "services/warehouseService";
 import { toast } from "react-toastify";
 
 const fmtCurrency = (n) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n);
+  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n || 0);
 
 const EMPTY_FORM = {
   name: "", code: "", categoryId: "", unit: "", costPrice: "", sellPrice: "", minStock: "", supplierId: "",
 };
 
-function ProductModal({ open, onClose, product, onSaved }) {
+// Hàm hỗ trợ bóc tách ID chuỗi (tránh lỗi khi backend trả về Object do populate)
+const extractId = (field) => {
+  if (!field) return "";
+  if (typeof field === "object") return field.id || field._id || "";
+  return field;
+};
+
+// ----------------------------------------------------------------------
+// COMPONENT: MODAL THÊM / SỬA SẢN PHẨM
+// ----------------------------------------------------------------------
+function ProductModal({ open, onClose, product, onSaved, categories }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
+  const [suppliers, setSuppliers] = useState([]);
 
+  // Đồng bộ dữ liệu vào form khi mở Modal
   useEffect(() => {
-    if (product) setForm({ ...product });
-    else setForm(EMPTY_FORM);
+    if (product) {
+      setForm({
+        ...product,
+        // Dùng hàm extractId để luôn lấy được chuỗi ID, giúp MUI Select hoạt động đúng
+        categoryId: extractId(product.categoryId || product.category),
+        supplierId: extractId(product.supplierId || product.supplier),
+      });
+    } else {
+      setForm(EMPTY_FORM);
+    }
   }, [product, open]);
+
+  // Load danh sách nhà cung cấp
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        const response = await SupplierService.getAll();
+        const data = response?.data || response;
+        setSuppliers(Array.isArray(data) ? data : []);
+      } catch (error) {
+        setSuppliers([]);
+      }
+    };
+    if (open) fetchSuppliers();
+  }, [open]);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
   const handleSubmit = async () => {
-    if (!form.name || !form.unit) { toast.error("Vui lòng điền đủ thông tin"); return; }
+    if (!form.name || !form.unit) { 
+      toast.error("Vui lòng điền tên và đơn vị tính!"); 
+      return; 
+    }
+    
     try {
       setLoading(true);
       const payload = {
         ...form,
-        categoryId: Number(form.categoryId),
-        costPrice: Number(form.costPrice),
-        sellPrice: Number(form.sellPrice),
-        minStock: Number(form.minStock),
-        supplierId: Number(form.supplierId),
+        categoryId: form.categoryId || null, 
+        supplierId: form.supplierId || null, 
+        costPrice: Number(form.costPrice) || 0,
+        sellPrice: Number(form.sellPrice) || 0,
+        minStock: Number(form.minStock) || 0,
       };
-      if (product?.id) await ProductService.update(product.id, payload);
-      else await ProductService.create(payload);
-      toast.success(product?.id ? "Cập nhật thành công" : "Thêm sản phẩm thành công");
+      
+      const productId = product?.id || product?._id;
+      if (productId) {
+        await ProductService.update(productId, payload);
+        toast.success("Cập nhật thành công");
+      } else {
+        await ProductService.create(payload);
+        toast.success("Thêm sản phẩm thành công");
+      }
+      
       onSaved();
       onClose();
     } catch (e) {
-      toast.error("Có lỗi xảy ra");
+      console.error(e);
+      toast.error("Có lỗi xảy ra khi lưu!");
     } finally {
       setLoading(false);
     }
@@ -71,7 +117,7 @@ function ProductModal({ open, onClose, product, onSaved }) {
         }}
       >
         <SoftTypography variant="h5" fontWeight="bold" mb={3}>
-          {product?.id ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới"}
+          {product?.id || product?._id ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới"}
         </SoftTypography>
         <Grid container spacing={2}>
           <Grid item xs={12}>
@@ -85,7 +131,7 @@ function ProductModal({ open, onClose, product, onSaved }) {
           <Grid item xs={6}>
             <SoftTypography variant="caption" fontWeight="medium">Đơn vị tính *</SoftTypography>
             <FormControl fullWidth size="small">
-              <Select name="unit" value={form.unit} onChange={handleChange} displayEmpty sx={{ height: 40 }}>
+              <Select name="unit" value={form.unit || ""} onChange={handleChange} displayEmpty sx={{ height: 40 }}>
                 <MenuItem value=""><em>Chọn đơn vị</em></MenuItem>
                 {MOCK_UNITS.map(u => <MenuItem key={u} value={u}>{u}</MenuItem>)}
               </Select>
@@ -94,18 +140,18 @@ function ProductModal({ open, onClose, product, onSaved }) {
           <Grid item xs={6}>
             <SoftTypography variant="caption" fontWeight="medium">Danh mục</SoftTypography>
             <FormControl fullWidth size="small">
-              <Select name="categoryId" value={form.categoryId} onChange={handleChange} displayEmpty sx={{ height: 40 }}>
+              <Select name="categoryId" value={form.categoryId || ""} onChange={handleChange} displayEmpty sx={{ height: 40 }}>
                 <MenuItem value=""><em>Chọn danh mục</em></MenuItem>
-                {MOCK_CATEGORIES.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                {categories.map(c => <MenuItem key={c.id || c._id} value={c.id || c._id}>{c.name}</MenuItem>)}
               </Select>
             </FormControl>
           </Grid>
           <Grid item xs={6}>
             <SoftTypography variant="caption" fontWeight="medium">Nhà cung cấp</SoftTypography>
             <FormControl fullWidth size="small">
-              <Select name="supplierId" value={form.supplierId} onChange={handleChange} displayEmpty sx={{ height: 40 }}>
+              <Select name="supplierId" value={form.supplierId || ""} onChange={handleChange} displayEmpty sx={{ height: 40 }}>
                 <MenuItem value=""><em>Chọn NCC</em></MenuItem>
-                {MOCK_SUPPLIERS.map(s => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
+                {suppliers.map(s => <MenuItem key={s.id || s._id} value={s.id || s._id}>{s.name}</MenuItem>)}
               </Select>
             </FormControl>
           </Grid>
@@ -125,7 +171,7 @@ function ProductModal({ open, onClose, product, onSaved }) {
         <SoftBox display="flex" gap={2} mt={4}>
           <SoftButton variant="outlined" color="secondary" onClick={onClose} fullWidth>Hủy</SoftButton>
           <SoftButton variant="gradient" color="info" onClick={handleSubmit} disabled={loading} fullWidth>
-            {loading ? "Đang lưu..." : product?.id ? "Cập nhật" : "Thêm mới"}
+            {loading ? "Đang lưu..." : (product?.id || product?._id) ? "Cập nhật" : "Thêm mới"}
           </SoftButton>
         </SoftBox>
       </SoftBox>
@@ -133,31 +179,56 @@ function ProductModal({ open, onClose, product, onSaved }) {
   );
 }
 
+// ----------------------------------------------------------------------
+// COMPONENT: TRANG CHÍNH (QUẢN LÝ HÀNG HÓA)
+// ----------------------------------------------------------------------
 function HangHoa() {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const load = () => {
+  const load = async () => {
     setLoading(true);
-    ProductService.getAll().then(({ data }) => { setProducts(data); setLoading(false); });
+    try {
+      const [prodRes, catRes] = await Promise.all([
+        ProductService.getAll(),
+        CategoryService.getAll()
+      ]);
+      setProducts(prodRes?.data || prodRes || []);
+      setCategories(catRes?.data || catRes || []);
+    } catch (error) {
+      console.error("Lỗi khi tải dữ liệu:", error);
+      toast.error("Không thể tải dữ liệu");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Xác nhận xóa sản phẩm này?")) return;
-    await ProductService.delete(id);
-    toast.success("Đã xóa sản phẩm");
-    load();
+    try {
+      await ProductService.delete(id);
+      toast.success("Đã xóa sản phẩm");
+      load();
+    } catch (error) {
+      toast.error("Lỗi khi xóa sản phẩm");
+    }
   };
 
+  // Lọc sản phẩm
   const filtered = products.filter((p) => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.code?.toLowerCase().includes(search.toLowerCase());
-    const matchCat = filterCategory ? p.categoryId === Number(filterCategory) : true;
+    const matchSearch = p.name?.toLowerCase().includes(search.toLowerCase()) || 
+                        p.code?.toLowerCase().includes(search.toLowerCase());
+    
+    const pCatId = extractId(p.categoryId || p.category);
+    const matchCat = filterCategory ? pCatId === filterCategory : true; 
+    
     return matchSearch && matchCat;
   });
 
@@ -191,13 +262,13 @@ function HangHoa() {
               </SoftBox>
               <FormControl size="small" sx={{ minWidth: 180 }}>
                 <Select
-                  value={filterCategory}
+                  value={filterCategory || ""}
                   onChange={(e) => setFilterCategory(e.target.value)}
                   displayEmpty
                   sx={{ height: 40 }}
                 >
                   <MenuItem value="">Tất cả danh mục</MenuItem>
-                  {MOCK_CATEGORIES.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                  {categories.map((c) => <MenuItem key={c.id || c._id} value={c.id || c._id}>{c.name}</MenuItem>)}
                 </Select>
               </FormControl>
             </SoftBox>
@@ -214,16 +285,26 @@ function HangHoa() {
                 </thead>
                 <tbody>
                   {loading && (
-                    <tr><td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}>Đang tải...</td></tr>
+                    <tr><td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}>Đang tải dữ liệu...</td></tr>
                   )}
                   {!loading && filtered.length === 0 && (
                     <tr><td colSpan={9} style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}>Không tìm thấy sản phẩm</td></tr>
                   )}
                   {!loading && filtered.map((p, idx) => {
-                    const catName = MOCK_CATEGORIES.find(c => c.id === p.categoryId)?.name || "—";
-                    const isLow = p.stock <= p.minStock;
+                    // Ưu tiên hiển thị tên danh mục trực tiếp từ backend (nếu có populate), ngược lại thì tìm trong state categories
+                    let catName = "—";
+                    if (p.categoryId && p.categoryId.name) {
+                      catName = p.categoryId.name;
+                    } else {
+                      const pCatId = extractId(p.categoryId || p.category);
+                      catName = categories.find(c => (c.id || c._id) === pCatId)?.name || "—";
+                    }
+                    
+                    const pId = p.id || p._id;
+                    const isLow = (p.stock || 0) <= (p.minStock || 0);
+                    
                     return (
-                      <tr key={p.id} style={{ borderBottom: "1px solid #F0F0F0", background: idx % 2 === 0 ? "#fff" : "#FAFAFA" }}>
+                      <tr key={pId} style={{ borderBottom: "1px solid #F0F0F0", background: idx % 2 === 0 ? "#fff" : "#FAFAFA" }}>
                         <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "#3B82F6" }}>{p.code}</td>
                         <td style={{ padding: "10px 12px", fontSize: 13 }}>{p.name}</td>
                         <td style={{ padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>{catName}</td>
@@ -231,7 +312,7 @@ function HangHoa() {
                         <td style={{ padding: "10px 12px", fontSize: 13 }}>{fmtCurrency(p.costPrice)}</td>
                         <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600 }}>{fmtCurrency(p.sellPrice)}</td>
                         <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: isLow ? "#E65100" : "#388E3C" }}>
-                          {p.stock} {p.unit}
+                          {p.stock || 0} {p.unit}
                         </td>
                         <td style={{ padding: "10px 12px" }}>
                           <span style={{
@@ -250,7 +331,7 @@ function HangHoa() {
                               </IconButton>
                             </Tooltip>
                             <Tooltip title="Xóa">
-                              <IconButton size="small" onClick={() => handleDelete(p.id)}>
+                              <IconButton size="small" onClick={() => handleDelete(pId)}>
                                 <Icon sx={{ fontSize: 18, color: "#EF4444" }}>delete</Icon>
                               </IconButton>
                             </Tooltip>
@@ -263,7 +344,6 @@ function HangHoa() {
               </table>
             </SoftBox>
 
-            {/* Footer */}
             <SoftBox mt={2} display="flex" justifyContent="flex-end">
               <SoftTypography variant="caption" color="text">
                 Hiển thị {filtered.length} / {products.length} sản phẩm
@@ -278,6 +358,7 @@ function HangHoa() {
         onClose={() => setModalOpen(false)}
         product={selected}
         onSaved={load}
+        categories={categories} 
       />
     </DashboardLayout>
   );

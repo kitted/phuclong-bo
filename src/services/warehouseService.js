@@ -64,43 +64,74 @@ export let MOCK_TRUCK_RETURNS = [
 // ─── PRODUCTS ─────────────────────────────────────────────────────────────────
 
 export const ProductService = {
-  getAll: async () => { await delay(); return { data: MOCK_PRODUCTS }; },
-  getById: async (id) => { await delay(); return { data: MOCK_PRODUCTS.find(p => p.id === id) }; },
+  getAll: async () => {
+    return await AxiosInstance.get(`/admin/products`);
+  },
+  getById: async (id) => {
+    return await AxiosInstance.get(`/admin/products/${id}`);
+  },
   create: async (payload) => {
-    await delay();
-    const newItem = { ...payload, id: Date.now(), code: `PLT-${Date.now()}`, stock: 0 };
-    MOCK_PRODUCTS.push(newItem);
-    return { data: newItem };
+    return await AxiosInstance.post(`/admin/products`, payload);
   },
   update: async (id, payload) => {
-    await delay();
-    MOCK_PRODUCTS = MOCK_PRODUCTS.map(p => p.id === id ? { ...p, ...payload } : p);
-    return { data: MOCK_PRODUCTS.find(p => p.id === id) };
+    return await AxiosInstance.put(`/admin/products/${id}`, payload);
   },
-  delete: async (id) => { await delay(); MOCK_PRODUCTS = MOCK_PRODUCTS.filter(p => p.id !== id); return { data: { success: true } }; },
+  delete: async (id) => {
+    return await AxiosInstance.delete(`/admin/products/${id}`);
+  },
 };
 
 // ─── SUPPLIERS ────────────────────────────────────────────────────────────────
 
 export const SupplierService = {
-  getAll: async () => { await delay(); return { data: MOCK_SUPPLIERS }; },
+  getAll: async () => {
+    return await AxiosInstance.get(`/admin/suppliers`);
+  },
+  create: async (payload) => {
+    return await AxiosInstance.post(`/admin/suppliers`, payload);
+  },
+  update: async (id, payload) => {
+    return await AxiosInstance.put(`/admin/suppliers/${id}`, payload);
+  },
+  delete: async (id) => {
+    return await AxiosInstance.delete(`/admin/suppliers/${id}`);
+  },
+};
+
+// ─── CATEGORIES ────────────────────────────────────────────────────────────────
+
+export const CategoryService = {
+  getAll: async () => {
+    return await AxiosInstance.get(`/admin/categories`);
+  },
+  create: async (payload) => {
+    return await AxiosInstance.post(`/admin/categories`, payload);
+  },
+  update: async (id, payload) => {
+    return await AxiosInstance.put(`/admin/categories/${id}`, payload);
+  },
+  delete: async (id) => {
+    return await AxiosInstance.delete(`/admin/categories/${id}`);
+  },
 };
 
 // ─── IMPORTS ──────────────────────────────────────────────────────────────────
 
 export const ImportService = {
-  getAll: async () => { await delay(); return { data: MOCK_IMPORTS }; },
-  getById: async (id) => { await delay(); return { data: MOCK_IMPORTS.find(i => i.id === id) }; },
+  getAll: async () => {
+    return await AxiosInstance.get(`/admin/imports`);
+  },
+  getById: async (id) => {
+    return await AxiosInstance.get(`/admin/imports/${id}`);
+  },
   create: async (payload) => {
-    await delay();
-    const newImport = { ...payload, id: Date.now(), code: `NK-${Date.now()}`, status: "completed" };
-    // Update stock
-    newImport.items.forEach(item => {
-      const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
-      if (product) product.stock += item.qty;
-    });
-    MOCK_IMPORTS.push(newImport);
-    return { data: newImport };
+    return await AxiosInstance.post(`/admin/imports`, payload);
+  },  
+  update: async (id, payload) => {
+    return await AxiosInstance.put(`/admin/imports/${id}`, payload);
+  },
+  delete: async (id) => {
+    return await AxiosInstance.delete(`/admin/imports/${id}`);
   },
 };
 
