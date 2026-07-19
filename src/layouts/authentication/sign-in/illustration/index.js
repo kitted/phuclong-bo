@@ -54,41 +54,41 @@ function Illustration() {
       }, 3000);
       return;
     }
-    // try {
-    //   setLoading(true);
-    //   const { data: result } = await AuthService.login(data);
-    //   if (result && Object.keys(result).length > 0) {
-    //     localStorage.setItem("access_token", result.access_token);
-    //     localStorage.setItem("reset_token", result.refresh_token);
+    try {
+      setLoading(true);
+      const { data: result } = await AuthService.login(data);
+      if (result && Object.keys(result).length > 0) {
+        localStorage.setItem("access_token", result.access_token);
+        localStorage.setItem("reset_token", result.refresh_token);
 
-    //     const { data: user } = await AuthService.getMe();
-    //     dispatch(updateUser(user));
+        const { data: user } = await AuthService.getMe();
+        dispatch(updateUser(user));
 
-    //     // Thiết lập interval tự gọi getMe mỗi 10 phút
-    //     setInterval(async () => {
-    //       try {
-    //         const { data: refreshedUser } = await AuthService.getMe();
-    //         dispatch(updateUser(refreshedUser));
-    //       } catch (e) {
-    //         console.error("Failed to refresh user info:", e);
-    //       }
-    //     }, 10 * 60 * 1000); // 10 phút
+        // Thiết lập interval tự gọi getMe mỗi 10 phút
+        setInterval(async () => {
+          try {
+            const { data: refreshedUser } = await AuthService.getMe();
+            dispatch(updateUser(refreshedUser));
+          } catch (e) {
+            console.error("Failed to refresh user info:", e);
+          }
+        }, 10 * 60 * 1000); // 10 phút
 
-    //     if (result.role === "admin" || result.role === "staff") {
-    //       navigate("/dashboards");
-    //     } else {
-    //       navigate("/dashboards");
-    //     }
-    //   }
+        if (result.role === "admin" || result.role === "staff") {
+          navigate("/dashboards");
+        } else {
+          navigate("/dashboards");
+        }
+      }
 
-    //   setLoading(false);
-    // } catch (error) {
-    //   setLoading(false);
-    //   setErr(error?.response?.data?.message);
-    //   setTimeout(() => {
-    //     setErr("");
-    //   }, 3000);
-    // }
+      setLoading(false);
+    } catch (error) {
+      setLoading(false);
+      setErr(error?.response?.data?.message);
+      setTimeout(() => {
+        setErr("");
+      }, 3000);
+    }
     navigate("/dashboards");
   };
 
