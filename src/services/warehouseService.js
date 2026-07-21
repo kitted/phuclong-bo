@@ -460,32 +460,13 @@ export const TruckService = {
 
 export const InvoiceService = {
   getAll: async () => {
-    await delay();
-    return { data: MOCK_INVOICES };
+    return await AxiosInstance.get(`/admin/invoices`);
   },
   getById: async (id) => {
-    await delay();
-    return { data: MOCK_INVOICES.find((i) => i.id === id) };
+    return await AxiosInstance.get(`/admin/invoices/${id}`);
   },
   create: async (payload) => {
-    await delay();
-    const newInvoice = { ...payload, id: Date.now(), code: `HD-${Date.now()}` };
-    if (payload.sourceType === "warehouse") {
-      payload.items.forEach((item) => {
-        const product = MOCK_PRODUCTS.find((p) => p.id === item.productId);
-        if (product) product.stock -= item.qty;
-      });
-    } else if (payload.sourceType === "truck" && payload.truckId) {
-      const truck = MOCK_TRUCKS.find((t) => t.id === payload.truckId);
-      if (truck) {
-        payload.items.forEach((item) => {
-          const inv = truck.inventory.find((i) => i.productId === item.productId);
-          if (inv) inv.qty = Math.max(0, inv.qty - item.qty);
-        });
-      }
-    }
-    MOCK_INVOICES.push(newInvoice);
-    return { data: newInvoice };
+    return await AxiosInstance.post(`/admin/invoices`, payload);
   },
 };
 

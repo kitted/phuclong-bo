@@ -16,6 +16,8 @@ import QuanLyXe from "layouts/quan-ly-xe";
 import TonKho from "layouts/ton-kho";
 import NhaCungCap from "layouts/nha-cung-cap";
 import BaoCao from "layouts/bao-cao";
+import KhachHang from "layouts/khach-hang";
+import KhuyenMai from "layouts/khuyen-mai";
 
 const routes = [
   // ─── Dashboard ────────────────────────────────────────────────────────────
@@ -95,6 +97,29 @@ const routes = [
     route: "/quan-ly-xe",
     noCollapse: true,
     component: <QuanLyXe />,
+    permission: ["admin", "staff"],
+  },
+
+  // ─── Section: CRM & Khuyến mãi ──────────────────────────────────────────
+  { type: "title", title: "CRM & Khuyến mãi", key: "title-crm", permission: ["admin", "staff"] },
+  {
+    type: "collapse",
+    name: "Khách hàng",
+    key: "khach-hang",
+    icon: <CustomerSupport size="12px" />,
+    route: "/khach-hang",
+    noCollapse: true,
+    component: <KhachHang />,
+    permission: ["admin", "staff"],
+  },
+  {
+    type: "collapse",
+    name: "Chương trình khuyến mãi",
+    key: "khuyen-mai",
+    icon: <Document size="12px" />,
+    route: "/khuyen-mai",
+    noCollapse: true,
+    component: <KhuyenMai />,
     permission: ["admin", "staff"],
   },
 

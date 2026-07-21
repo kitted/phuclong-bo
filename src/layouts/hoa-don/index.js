@@ -17,7 +17,9 @@ import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
-import { InvoiceService, MOCK_PRODUCTS, MOCK_TRUCKS } from "services/warehouseService";
+import { InvoiceService, ProductService } from "services/warehouseService";
+import { CustomerService } from "services/crmService";
+import AxiosInstance from "services/api";
 import { toast } from "react-toastify";
 
 const fmtCurrency = (n) =>
@@ -29,10 +31,16 @@ function HoaDon() {
   const [detailModal, setDetailModal] = useState(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [trucks, setTrucks] = useState([]);
+  const [customers, setCustomers] = useState([]);
 
   // Form
   const [form, setForm] = useState({
-    customer: "",
+    code: "",
+    customer: "Khách lẻ",
+    customerId: "",
+    paidAmount: 0,
     sourceType: "warehouse", // "warehouse" | "truck"
     truckId: "",
     note: "",
@@ -40,22 +48,31 @@ function HoaDon() {
   });
   const [items, setItems] = useState([{ productId: "", qty: 1, price: 0 }]);
 
-  const load = () => {
+  const load = async () => {
     setLoading(true);
-    InvoiceService.getAll().then(({ data }) => { setInvoices([...data].reverse()); setLoading(false); });
+    try {
+      const [invoiceResponse, productResponse, truckResponse, customerResponse] = await Promise.all([
+        InvoiceService.getAll(), ProductService.getAll(), AxiosInstance.get("/admin/trucks"), CustomerService.getAll({ page: 1, limit: 100 }),
+      ]);
+      setInvoices([...(invoiceResponse.data || [])].reverse());
+      setProducts(productResponse.data?.data || productResponse.data || []);
+      setTrucks(truckResponse.data?.data || truckResponse.data || []);
+      setCustomers(customerResponse.data?.data || []);
+    } catch (error) { toast.error(error.response?.data?.message || "Không thể tải dữ liệu hóa đơn"); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
 
-  const activeTrucks = MOCK_TRUCKS.filter((t) => t.status === "active");
+  const activeTrucks = trucks.filter((t) => t.status === "active");
 
   const getAvailableProducts = () => {
-    if (form.sourceType === "warehouse") return MOCK_PRODUCTS;
+    if (form.sourceType === "warehouse") return products;
     if (form.sourceType === "truck" && form.truckId) {
-      const truck = MOCK_TRUCKS.find((t) => t.id === Number(form.truckId));
+      const truck = trucks.find((t) => String(t.id || t._id) === String(form.truckId));
       if (!truck) return [];
       return truck.inventory.map((inv) => {
-        const product = MOCK_PRODUCTS.find((p) => p.id === inv.productId);
+        const product = products.find((p) => String(p.id || p._id) === String(inv.productId?.id || inv.productId?._id || inv.productId));
         return product ? { ...product, stock: inv.qty } : null;
       }).filter(Boolean);
     }
@@ -69,7 +86,7 @@ function HoaDon() {
       const updated = [...prev];
       updated[idx] = { ...updated[idx], [field]: value };
       if (field === "productId") {
-        const product = MOCK_PRODUCTS.find((p) => p.id === Number(value));
+        const product = products.find((p) => String(p.id || p._id) === String(value));
         if (product) updated[idx].price = product.sellPrice;
       }
       return updated;
@@ -79,24 +96,28 @@ function HoaDon() {
   const totalAmount = items.reduce((sum, i) => sum + Number(i.qty) * Number(i.price), 0);
 
   const handleSubmit = async () => {
-    if (!form.customer) { toast.error("Vui lòng nhập tên khách hàng"); return; }
+    if (!form.code.trim()) { toast.error("Vui lòng nhập mã hóa đơn"); return; }
+    if (!form.customer) { toast.error("Vui lòng chọn hoặc nhập khách hàng"); return; }
+    if (Number(form.paidAmount) < 0 || Number(form.paidAmount) > totalAmount) { toast.error("Số tiền thanh toán phải từ 0 đến tổng hóa đơn"); return; }
     if (form.sourceType === "truck" && !form.truckId) { toast.error("Vui lòng chọn xe"); return; }
     if (items.some((i) => !i.productId || !i.qty)) { toast.error("Vui lòng điền đầy đủ thông tin"); return; }
     try {
       setSubmitting(true);
       await InvoiceService.create({
         ...form,
-        truckId: form.truckId ? Number(form.truckId) : null,
+        customerId: form.customerId || undefined,
+        paidAmount: Number(form.paidAmount) || 0,
+        truckId: form.truckId || undefined,
         totalAmount,
-        items: items.map((i) => ({ productId: Number(i.productId), qty: Number(i.qty), price: Number(i.price) })),
+        items: items.map((i) => ({ productId: i.productId, qty: Number(i.qty), price: Number(i.price) })),
       });
       toast.success("Tạo hóa đơn thành công!");
       setModalOpen(false);
-      setForm({ customer: "", sourceType: "warehouse", truckId: "", note: "", date: new Date().toISOString().split("T")[0] });
+      setForm({ code: "", customer: "Khách lẻ", customerId: "", paidAmount: 0, sourceType: "warehouse", truckId: "", note: "", date: new Date().toISOString().split("T")[0] });
       setItems([{ productId: "", qty: 1, price: 0 }]);
       load();
     } catch (e) {
-      toast.error("Có lỗi xảy ra");
+      toast.error(e.response?.data?.message || "Có lỗi xảy ra");
     } finally {
       setSubmitting(false);
     }
@@ -127,9 +148,9 @@ function HoaDon() {
                 <tbody>
                   {loading && <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}>Đang tải...</td></tr>}
                   {!loading && invoices.map((inv, idx) => {
-                    const truck = MOCK_TRUCKS.find((t) => t.id === inv.truckId);
+                    const invoiceTruck = typeof inv.truckId === "object" ? inv.truckId : trucks.find((t) => String(t.id || t._id) === String(inv.truckId));
                     return (
-                      <tr key={inv.id} style={{ borderBottom: "1px solid #F0F0F0", background: idx % 2 === 0 ? "#fff" : "#FAFAFA" }}>
+                      <tr key={inv.id || inv._id} style={{ borderBottom: "1px solid #F0F0F0", background: idx % 2 === 0 ? "#fff" : "#FAFAFA" }}>
                         <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "#3B82F6" }}>{inv.code}</td>
                         <td style={{ padding: "10px 12px", fontSize: 13 }}>{inv.date}</td>
                         <td style={{ padding: "10px 12px", fontSize: 13 }}>{inv.customer}</td>
@@ -139,7 +160,7 @@ function HoaDon() {
                             background: inv.sourceType === "truck" ? "#E3F2FD" : "#E8F5E9",
                             color: inv.sourceType === "truck" ? "#1565C0" : "#2E7D32"
                           }}>
-                            {inv.sourceType === "truck" ? `🚛 ${truck?.code || "Xe"}` : "🏭 Kho"}
+                            {inv.sourceType === "truck" ? `🚛 ${invoiceTruck?.code || "Xe"}` : "🏭 Kho"}
                           </span>
                         </td>
                         <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "#388E3C" }}>{fmtCurrency(inv.totalAmount)}</td>
@@ -172,12 +193,20 @@ function HoaDon() {
 
           <Grid container spacing={2} mb={2}>
             <Grid item xs={12} md={6}>
-              <SoftTypography variant="caption" fontWeight="medium">Khách hàng *</SoftTypography>
-              <SoftInput value={form.customer} onChange={(e) => setForm((f) => ({ ...f, customer: e.target.value }))} placeholder="Tên khách hàng..." fullWidth />
+              <SoftTypography variant="caption" fontWeight="medium">Mã hóa đơn *</SoftTypography>
+              <SoftInput value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="VD: HD-2607-001" fullWidth />
             </Grid>
             <Grid item xs={12} md={6}>
               <SoftTypography variant="caption" fontWeight="medium">Ngày</SoftTypography>
               <SoftInput type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} fullWidth />
+            </Grid>
+            <Grid item xs={12} md={8}>
+              <SoftTypography variant="caption" fontWeight="medium">Khách hàng *</SoftTypography>
+              <FormControl fullWidth size="small"><Select displayEmpty value={form.customerId} onChange={(e) => { const customer = customers.find((item) => item.id === e.target.value); setForm((f) => ({ ...f, customerId: e.target.value, customer: customer?.name || "Khách lẻ" })); }}><MenuItem value="">Khách lẻ (không ghi nhận CRM)</MenuItem>{customers.map((customer) => <MenuItem key={customer.id} value={customer.id}>{customer.code} · {customer.name} · {customer.phone}</MenuItem>)}</Select></FormControl>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <SoftTypography variant="caption" fontWeight="medium">Đã thanh toán</SoftTypography>
+              <SoftInput type="number" value={form.paidAmount} onChange={(e) => setForm((f) => ({ ...f, paidAmount: e.target.value }))} fullWidth />
             </Grid>
 
             {/* Source Type Selector */}
@@ -195,7 +224,7 @@ function HoaDon() {
                     <Select value={form.truckId} onChange={(e) => setForm((f) => ({ ...f, truckId: e.target.value }))} displayEmpty sx={{ height: 40 }}>
                       <MenuItem value=""><em>Chọn xe tải</em></MenuItem>
                       {activeTrucks.map((t) => (
-                        <MenuItem key={t.id} value={t.id}>
+                        <MenuItem key={t.id || t._id} value={t.id || t._id}>
                           {t.name} – {t.licensePlate} ({t.driver})
                         </MenuItem>
                       ))}
@@ -220,14 +249,13 @@ function HoaDon() {
           )}
           {items.map((item, idx) => {
             const availableProducts = getAvailableProducts();
-            const selectedProduct = availableProducts.find((p) => p.id === Number(item.productId));
             return (
               <SoftBox key={idx} display="flex" gap={1} alignItems="center" mb={1.5}>
                 <FormControl size="small" sx={{ flex: 2 }}>
                   <Select value={item.productId} onChange={(e) => handleItemChange(idx, "productId", e.target.value)} displayEmpty sx={{ height: 40 }}>
                     <MenuItem value=""><em>Chọn sản phẩm</em></MenuItem>
                     {availableProducts.map((p) => (
-                      <MenuItem key={p.id} value={p.id}>{p.name} (còn: {p.stock} {p.unit})</MenuItem>
+                      <MenuItem key={p.id || p._id} value={p.id || p._id}>{p.name} (còn: {p.stock} {p.unit})</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -272,10 +300,10 @@ function HoaDon() {
           }}>
             <SoftTypography variant="h5" fontWeight="bold" mb={1}>{detailModal.code}</SoftTypography>
             <SoftTypography variant="body2" color="text" mb={2}>
-              {detailModal.date} · {detailModal.customer} · {detailModal.sourceType === "truck" ? `Xe ${MOCK_TRUCKS.find(t => t.id === detailModal.truckId)?.code}` : "Kho hàng"}
+              {detailModal.date} · {detailModal.customer} · {detailModal.sourceType === "truck" ? `Xe ${detailModal.truckId?.code || "—"}` : "Kho hàng"}
             </SoftTypography>
             {detailModal.items.map((item, i) => {
-              const p = MOCK_PRODUCTS.find((pp) => pp.id === item.productId);
+              const p = typeof item.productId === "object" ? item.productId : products.find((product) => String(product.id || product._id) === String(item.productId));
               return (
                 <SoftBox key={i} display="flex" justifyContent="space-between" py={1} sx={{ borderBottom: "1px solid #f0f0f0" }}>
                   <SoftTypography variant="button">{p?.name || "—"}</SoftTypography>
