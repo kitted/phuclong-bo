@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Card from "@mui/material/Card";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
@@ -19,10 +19,15 @@ import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
 import { CustomerService, CUSTOMER_SEGMENTS } from "services/crmService";
 import { toast } from "react-toastify";
+import { downloadBlob, exportExcel, readExcelFile } from "utils/excel";
 
 const money = (value) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
 const EMPTY_FORM = { name: "", phone: "", email: "", address: "", source: "LEAD", segment: "THƯỜNG", zaloConnected: false, debtLimit: 0, note: "" };
 const badge = (label, color, background) => <span style={{ padding: "4px 9px", borderRadius: 12, fontSize: 11, fontWeight: 600, color, background }}>{label}</span>;
+const normalizeCustomerDetail = (response) => {
+  const data = response?.data?.data || response?.data || {};
+  return { ...data, invoices: Array.isArray(data.invoices) ? data.invoices : [], vouchers: Array.isArray(data.vouchers) ? data.vouchers : [], interactions: Array.isArray(data.interactions) ? data.interactions : [] };
+};
 
 function CustomerForm({ open, customer, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -62,14 +67,14 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
   const [interactionOpen, setInteractionOpen] = useState(false);
   const [interaction, setInteraction] = useState({ channel: "Zalo", action: "", result: "" });
   const [savingInteraction, setSavingInteraction] = useState(false);
-  const loadDetail = () => CustomerService.getById(customerId).then((response) => setCustomer(response.data));
+  const loadDetail = () => CustomerService.getById(customerId).then((response) => setCustomer(normalizeCustomerDetail(response)));
   useEffect(() => {
     let active = true;
     if (open && customerId) {
       setCustomer(null);
       setTab(0);
       CustomerService.getById(customerId).then((response) => {
-        if (active) setCustomer(response.data);
+        if (active) setCustomer(normalizeCustomerDetail(response));
       }).catch((error) => active && toast.error(error.response?.data?.message || "Không thể tải hồ sơ khách hàng"));
     }
     return () => { active = false; };
@@ -107,6 +112,7 @@ function DataTable({ headers, rows }) { return <SoftBox sx={{ overflowX: "auto" 
 
 export default function KhachHang() {
   const [customers, setCustomers] = useState([]); const [summary, setSummary] = useState({}); const [search, setSearch] = useState(""); const [debouncedSearch, setDebouncedSearch] = useState(""); const [segment, setSegment] = useState(""); const [source, setSource] = useState(""); const [zalo, setZalo] = useState(""); const [debtWarning, setDebtWarning] = useState(false); const [page, setPage] = useState(1); const [meta, setMeta] = useState({ totalPages: 1, totalItems: 0 }); const [loading, setLoading] = useState(true); const [formOpen, setFormOpen] = useState(false); const [selected, setSelected] = useState(null); const [detailId, setDetailId] = useState(null);
+  const [importing, setImporting] = useState(false); const importInputRef = useRef(null);
   useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(search.trim()), 400); return () => clearTimeout(timer); }, [search]);
   useEffect(() => setPage(1), [debouncedSearch, segment, source, zalo, debtWarning]);
   const load = () => {
@@ -117,9 +123,29 @@ export default function KhachHang() {
       .finally(() => setLoading(false));
   };
   useEffect(load, [page, debouncedSearch, segment, source, zalo, debtWarning]);
+  const handleExport = async () => {
+    try {
+      const response = await CustomerService.exportExcel();
+      downloadBlob(response.data, `customers-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (error) { toast.error(error.response?.data?.message || "Không thể xuất danh sách khách hàng"); }
+  };
+  const handleImport = async (event) => {
+    const file = event.target.files?.[0]; if (!file) return;
+    try {
+      setImporting(true);
+      const rows = await readExcelFile(file);
+      if (rows.length > 10000) throw new Error("Mỗi lần chỉ được import tối đa 10.000 dòng");
+      const response = await CustomerService.importExcel(rows);
+      const result = response.data?.data || {};
+      toast.success(`Import ${result.totalRows || 0} dòng: thêm ${result.created || 0}, cập nhật ${result.updated || 0}, lỗi ${result.failed || 0}`);
+      if (result.errors?.length) exportExcel(result.errors.map((error) => ({ "Dòng": error.row, "Lỗi import": error.message, "Dữ liệu": JSON.stringify(error.data || {}) })), `loi-import-khach-hang-${Date.now()}.xlsx`, "Loi import");
+      load();
+    } catch (error) { toast.error(error.response?.data?.message || error.message || "Không thể import file Excel"); }
+    finally { setImporting(false); event.target.value = ""; }
+  };
   return <DashboardLayout><DashboardNavbar /><SoftBox py={3}>
     <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">{[["Tổng khách hàng", summary.totalCustomers || 0, "groups", "#1565C0"], ["Đã kết bạn Zalo", summary.zaloConnected || 0, "chat", "#2E7D32"], ["Khách lead", summary.leads || 0, "person_add", "#7B1FA2"], ["Cảnh báo công nợ", summary.debtWarnings || 0, "warning", "#C62828"]].map(([label, value, icon, color]) => <Card key={label} sx={{ flex: 1, minWidth: 180 }}><SoftBox p={2.5} display="flex" gap={2} alignItems="center"><Icon sx={{ color }}>{icon}</Icon><SoftBox><SoftTypography variant="caption">{label}</SoftTypography><SoftTypography variant="h5" fontWeight="bold" sx={{ color }}>{value}</SoftTypography></SoftBox></SoftBox></Card>)}</SoftBox>
-    <Card><SoftBox p={3}><SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={3}><SoftBox><SoftTypography variant="h5" fontWeight="bold">Quản lý khách hàng</SoftTypography><SoftTypography variant="caption" color="text">Hồ sơ 360°, công nợ, hóa đơn và tương tác</SoftTypography></SoftBox><SoftButton color="info" variant="gradient" startIcon={<Icon>person_add</Icon>} onClick={() => { setSelected(null); setFormOpen(true); }}>Thêm khách hàng</SoftButton></SoftBox>
+    <Card><SoftBox p={3}><SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}><SoftBox><SoftTypography variant="h5" fontWeight="bold">Quản lý khách hàng</SoftTypography><SoftTypography variant="caption" color="text">Hồ sơ 360°, công nợ, hóa đơn và tương tác</SoftTypography></SoftBox><SoftBox display="flex" gap={1} flexWrap="wrap"><input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} style={{ display: "none" }} /><SoftButton color="info" variant="outlined" startIcon={<Icon>upload_file</Icon>} disabled={importing} onClick={() => importInputRef.current?.click()}>{importing ? "Đang import..." : "Import Excel"}</SoftButton><SoftButton color="success" variant="outlined" startIcon={<Icon>download</Icon>} onClick={handleExport}>Export Excel</SoftButton><SoftButton color="info" variant="gradient" startIcon={<Icon>person_add</Icon>} onClick={() => { setSelected(null); setFormOpen(true); }}>Thêm khách hàng</SoftButton></SoftBox></SoftBox>
       <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap"><SoftBox sx={{ flex: 1, minWidth: 230 }}><SoftInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm mã, tên, số điện thoại..." icon={{ component: "search", direction: "left" }} /></SoftBox><FormControl size="small" sx={{ minWidth: 150 }}><Select displayEmpty value={segment} onChange={(e) => setSegment(e.target.value)}><MenuItem value="">Mọi phân loại</MenuItem>{CUSTOMER_SEGMENTS.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}</Select></FormControl><FormControl size="small" sx={{ minWidth: 150 }}><Select displayEmpty value={source} onChange={(e) => setSource(e.target.value)}><MenuItem value="">Mọi nguồn</MenuItem><MenuItem value="LEAD">Khách lead</MenuItem><MenuItem value="LEGACY">Hệ thống cũ</MenuItem><MenuItem value="NEW">Khách mới</MenuItem></Select></FormControl><FormControl size="small" sx={{ minWidth: 150 }}><Select displayEmpty value={zalo} onChange={(e) => setZalo(e.target.value)}><MenuItem value="">Mọi trạng thái Zalo</MenuItem><MenuItem value="true">Đã kết bạn Zalo</MenuItem><MenuItem value="false">Chưa kết bạn</MenuItem></Select></FormControl><SoftButton size="small" variant={debtWarning ? "gradient" : "outlined"} color="error" onClick={() => setDebtWarning((value) => !value)}>Cảnh báo công nợ</SoftButton></SoftBox>
       <SoftBox sx={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr style={{ background: "#F8F9FA" }}>{["Khách hàng", "Liên hệ", "Nguồn", "Phân loại", "Zalo", "Công nợ / Hạn mức", "Ngày tạo", ""].map((item, index) => <th key={`${item}-${index}`} style={{ padding: 10, textAlign: "left", fontSize: 12, color: "#6B7280" }}>{item}</th>)}</tr></thead><tbody>{loading && <tr><td colSpan={8} style={{ padding: 30, textAlign: "center" }}>Đang tải...</td></tr>}{!loading && customers.length === 0 && <tr><td colSpan={8} style={{ padding: 30, textAlign: "center", color: "#9E9E9E" }}>Không tìm thấy khách hàng</td></tr>}{!loading && customers.map((item) => { const warning = item.debtLimit > 0 && item.debt >= item.debtLimit; return <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}><td style={{ padding: 10 }}><SoftTypography variant="button" fontWeight="bold">{item.name}</SoftTypography><SoftTypography variant="caption" display="block" color="text">{item.code}</SoftTypography></td><td style={{ padding: 10, fontSize: 13 }}>{item.phone}<br /><span style={{ color: "#6B7280" }}>{item.email || "—"}</span></td><td style={{ padding: 10 }}>{badge(item.source === "LEGACY" ? "Hệ thống cũ" : item.source === "LEAD" ? "Lead" : "Khách mới", "#1565C0", "#E3F2FD")}</td><td style={{ padding: 10 }}>{badge(item.segment, "#6A1B9A", "#F3E5F5")}</td><td style={{ padding: 10 }}>{item.zaloConnected ? badge("Đã kết bạn", "#2E7D32", "#E8F5E9") : badge("Chưa kết bạn", "#6B7280", "#F3F4F6")}</td><td style={{ padding: 10, fontSize: 13, color: warning ? "#C62828" : "inherit", fontWeight: warning ? 700 : 400 }}>{money(item.debt)}<br /><span style={{ fontSize: 11, color: "#6B7280" }}>/ {money(item.debtLimit)}</span>{warning && <Icon sx={{ fontSize: 16, ml: 0.5 }}>warning</Icon>}</td><td style={{ padding: 10, fontSize: 13 }}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN") : "—"}</td><td style={{ padding: 10 }}><Tooltip title="Xem hồ sơ 360°"><IconButton onClick={() => setDetailId(item.id)}><Icon color="info">visibility</Icon></IconButton></Tooltip><Tooltip title="Chỉnh sửa"><IconButton onClick={() => { setSelected(item); setFormOpen(true); }}><Icon color="info">edit</Icon></IconButton></Tooltip></td></tr>; })}</tbody></table></SoftBox>
       {meta.totalPages > 1 && <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center"><SoftTypography variant="caption" color="text">Tổng {meta.totalItems} khách hàng</SoftTypography><Pagination page={page} count={meta.totalPages} color="primary" onChange={(_, value) => setPage(value)} /></SoftBox>}

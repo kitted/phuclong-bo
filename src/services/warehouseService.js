@@ -302,6 +302,12 @@ export const ProductService = {
   delete: async (id) => {
     return await AxiosInstance.delete(`/admin/products/${id}`);
   },
+  importExcel: async (rows) => {
+    return await AxiosInstance.post(`/admin/products/import`, { rows });
+  },
+  exportExcel: async () => {
+    return await AxiosInstance.get(`/admin/products/export`, { responseType: "blob" });
+  },
 };
 
 // ─── SUPPLIERS ────────────────────────────────────────────────────────────────

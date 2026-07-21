@@ -11,6 +11,8 @@ export const CustomerService = {
   update: (id, payload) => AxiosInstance.patch(`/admin/customers/${id}`, payload),
   addInteraction: (id, payload) =>
     AxiosInstance.post(`/admin/customers/${id}/interactions`, payload),
+  importExcel: (rows) => AxiosInstance.post("/admin/customers/import", { rows }),
+  exportExcel: () => AxiosInstance.get("/admin/customers/export", { responseType: "blob" }),
 };
 
 export const PromotionService = {

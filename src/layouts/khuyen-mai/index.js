@@ -25,7 +25,8 @@ const statusStyle = { ACTIVE: ["Đang chạy", "#2E7D32", "#E8F5E9"], SCHEDULED:
 const pill = (status) => { const value = statusStyle[status] || statusStyle.DRAFT; return <span style={{ padding: "4px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600, color: value[1], background: value[2] }}>{value[0]}</span>; };
 
 function MultiSelectField({ value, onChange, options, placeholder }) {
-  return <FormControl fullWidth size="small"><Select multiple value={value} onChange={(event) => onChange(event.target.value)} displayEmpty renderValue={(selected) => selected.length ? selected.map((id) => options.find((item) => String(item.id || item._id) === String(id))?.name).filter(Boolean).join(", ") : placeholder}>{options.map((item) => <MenuItem key={item.id || item._id} value={item.id || item._id}>{item.name}</MenuItem>)}</Select></FormControl>;
+  const safeValue = Array.isArray(value) ? value : []; const safeOptions = Array.isArray(options) ? options : [];
+  return <FormControl fullWidth size="small"><Select multiple value={safeValue} onChange={(event) => onChange(event.target.value)} displayEmpty renderValue={(selected) => Array.isArray(selected) && selected.length ? selected.map((id) => safeOptions.find((item) => String(item.id || item._id) === String(id))?.name).filter(Boolean).join(", ") : placeholder}>{safeOptions.map((item) => <MenuItem key={item.id || item._id} value={item.id || item._id}>{item.name}</MenuItem>)}</Select></FormControl>;
 }
 
 function PromotionForm({ open, promotion, onClose, onSaved }) {
@@ -35,9 +36,9 @@ function PromotionForm({ open, promotion, onClose, onSaved }) {
   const save = async (status = form.status) => {
     if (!form.code.trim() || !form.name.trim()) return toast.error("Vui lòng nhập mã và tên chương trình");
     if (!form.startAt || !form.endAt || new Date(form.endAt) <= new Date(form.startAt)) return toast.error("Thời gian kết thúc phải sau thời gian bắt đầu");
-    if (form.scope === "CATEGORY" && !form.categoryIds.length) return toast.error("Vui lòng chọn ít nhất một danh mục");
+    if (form.scope === "CATEGORY" && !(form.categoryIds || []).length) return toast.error("Vui lòng chọn ít nhất một danh mục");
     if (form.scope === "PRODUCT_TYPE" && !form.productType) return toast.error("Vui lòng chọn loại sản phẩm");
-    if (form.scope === "PRODUCTS" && !form.productIds.length) return toast.error("Vui lòng chọn ít nhất một sản phẩm");
+    if (form.scope === "PRODUCTS" && !(form.productIds || []).length) return toast.error("Vui lòng chọn ít nhất một sản phẩm");
     if (form.type === "VOUCHER" && (!form.voucherPrefix.trim() || Number(form.quantity) <= 0)) return toast.error("Voucher cần tiền tố mã và số lượng phát hành");
     try { setSaving(true); const payload = { ...form, status, discountValue: Number(form.discountValue), maxDiscount: Number(form.maxDiscount), quantity: Number(form.quantity), usageLimitPerCustomer: Number(form.usageLimitPerCustomer), minOrderValue: Number(form.minOrderValue), startAt: new Date(form.startAt).toISOString(), endAt: new Date(form.endAt).toISOString() }; if (promotion?.id) await PromotionService.update(promotion.id, payload); else await PromotionService.create(payload); toast.success(status === "DRAFT" ? "Đã lưu bản nháp" : "Đã lưu chương trình khuyến mãi"); onSaved(); onClose(); } catch (error) { toast.error(error.response?.data?.message || "Không thể lưu chương trình"); } finally { setSaving(false); }
   };
@@ -85,7 +86,7 @@ export default function KhuyenMai() {
   useEffect(() => setPage(1), [debouncedSearch, status, type]);
   const load = () => { setLoading(true); Promise.all([PromotionService.getAll({ search: debouncedSearch || undefined, status: status || undefined, type: type || undefined, page, limit: 20 }), PromotionService.getSummary()]).then(([listResponse, summaryResponse]) => { setPromotions(listResponse.data?.data || []); setMeta(listResponse.data?.meta || { totalPages: 1, totalItems: 0 }); setSummary(summaryResponse.data?.data || {}); }).catch((error) => { setPromotions([]); toast.error(error.response?.data?.message || "Không thể tải chương trình khuyến mãi"); }).finally(() => setLoading(false)); };
   useEffect(load, [page, debouncedSearch, status, type]);
-  const scopeLabel = (item) => item.scope === "ALL" ? "Tất cả sản phẩm" : item.scope === "CATEGORY" ? `${item.categoryIds.length} danh mục` : item.scope === "PRODUCT_TYPE" ? `Loại: ${item.productType}` : `${item.productIds.length} sản phẩm`;
+  const scopeLabel = (item) => item.scope === "ALL" ? "Tất cả sản phẩm" : item.scope === "CATEGORY" ? `${(item.categoryIds || []).length} danh mục` : item.scope === "PRODUCT_TYPE" ? `Loại: ${item.productType || "—"}` : `${(item.productIds || []).length} sản phẩm`;
   const editPromotion = async (item) => { try { const response = await PromotionService.getById(item.id); setSelected(response.data?.data); setOpen(true); } catch (error) { toast.error(error.response?.data?.message || "Không thể tải chi tiết chương trình"); } };
   const nextStatus = (item) => { const now = new Date(); const started = now >= new Date(item.startAt); const notEnded = now <= new Date(item.endAt); if (item.status === "ACTIVE") return "PAUSED"; if (item.status === "PAUSED") return started && notEnded ? "ACTIVE" : null; if (item.status === "DRAFT") return started && notEnded ? "ACTIVE" : !started ? "SCHEDULED" : null; if (item.status === "SCHEDULED") return started && notEnded ? "ACTIVE" : "PAUSED"; return null; };
   const changeStatus = async (item) => { const next = nextStatus(item); if (!next) return; try { await PromotionService.changeStatus(item.id, next); toast.success(next === "ACTIVE" ? "Đã kích hoạt chương trình" : next === "SCHEDULED" ? "Đã lên lịch chương trình" : "Đã tạm dừng chương trình"); load(); } catch (error) { toast.error(error.response?.data?.message || "Không thể đổi trạng thái chương trình"); } };

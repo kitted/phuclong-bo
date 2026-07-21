@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
@@ -17,6 +17,7 @@ import SoftButton from "components/SoftButton";
 
 import { ProductService, CategoryService, SupplierService, MOCK_UNITS } from "services/warehouseService";
 import { toast } from "react-toastify";
+import { downloadBlob, exportExcel, readExcelFile } from "utils/excel";
 
 const fmtCurrency = (n) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n || 0);
@@ -190,6 +191,8 @@ function HangHoa() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef(null);
 
   const load = async () => {
     setLoading(true);
@@ -209,6 +212,28 @@ function HangHoa() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleExport = async () => {
+    try {
+      const response = await ProductService.exportExcel();
+      downloadBlob(response.data, `products-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (error) { toast.error(error.response?.data?.message || "Không thể xuất danh sách sản phẩm"); }
+  };
+
+  const handleImport = async (event) => {
+    const file = event.target.files?.[0]; if (!file) return;
+    try {
+      setImporting(true);
+      const rows = await readExcelFile(file);
+      if (rows.length > 10000) throw new Error("Mỗi lần chỉ được import tối đa 10.000 dòng");
+      const response = await ProductService.importExcel(rows);
+      const result = response.data?.data || {};
+      toast.success(`Import ${result.totalRows || 0} dòng: thêm ${result.created || 0}, cập nhật ${result.updated || 0}, tạo ${result.categoriesCreated || 0} danh mục, lỗi ${result.failed || 0}`);
+      if (result.errors?.length) exportExcel(result.errors.map((error) => ({ "Dòng": error.row, "Lỗi import": error.message, "Dữ liệu": JSON.stringify(error.data || {}) })), `loi-import-san-pham-${Date.now()}.xlsx`, "Loi import");
+      load();
+    } catch (error) { toast.error(error.response?.data?.message || error.message || "Không thể import file Excel"); }
+    finally { setImporting(false); event.target.value = ""; }
+  };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Xác nhận xóa sản phẩm này?")) return;
@@ -241,13 +266,7 @@ function HangHoa() {
             {/* Header */}
             <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
               <SoftTypography variant="h5" fontWeight="bold">Quản lý Hàng hóa</SoftTypography>
-              <SoftButton
-                variant="gradient" color="info"
-                startIcon={<Icon>add</Icon>}
-                onClick={() => { setSelected(null); setModalOpen(true); }}
-              >
-                Thêm sản phẩm
-              </SoftButton>
+              <SoftBox display="flex" gap={1} flexWrap="wrap"><input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} style={{ display: "none" }} /><SoftButton variant="outlined" color="info" startIcon={<Icon>upload_file</Icon>} disabled={importing} onClick={() => importInputRef.current?.click()}>{importing ? "Đang import..." : "Import Excel"}</SoftButton><SoftButton variant="outlined" color="success" startIcon={<Icon>download</Icon>} onClick={handleExport}>Export Excel</SoftButton><SoftButton variant="gradient" color="info" startIcon={<Icon>add</Icon>} onClick={() => { setSelected(null); setModalOpen(true); }}>Thêm sản phẩm</SoftButton></SoftBox>
             </SoftBox>
 
             {/* Filters */}
