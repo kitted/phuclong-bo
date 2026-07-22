@@ -128,6 +128,13 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
   const [preview, setPreview] = useState(null);
   const [previewError, setPreviewError] = useState("");
   const [appliedVoucher, setAppliedVoucher] = useState("");
+  const [giftPromotions, setGiftPromotions] = useState({
+    eligiblePromotions: [],
+    nearlyEligiblePromotions: [],
+  });
+  const [selectedGiftPromotion, setSelectedGiftPromotion] = useState(null);
+  const [giftSelections, setGiftSelections] = useState({});
+  const [appliedGiftPromotion, setAppliedGiftPromotion] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   useEffect(() => {
@@ -150,6 +157,10 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
     setItems([{ product: null, qty: 1, search: "" }]);
     setPreview(null);
     setAppliedVoucher("");
+    setGiftPromotions({ eligiblePromotions: [], nearlyEligiblePromotions: [] });
+    setSelectedGiftPromotion(null);
+    setGiftSelections({});
+    setAppliedGiftPromotion(null);
   }, [open]);
   useEffect(() => {
     if (!open) return undefined;
@@ -262,6 +273,34 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
     const timer = setTimeout(() => loadPreview(appliedVoucher, true), 350);
     return () => clearTimeout(timer);
   }, [open, loadPreview, previewItems.length, appliedVoucher]);
+  useEffect(() => {
+    if (!open || !previewItems.length) {
+      setGiftPromotions({ eligiblePromotions: [], nearlyEligiblePromotions: [] });
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      InvoiceService.previewGiftPromotions({
+        customerId: getId(customer) || undefined,
+        items: previewItems,
+      })
+        .then((response) => {
+          const data = unwrap(response) || {};
+          setGiftPromotions({
+            eligiblePromotions: data.eligiblePromotions || [],
+            nearlyEligiblePromotions: data.nearlyEligiblePromotions || [],
+          });
+          setSelectedGiftPromotion(
+            (current) =>
+              (data.eligiblePromotions || []).find(
+                (item) => item.promotionId === current?.promotionId
+              ) || null
+          );
+        })
+        .catch(() => setGiftPromotions({ eligiblePromotions: [], nearlyEligiblePromotions: [] }));
+      setAppliedGiftPromotion(null);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [open, customer, previewItems]);
   const applyVoucher = async () => {
     const code = form.voucherCode.trim().toUpperCase();
     if (!code) {
@@ -272,6 +311,47 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
     if (result) {
       setAppliedVoucher(code);
       toast.success(`Đã áp dụng ${result.promotion?.name || code}`);
+    }
+  };
+  const chooseGiftPromotion = (promotion) => {
+    setSelectedGiftPromotion(promotion);
+    setGiftSelections({});
+    setAppliedGiftPromotion(null);
+  };
+  const changeGiftQty = (groupCode, productId, qty) =>
+    setGiftSelections((current) => ({
+      ...current,
+      [groupCode]: { ...(current[groupCode] || {}), [productId]: Number(qty) || 0 },
+    }));
+  const giftSelectionPayload = () =>
+    selectedGiftPromotion
+      ? selectedGiftPromotion.giftGroups
+          .filter((group) => group.selectionMode !== "ALL")
+          .map((group) => ({
+            groupCode: group.groupCode,
+            items: Object.entries(giftSelections[group.groupCode] || {})
+              .filter(([, qty]) => qty > 0)
+              .map(([productId, qty]) => ({ productId, qty })),
+          }))
+      : [];
+  const applyGift = async () => {
+    if (!selectedGiftPromotion) return;
+    try {
+      const selections = giftSelectionPayload();
+      const response = await InvoiceService.applyGiftPromotion({
+        customerId: getId(customer) || undefined,
+        promotionId: selectedGiftPromotion.promotionId,
+        items: previewItems,
+        giftSelections: selections,
+      });
+      setAppliedGiftPromotion({
+        ...(unwrap(response)?.promotionApplication || {}),
+        promotionId: selectedGiftPromotion.promotionId,
+        giftSelections: selections,
+      });
+      toast.success("Đã xác nhận quà tặng");
+    } catch (error) {
+      toast.error(errorMessage(error, "Lựa chọn quà không hợp lệ"));
     }
   };
   const paidAmount = Number(form.cashAmount || 0) + Number(form.bankAmount || 0);
@@ -289,6 +369,8 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
       return toast.error("Vui lòng chọn đầy đủ sản phẩm và số lượng");
     if (form.sourceType === "truck" && !truck) return toast.error("Vui lòng chọn xe xuất hàng");
     if (!preview) return toast.error(previewError || "Chưa tính được giá trị hóa đơn");
+    if (selectedGiftPromotion && !appliedGiftPromotion)
+      return toast.error("Vui lòng xác nhận lựa chọn quà tặng");
     if (paidAmount > grandTotal)
       return toast.error("Tổng tiền thanh toán không được vượt giá trị hóa đơn");
     if (!customer && paidAmount !== grandTotal) return toast.error("Khách lẻ phải thanh toán đủ");
@@ -315,6 +397,14 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
         truckId: getId(truck) || undefined,
         salespersonId: getId(salesperson),
         voucherCode: appliedVoucher || undefined,
+        promotionApplications: appliedGiftPromotion
+          ? [
+              {
+                promotionId: appliedGiftPromotion.promotionId,
+                giftSelections: appliedGiftPromotion.giftSelections,
+              },
+            ]
+          : undefined,
         payments,
         items: previewItems,
         note: form.note.trim() || undefined,
@@ -511,6 +601,122 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
         >
           Thêm sản phẩm
         </SoftButton>
+        {(giftPromotions.eligiblePromotions.length > 0 ||
+          giftPromotions.nearlyEligiblePromotions.length > 0) && (
+          <SoftBox mt={2} p={2} border="1px solid #D1E7DD" borderRadius={2}>
+            <SoftTypography variant="button" fontWeight="bold" color="success">
+              Chương trình quà tặng
+            </SoftTypography>
+            {giftPromotions.eligiblePromotions.map((promotion) => (
+              <SoftBox
+                key={promotion.promotionId}
+                mt={1}
+                p={1.5}
+                bgcolor={
+                  selectedGiftPromotion?.promotionId === promotion.promotionId
+                    ? "#E8F5E9"
+                    : "#F8F9FA"
+                }
+                borderRadius={2}
+              >
+                <FormControlLabel
+                  control={
+                    <Radio
+                      checked={selectedGiftPromotion?.promotionId === promotion.promotionId}
+                      onChange={() => chooseGiftPromotion(promotion)}
+                    />
+                  }
+                  label={`${promotion.code} · ${promotion.name} · áp dụng ${promotion.applicationCount} lần`}
+                />
+                {selectedGiftPromotion?.promotionId === promotion.promotionId && (
+                  <SoftBox pl={1}>
+                    {promotion.giftGroups.map((group) => (
+                      <SoftBox key={group.groupCode} mt={1}>
+                        <SoftTypography variant="caption" fontWeight="bold" display="block">
+                          {group.name || group.groupCode} — cần {group.requiredQuantity} sản phẩm{" "}
+                          {group.selectionMode === "ALL" ? "(tự động nhận tất cả)" : ""}
+                        </SoftTypography>
+                        {group.selectionMode !== "ALL" && (
+                          <Grid container spacing={1} mt={0}>
+                            {group.options.map((option) => (
+                              <Grid item xs={12} sm={6} key={option.productId}>
+                                <SoftBox
+                                  display="flex"
+                                  alignItems="center"
+                                  justifyContent="space-between"
+                                  gap={1}
+                                  p={1}
+                                  border="1px solid #E5E7EB"
+                                  borderRadius={1}
+                                >
+                                  <SoftTypography variant="caption">
+                                    {option.code} · {option.name}
+                                    <br />
+                                    Còn {option.availableStock}
+                                  </SoftTypography>
+                                  <SoftBox sx={{ width: 80 }}>
+                                    <SoftInput
+                                      type="number"
+                                      inputProps={{ min: 0, max: group.requiredQuantity }}
+                                      value={
+                                        giftSelections[group.groupCode]?.[option.productId] || 0
+                                      }
+                                      onChange={(event) =>
+                                        changeGiftQty(
+                                          group.groupCode,
+                                          option.productId,
+                                          event.target.value
+                                        )
+                                      }
+                                    />
+                                  </SoftBox>
+                                </SoftBox>
+                              </Grid>
+                            ))}
+                          </Grid>
+                        )}
+                      </SoftBox>
+                    ))}
+                    <SoftButton
+                      variant="outlined"
+                      color="success"
+                      size="small"
+                      sx={{ mt: 2 }}
+                      onClick={applyGift}
+                    >
+                      {appliedGiftPromotion ? "Đã xác nhận quà" : "Xác nhận quà tặng"}
+                    </SoftButton>
+                    {appliedGiftPromotion && (
+                      <SoftBox mt={1}>
+                        {(appliedGiftPromotion.gifts || []).map((gift, index) => (
+                          <SoftTypography
+                            key={`${gift.productId}-${index}`}
+                            variant="caption"
+                            display="block"
+                            color="success"
+                          >
+                            🎁 {gift.productName}: {gift.qty} {gift.unit}
+                          </SoftTypography>
+                        ))}
+                      </SoftBox>
+                    )}
+                  </SoftBox>
+                )}
+              </SoftBox>
+            ))}
+            {giftPromotions.nearlyEligiblePromotions.slice(0, 3).map((promotion) => (
+              <SoftTypography
+                key={promotion.promotionId}
+                variant="caption"
+                color="warning"
+                display="block"
+                mt={1}
+              >
+                Gợi ý: {promotion.name} — {promotion.message}
+              </SoftTypography>
+            ))}
+          </SoftBox>
+        )}
         <Grid container spacing={2} mt={1}>
           <Field label="Mã khuyến mãi" md={8}>
             <SoftBox display="flex" gap={1}>

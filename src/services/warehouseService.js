@@ -427,6 +427,9 @@ export const InvoiceService = {
     return await AxiosInstance.post(`/admin/invoices`, payload);
   },
   preview: (payload) => AxiosInstance.post(`/admin/invoices/preview`, payload),
+  previewGiftPromotions: (payload) =>
+    AxiosInstance.post(`/admin/invoices/promotions/preview`, payload),
+  applyGiftPromotion: (payload) => AxiosInstance.post(`/admin/invoices/promotions/apply`, payload),
 };
 
 // ─── DASHBOARD KPIs ───────────────────────────────────────────────────────────
