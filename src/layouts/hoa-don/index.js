@@ -7,10 +7,14 @@ import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import Modal from "@mui/material/Modal";
+import MenuItem from "@mui/material/MenuItem";
+import Pagination from "@mui/material/Pagination";
 import Radio from "@mui/material/Radio";
 import RadioGroup from "@mui/material/RadioGroup";
 import Tooltip from "@mui/material/Tooltip";
 import TextField from "@mui/material/TextField";
+import FormControl from "@mui/material/FormControl";
+import Select from "@mui/material/Select";
 import { useSelector } from "react-redux";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
@@ -136,9 +140,11 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
   const [giftSelections, setGiftSelections] = useState({});
   const [appliedGiftPromotion, setAppliedGiftPromotion] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [createdInvoice, setCreatedInvoice] = useState(null);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   useEffect(() => {
     if (!open) return;
+    setCreatedInvoice(null);
     setForm({
       code: "",
       date: today(),
@@ -414,14 +420,84 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
           : undefined,
       });
       toast.success(`Đã tạo hóa đơn ${unwrap(response)?.code || ""}`);
+      setCreatedInvoice(unwrap(response));
       onCreated();
-      onClose();
     } catch (error) {
       toast.error(errorMessage(error, "Không thể tạo hóa đơn"));
     } finally {
       setSubmitting(false);
     }
   };
+  if (createdInvoice)
+    return (
+      <Modal open={open} onClose={onClose}>
+        <SoftBox
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: { xs: "92%", md: 560 },
+            bgcolor: "background.paper",
+            borderRadius: 3,
+            boxShadow: 24,
+            p: 4,
+          }}
+        >
+          <SoftBox textAlign="center">
+            <Icon sx={{ fontSize: 54, color: "#2E7D32" }}>check_circle</Icon>
+            <SoftTypography variant="h5" fontWeight="bold">
+              Tạo hóa đơn thành công
+            </SoftTypography>
+            <SoftTypography variant="h6" color="info" mt={1}>
+              {createdInvoice.code}
+            </SoftTypography>
+          </SoftBox>
+          {(createdInvoice.promotionActivations || []).length > 0 && (
+            <SoftBox mt={3} p={2} bgcolor="#F3E5F5" borderRadius={2}>
+              <SoftTypography variant="button" fontWeight="bold" color="secondary">
+                Mã kích hoạt của khách hàng
+              </SoftTypography>
+              {createdInvoice.promotionActivations.map((activation) => (
+                <SoftBox
+                  key={activation.id || activation.code}
+                  mt={1.5}
+                  p={1.5}
+                  bgcolor="#fff"
+                  borderRadius={1}
+                >
+                  <SoftTypography variant="caption" color="text" display="block">
+                    {activation.promotionName || activation.promotionCode}
+                  </SoftTypography>
+                  <SoftBox display="flex" justifyContent="space-between" alignItems="center">
+                    <SoftTypography variant="h6" fontWeight="bold" sx={{ letterSpacing: 1 }}>
+                      {activation.code}
+                    </SoftTypography>
+                    <SoftButton
+                      size="small"
+                      variant="text"
+                      color="info"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(activation.code);
+                        toast.success("Đã sao chép mã kích hoạt");
+                      }}
+                    >
+                      Sao chép
+                    </SoftButton>
+                  </SoftBox>
+                </SoftBox>
+              ))}
+            </SoftBox>
+          )}
+          <SoftTypography variant="caption" color="text" display="block" mt={2}>
+            Mã kích hoạt đã được lưu vào hồ sơ khách hàng và hóa đơn.
+          </SoftTypography>
+          <SoftButton variant="gradient" color="success" fullWidth sx={{ mt: 3 }} onClick={onClose}>
+            Hoàn tất
+          </SoftButton>
+        </SoftBox>
+      </Modal>
+    );
   return (
     <Modal open={open} onClose={onClose}>
       <SoftBox
@@ -934,6 +1010,24 @@ function InvoiceDetail({ id, onClose }) {
               <SoftTypography variant="button" color={invoice.debtAmount > 0 ? "error" : "success"}>
                 Công nợ: {money(invoice.debtAmount)}
               </SoftTypography>
+              {(invoice.promotionApplications || [])
+                .filter((application) => application.activationCode)
+                .map((application) => (
+                  <SoftBox
+                    key={application.activationCode}
+                    mt={1}
+                    p={1.5}
+                    bgcolor="#F3E5F5"
+                    borderRadius={1}
+                  >
+                    <SoftTypography variant="caption" color="text">
+                      Mã kích hoạt {application.promotionName || application.promotionCode}
+                    </SoftTypography>
+                    <SoftTypography variant="button" fontWeight="bold" display="block">
+                      {application.activationCode}
+                    </SoftTypography>
+                  </SoftBox>
+                ))}
             </SoftBox>
             <SoftButton
               variant="outlined"
@@ -953,21 +1047,86 @@ function InvoiceDetail({ id, onClose }) {
 
 export default function HoaDon() {
   const [invoices, setInvoices] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [summary, setSummary] = useState({});
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [salespersonId, setSalespersonId] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
-  const load = () => {
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
+    EmployeeService.getAll({ role: "staff", status: "ACTIVE", page: 1, limit: 100 })
+      .then((response) => setEmployees(listOf(response)))
+      .catch(() => setEmployees([]));
+  }, []);
+  useEffect(() => setPage(1), [debouncedSearch, salespersonId, paymentStatus, month]);
+  const filters = useMemo(() => {
+    if (!month)
+      return {
+        salespersonId: salespersonId || undefined,
+        paymentStatus: paymentStatus || undefined,
+        search: debouncedSearch || undefined,
+      };
+    const [year, monthNumber] = month.split("-").map(Number);
+    const lastDay = new Date(year, monthNumber, 0).getDate();
+    return {
+      salespersonId: salespersonId || undefined,
+      paymentStatus: paymentStatus || undefined,
+      search: debouncedSearch || undefined,
+      from: `${month}-01`,
+      to: `${month}-${String(lastDay).padStart(2, "0")}`,
+    };
+  }, [month, salespersonId, paymentStatus, debouncedSearch]);
+  const load = useCallback(() => {
     setLoading(true);
-    InvoiceService.getAll()
-      .then((response) => setInvoices(listOf(response)))
+    Promise.all([
+      InvoiceService.getAll({ ...filters, page, limit: 20 }),
+      InvoiceService.getSummary(filters),
+    ])
+      .then(([listResponse, summaryResponse]) => {
+        setInvoices(listOf(listResponse));
+        setMeta(listResponse.data?.meta || { totalPages: 1, total: 0 });
+        setSummary(summaryResponse.data?.data || {});
+      })
       .catch((error) => toast.error(errorMessage(error, "Không thể tải hóa đơn")))
       .finally(() => setLoading(false));
-  };
-  useEffect(load, []);
+  }, [filters, page]);
+  useEffect(load, [load]);
   return (
     <DashboardLayout>
       <DashboardNavbar />
       <SoftBox py={3}>
+        <Grid container spacing={2} mb={3}>
+          {[
+            ["Số hóa đơn", summary.invoiceCount || 0],
+            ["Doanh thu", money(summary.netRevenue)],
+            ["Đã thu", money(summary.paidAmount)],
+            ["Công nợ", money(summary.debtAmount)],
+            ["Mã kích hoạt", summary.promotionActivationCount || 0],
+          ].map(([label, value]) => (
+            <Grid item xs={12} sm={6} lg key={label}>
+              <Card>
+                <SoftBox p={2}>
+                  <SoftTypography variant="caption" color="text">
+                    {label}
+                  </SoftTypography>
+                  <SoftTypography variant="h6" fontWeight="bold">
+                    {value}
+                  </SoftTypography>
+                </SoftBox>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
         <Card>
           <SoftBox p={3}>
             <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -987,6 +1146,48 @@ export default function HoaDon() {
               >
                 Tạo hóa đơn
               </SoftButton>
+            </SoftBox>
+            <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
+              <SoftBox sx={{ flex: 1, minWidth: 230 }}>
+                <SoftInput
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Tìm hóa đơn, khách hàng, mã kích hoạt..."
+                  icon={{ component: "search", direction: "left" }}
+                />
+              </SoftBox>
+              <SoftInput
+                type="month"
+                value={month}
+                onChange={(event) => setMonth(event.target.value)}
+                sx={{ width: 170 }}
+              />
+              <FormControl size="small" sx={{ minWidth: 210 }}>
+                <Select
+                  displayEmpty
+                  value={salespersonId}
+                  onChange={(event) => setSalespersonId(event.target.value)}
+                >
+                  <MenuItem value="">Tất cả nhân viên</MenuItem>
+                  {employees.map((employee) => (
+                    <MenuItem key={getId(employee)} value={getId(employee)}>
+                      {employee.employeeCode} - {employee.fullName || employee.username}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 190 }}>
+                <Select
+                  displayEmpty
+                  value={paymentStatus}
+                  onChange={(event) => setPaymentStatus(event.target.value)}
+                >
+                  <MenuItem value="">Mọi trạng thái thanh toán</MenuItem>
+                  <MenuItem value="PAID">Đã thanh toán</MenuItem>
+                  <MenuItem value="PARTIAL">Thanh toán một phần</MenuItem>
+                  <MenuItem value="UNPAID">Chưa thanh toán</MenuItem>
+                </Select>
+              </FormControl>
             </SoftBox>
             <SoftBox sx={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1114,6 +1315,17 @@ export default function HoaDon() {
                 </tbody>
               </table>
             </SoftBox>
+            {meta.totalPages > 1 && (
+              <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center">
+                <SoftTypography variant="caption">Tổng {meta.total || 0} hóa đơn</SoftTypography>
+                <Pagination
+                  page={page}
+                  count={meta.totalPages}
+                  color="primary"
+                  onChange={(_, value) => setPage(value)}
+                />
+              </SoftBox>
+            )}
           </SoftBox>
         </Card>
       </SoftBox>

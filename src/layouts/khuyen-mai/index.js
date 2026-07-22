@@ -25,6 +25,7 @@ const money = (value) =>
 const EMPTY = {
   code: "",
   name: "",
+  activationPrefix: "",
   type: "VOUCHER",
   discountType: "PERCENT",
   discountValue: 10,
@@ -81,6 +82,14 @@ const EMPTY_CONTRIBUTION = {
   maxQuantity: "",
 };
 const isGiftPromotion = (type) => ["BUY_X_GET_Y", "BUNDLE_GIFT"].includes(type);
+const normalizeActivationPrefix = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/gi, "d")
+    .replace(/[^a-z0-9]/gi, "")
+    .toUpperCase()
+    .slice(0, 7);
 const plain = (value) =>
   String(value || "")
     .normalize("NFD")
@@ -820,7 +829,12 @@ function PromotionForm({ open, promotion, onClose, onSaved }) {
     if (!quickDescription.trim()) return toast.error("Vui lòng nhập mô tả chương trình");
     try {
       const setup = quickPromotionSetup(quickDescription, products, categories);
-      setForm((current) => ({ ...current, ...setup }));
+      setForm((current) => ({
+        ...current,
+        ...setup,
+        activationPrefix:
+          current.activationPrefix || normalizeActivationPrefix(setup.name || setup.code),
+      }));
       toast.success("Đã tự thiết lập điều kiện và quà tặng");
     } catch (error) {
       toast.error(error.message || "Không thể phân tích mô tả");
@@ -843,6 +857,8 @@ function PromotionForm({ open, promotion, onClose, onSaved }) {
       return toast.error("Chương trình tặng quà cần ít nhất một nhóm điều kiện");
     if (isGiftPromotion(form.type) && !(form.giftGroups || []).length)
       return toast.error("Chương trình tặng quà cần ít nhất một nhóm quà");
+    if (isGiftPromotion(form.type) && !form.activationPrefix.trim())
+      return toast.error("Vui lòng nhập tiền tố mã kích hoạt");
     try {
       setSaving(true);
       const payload = {
@@ -955,7 +971,18 @@ function PromotionForm({ open, promotion, onClose, onSaved }) {
             />
           </FormGridField>
           <FormGridField label="Tên chương trình *" md={8}>
-            <SoftInput value={form.name} onChange={(e) => set("name", e.target.value)} fullWidth />
+            <SoftInput
+              value={form.name}
+              onChange={(e) => {
+                const name = e.target.value;
+                setForm((current) => ({
+                  ...current,
+                  name,
+                  activationPrefix: current.activationPrefix || normalizeActivationPrefix(name),
+                }));
+              }}
+              fullWidth
+            />
           </FormGridField>
           <FormGridField label="Cơ chế áp dụng">
             <FormControl fullWidth size="small">
@@ -967,6 +994,19 @@ function PromotionForm({ open, promotion, onClose, onSaved }) {
               </Select>
             </FormControl>
           </FormGridField>
+          {isGiftPromotion(form.type) && (
+            <FormGridField label="Tiền tố mã kích hoạt *">
+              <SoftInput
+                value={form.activationPrefix || ""}
+                onChange={(e) => set("activationPrefix", normalizeActivationPrefix(e.target.value))}
+                placeholder="VD: QUATGIO"
+                fullWidth
+              />
+              <SoftTypography variant="caption" color="text">
+                Tối đa 7 ký tự. Mã dự kiến: {form.activationPrefix || "PREFIX"}2207399001
+              </SoftTypography>
+            </FormGridField>
+          )}
           <FormGridField label="Loại ưu đãi">
             <FormControl fullWidth size="small">
               <Select

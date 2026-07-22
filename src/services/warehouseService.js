@@ -417,9 +417,10 @@ export const TruckService = {
 // ─── INVOICES ─────────────────────────────────────────────────────────────────
 
 export const InvoiceService = {
-  getAll: async () => {
-    return await AxiosInstance.get(`/admin/invoices`);
+  getAll: async (params = {}) => {
+    return await AxiosInstance.get(`/admin/invoices`, { params });
   },
+  getSummary: (params = {}) => AxiosInstance.get(`/admin/invoices/summary`, { params }),
   getById: async (id) => {
     return await AxiosInstance.get(`/admin/invoices/${id}`);
   },

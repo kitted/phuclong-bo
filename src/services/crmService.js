@@ -13,10 +13,22 @@ export const CustomerService = {
     AxiosInstance.post(`/admin/customers/${id}/interactions`, payload),
   importExcel: (rows) => AxiosInstance.post("/admin/customers/import", { rows }),
   exportExcel: () => AxiosInstance.get("/admin/customers/export", { responseType: "blob" }),
+  getPromotionActivations: (id, params = {}) =>
+    AxiosInstance.get(`/admin/customers/${id}/promotion-activations`, { params }),
+};
+
+export const PromotionActivationService = {
+  getAll: (params = {}) => AxiosInstance.get("/admin/promotion-activations", { params }),
+  getById: (id) => AxiosInstance.get(`/admin/promotion-activations/${id}`),
+  getByCode: (code) =>
+    AxiosInstance.get(`/admin/promotion-activations/code/${encodeURIComponent(code)}`),
+  changeStatus: (id, status, reason) =>
+    AxiosInstance.patch(`/admin/promotion-activations/${id}/status`, { status, reason }),
 };
 
 export const PromotionService = {
   getAll: (params = {}) => AxiosInstance.get("/admin/promotions", { params }),
+  getOptions: (params = {}) => AxiosInstance.get("/admin/promotions/options", { params }),
   getSummary: () => AxiosInstance.get("/admin/promotions/summary"),
   getById: (id) => AxiosInstance.get(`/admin/promotions/${id}`),
   create: (payload) => AxiosInstance.post("/admin/promotions", payload),
