@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Autocomplete from "@mui/material/Autocomplete";
 import Card from "@mui/material/Card";
 import FormControl from "@mui/material/FormControl";
 import Grid from "@mui/material/Grid";
@@ -11,6 +12,7 @@ import Select from "@mui/material/Select";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Tooltip from "@mui/material/Tooltip";
+import TextField from "@mui/material/TextField";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
@@ -381,6 +383,275 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
   );
 }
 
+function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
+  const [destination, setDestination] = useState(null);
+  const [destinationSearch, setDestinationSearch] = useState("");
+  const [destinations, setDestinations] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [items, setItems] = useState([{ productId: "", qty: 1 }]);
+  const [transferDate, setTransferDate] = useState(todayValue());
+  const [note, setNote] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!open || !sourceTruck) return;
+    setDestination(null);
+    setDestinationSearch("");
+    setItems([{ productId: "", qty: 1 }]);
+    setTransferDate(todayValue());
+    setNote("");
+    setPreview(null);
+    TruckService.getById(getId(sourceTruck))
+      .then((response) =>
+        setProducts(
+          (unwrap(response)?.inventory || []).map((item) => ({
+            ...productOf(item),
+            id: productIdOf(item),
+            stock: quantityOf(item),
+          }))
+        )
+      )
+      .catch((error) => toast.error(apiError(error, "Không thể tải tồn xe nguồn")));
+  }, [open, sourceTruck]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const timer = setTimeout(() => {
+      setLoading(true);
+      TruckService.getAll({
+        search: destinationSearch.trim() || undefined,
+        status: "active",
+        page: 1,
+        limit: 30,
+        sortBy: "code",
+        sortOrder: "asc",
+      })
+        .then((response) =>
+          setDestinations(
+            listOf(response).filter(
+              (truck) =>
+                getId(truck) !== getId(sourceTruck) && (getId(truck.driver) || truck.driverId)
+            )
+          )
+        )
+        .catch(() => setDestinations([]))
+        .finally(() => setLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [open, destinationSearch, sourceTruck]);
+  const change = (index, key, value) => {
+    setPreview(null);
+    setItems((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item))
+    );
+  };
+  const payload = () => ({
+    destinationTruckId: getId(destination),
+    date: `${transferDate}T00:00:00+07:00`,
+    items: items.map((item) => ({ productId: item.productId, qty: Number(item.qty) })),
+    note: note.trim() || undefined,
+  });
+  const validate = () => {
+    if (!destination) return "Vui lòng chọn xe nhận";
+    if (!transferDate) return "Vui lòng chọn ngày chứng từ";
+    if (
+      items.some(
+        (item) => !item.productId || !Number.isInteger(Number(item.qty)) || Number(item.qty) <= 0
+      )
+    )
+      return "Sản phẩm và số lượng nguyên dương là bắt buộc";
+    return "";
+  };
+  const runPreview = async () => {
+    const error = validate();
+    if (error) return toast.error(error);
+    try {
+      setSaving(true);
+      const response = await TruckService.previewTruckTransfer(getId(sourceTruck), payload());
+      setPreview(unwrap(response));
+    } catch (requestError) {
+      toast.error(apiError(requestError, "Không thể kiểm tra phiếu chuyển"));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const submit = async () => {
+    const error = validate();
+    if (error) return toast.error(error);
+    if (!preview) return runPreview();
+    try {
+      setSaving(true);
+      await TruckService.transferToTruck(getId(sourceTruck), payload());
+      toast.success("Đã chuyển hàng giữa hai xe");
+      onSaved();
+      onClose();
+    } catch (requestError) {
+      toast.error(apiError(requestError, "Không thể chuyển hàng giữa hai xe"));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Modal open={open} onClose={onClose}>
+      <SoftBox
+        sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "95%", md: 760 },
+          maxHeight: "92vh",
+          overflowY: "auto",
+          bgcolor: "background.paper",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: 4,
+        }}
+      >
+        <SoftTypography variant="h5" fontWeight="bold">
+          Chuyển hàng sang xe khác
+        </SoftTypography>
+        <SoftTypography variant="caption" color="text">
+          Xe nguồn: {sourceTruck?.code} - {sourceTruck?.name} · {sourceTruck?.licensePlate}
+        </SoftTypography>
+        <Grid container spacing={2} mt={1}>
+          <Field label="Xe nhận *" md={8}>
+            <Autocomplete
+              options={destinations}
+              value={destination}
+              loading={loading}
+              onChange={(_, value) => {
+                setDestination(value);
+                setPreview(null);
+              }}
+              onInputChange={(_, value, reason) =>
+                reason === "input" && setDestinationSearch(value)
+              }
+              getOptionLabel={(truck) =>
+                `${truck.code || ""} - ${truck.name || ""} · ${truck.licensePlate || ""}`
+              }
+              isOptionEqualToValue={(option, value) => getId(option) === getId(value)}
+              noOptionsText="Không có xe active, có tài xế phù hợp"
+              renderInput={(params) => (
+                <TextField {...params} size="small" placeholder="Tìm mã, tên hoặc biển số xe" />
+              )}
+            />
+          </Field>
+          <Field label="Ngày chứng từ *" md={4}>
+            <SoftInput
+              type="date"
+              value={transferDate}
+              onChange={(event) => {
+                setTransferDate(event.target.value);
+                setPreview(null);
+              }}
+            />
+          </Field>
+        </Grid>
+        <SoftBox mt={2}>
+          {items.map((item, index) => (
+            <SoftBox key={index} display="flex" gap={1} mb={1.5}>
+              <FormControl size="small" sx={{ flex: 2 }}>
+                <Select
+                  displayEmpty
+                  value={item.productId}
+                  onChange={(event) => change(index, "productId", event.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>Chọn hàng trên xe nguồn</em>
+                  </MenuItem>
+                  {products.map((product) => (
+                    <MenuItem key={getId(product)} value={getId(product)}>
+                      {product.code} - {product.name} (còn {product.stock} {product.unit || ""})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <SoftBox sx={{ flex: 1 }}>
+                <SoftInput
+                  type="number"
+                  value={item.qty}
+                  inputProps={{ min: 1, step: 1 }}
+                  onChange={(event) => change(index, "qty", event.target.value)}
+                />
+              </SoftBox>
+              <IconButton
+                disabled={items.length === 1}
+                onClick={() => {
+                  setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+                  setPreview(null);
+                }}
+              >
+                <Icon color="error">remove_circle</Icon>
+              </IconButton>
+            </SoftBox>
+          ))}
+        </SoftBox>
+        <SoftButton
+          variant="text"
+          color="info"
+          startIcon={<Icon>add</Icon>}
+          onClick={() => {
+            setItems((current) => [...current, { productId: "", qty: 1 }]);
+            setPreview(null);
+          }}
+        >
+          Thêm dòng
+        </SoftButton>
+        <SoftTypography variant="caption" display="block" mt={1}>
+          Ghi chú
+        </SoftTypography>
+        <SoftInput
+          value={note}
+          onChange={(event) => {
+            setNote(event.target.value);
+            setPreview(null);
+          }}
+        />
+        {preview && (
+          <SoftBox mt={2} p={2} bgcolor="#F3F8FF" borderRadius={2}>
+            <SoftTypography variant="button" fontWeight="bold" display="block">
+              Xác nhận: {preview.sourceTruck?.name || sourceTruck?.name} →{" "}
+              {preview.destinationTruck?.name || destination?.name}
+            </SoftTypography>
+            <SoftTypography variant="caption">
+              Tổng {preview.totalQuantity || 0} sản phẩm · {money(preview.totalValue)}
+            </SoftTypography>
+            {(preview.warnings || []).map((warning, index) => (
+              <SoftTypography key={index} variant="caption" color="warning" display="block">
+                ⚠ {typeof warning === "string" ? warning : warning.message}
+              </SoftTypography>
+            ))}
+          </SoftBox>
+        )}
+        <SoftBox display="flex" gap={2} mt={3}>
+          <SoftButton fullWidth variant="outlined" color="secondary" onClick={onClose}>
+            Hủy
+          </SoftButton>
+          <SoftButton
+            fullWidth
+            variant={preview ? "outlined" : "gradient"}
+            color="info"
+            disabled={saving || !products.length}
+            onClick={runPreview}
+          >
+            Kiểm tra
+          </SoftButton>
+          <SoftButton
+            fullWidth
+            variant="gradient"
+            color="success"
+            disabled={saving || !preview}
+            onClick={submit}
+          >
+            {saving ? "Đang xử lý..." : "Xác nhận chuyển"}
+          </SoftButton>
+        </SoftBox>
+      </SoftBox>
+    </Modal>
+  );
+}
+
 export default function QuanLyXe() {
   const [tab, setTab] = useState(0);
   const [trucks, setTrucks] = useState([]);
@@ -405,6 +676,7 @@ export default function QuanLyXe() {
   const [editTruck, setEditTruck] = useState(null);
   const [truckModal, setTruckModal] = useState(false);
   const [transferModal, setTransferModal] = useState(null);
+  const [truckToTruck, setTruckToTruck] = useState(null);
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 400);
     return () => clearTimeout(timer);
@@ -545,6 +817,16 @@ export default function QuanLyXe() {
       setExporting(false);
     }
   };
+  const reverseTransfer = async (transfer) => {
+    if (!window.confirm(`Tạo phiếu chuyển ngược cho ${transfer.code}?`)) return;
+    try {
+      await TruckService.reverseTransfer(getId(transfer));
+      toast.success("Đã tạo phiếu chuyển ngược");
+      refresh();
+    } catch (error) {
+      toast.error(apiError(error, "Không thể đảo phiếu chuyển xe"));
+    }
+  };
   const kpis = [
     ["Tổng xe", summary.totalTrucks, "local_shipping", "#1565C0"],
     ["Đang hoạt động", summary.activeTrucks, "check_circle", "#2E7D32"],
@@ -657,6 +939,7 @@ export default function QuanLyXe() {
                       <MenuItem value="">Mọi loại phiếu</MenuItem>
                       <MenuItem value="LOAD">Phiếu xuất lên xe</MenuItem>
                       <MenuItem value="RETURN">Phiếu hoàn về kho</MenuItem>
+                      <MenuItem value="TRUCK_TO_TRUCK">Chuyển xe → xe</MenuItem>
                     </Select>
                   </FormControl>
                   <FormControl size="small" sx={{ minWidth: 190 }}>
@@ -714,6 +997,12 @@ export default function QuanLyXe() {
                   ["Số xe", transferSummary.truckCount, "local_shipping", "#E65100"],
                   ["Số sản phẩm", transferSummary.productCount, "category", "#7B1FA2"],
                   ["Tổng giá trị", money(transferSummary.totalValue), "payments", "#C62828"],
+                  [
+                    "Phiếu chuyển xe",
+                    transferSummary.truckToTruckTransfers,
+                    "swap_horiz",
+                    "#00897B",
+                  ],
                 ].map(([label, value, icon, color]) => (
                   <Grid item xs={12} sm={6} lg key={label}>
                     <SoftBox
@@ -748,6 +1037,7 @@ export default function QuanLyXe() {
                 trucks={trucks}
                 onLoad={(truck) => setTransferModal({ truck, type: "LOAD" })}
                 onReturn={(truck) => setTransferModal({ truck, type: "RETURN" })}
+                onTransfer={(truck) => setTruckToTruck(truck)}
                 onEdit={(truck) => {
                   setEditTruck(truck);
                   setTruckModal(true);
@@ -756,7 +1046,9 @@ export default function QuanLyXe() {
                 onDelete={remove}
               />
             )}
-            {!loading && tab === 1 && <TransferTable transfers={transfers} />}
+            {!loading && tab === 1 && (
+              <TransferTable transfers={transfers} onReverse={reverseTransfer} />
+            )}
             {tab === 0 && meta.totalPages > 1 && (
               <Pager meta={meta} page={page} setPage={setPage} label="xe" />
             )}
@@ -786,11 +1078,19 @@ export default function QuanLyXe() {
           onSaved={refresh}
         />
       )}
+      {truckToTruck && (
+        <TruckToTruckModal
+          open
+          sourceTruck={truckToTruck}
+          onClose={() => setTruckToTruck(null)}
+          onSaved={refresh}
+        />
+      )}
     </DashboardLayout>
   );
 }
 
-function TruckGrid({ trucks, onLoad, onReturn, onEdit, onStatus, onDelete }) {
+function TruckGrid({ trucks, onLoad, onReturn, onTransfer, onEdit, onStatus, onDelete }) {
   if (!trucks.length)
     return (
       <SoftTypography variant="button" color="text" display="block" textAlign="center" py={5}>
@@ -899,6 +1199,15 @@ function TruckGrid({ trucks, onLoad, onReturn, onEdit, onStatus, onDelete }) {
                   >
                     Hoàn hàng
                   </SoftButton>
+                  <SoftButton
+                    size="small"
+                    variant="outlined"
+                    color="success"
+                    disabled={!quantity}
+                    onClick={() => onTransfer(truck)}
+                  >
+                    Chuyển xe
+                  </SoftButton>
                   <Tooltip title="Sửa">
                     <IconButton size="small" onClick={() => onEdit(truck)}>
                       <Icon color="info">edit</Icon>
@@ -926,7 +1235,7 @@ function TruckGrid({ trucks, onLoad, onReturn, onEdit, onStatus, onDelete }) {
   );
 }
 
-function TransferTable({ transfers }) {
+function TransferTable({ transfers, onReverse }) {
   return (
     <SoftBox sx={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -943,6 +1252,7 @@ function TransferTable({ transfers }) {
               "Giá trị",
               "Người tạo",
               "Ghi chú",
+              "",
             ].map((heading) => (
               <th
                 key={heading}
@@ -962,7 +1272,7 @@ function TransferTable({ transfers }) {
         <tbody>
           {!transfers.length && (
             <tr>
-              <td colSpan={10} style={{ textAlign: "center", padding: 40, color: "#9E9E9E" }}>
+              <td colSpan={11} style={{ textAlign: "center", padding: 40, color: "#9E9E9E" }}>
                 Chưa có phiếu điều chuyển
               </td>
             </tr>
@@ -979,25 +1289,58 @@ function TransferTable({ transfers }) {
                     fontSize: 11,
                     padding: "4px 8px",
                     borderRadius: 10,
-                    color: transfer.type === "LOAD" ? "#1565C0" : "#E65100",
-                    background: transfer.type === "LOAD" ? "#E3F2FD" : "#FFF3E0",
+                    color:
+                      transfer.type === "LOAD"
+                        ? "#1565C0"
+                        : transfer.type === "RETURN"
+                        ? "#E65100"
+                        : "#2E7D32",
+                    background:
+                      transfer.type === "LOAD"
+                        ? "#E3F2FD"
+                        : transfer.type === "RETURN"
+                        ? "#FFF3E0"
+                        : "#E8F5E9",
                   }}
                 >
-                  {transfer.type === "LOAD" ? "Xuất lên xe" : "Hoàn về kho"}
+                  {transfer.type === "LOAD"
+                    ? "Xuất lên xe"
+                    : transfer.type === "RETURN"
+                    ? "Hoàn về kho"
+                    : "Chuyển xe → xe"}
                 </span>
               </td>
               <td style={{ padding: 12, fontSize: 13 }}>
-                {transfer.truckName || transfer.truck?.name || "—"}
+                {transfer.type === "TRUCK_TO_TRUCK"
+                  ? `${transfer.sourceTruckName || transfer.sourceTruck?.name || "—"} → ${
+                      transfer.destinationTruckName || transfer.destinationTruck?.name || "—"
+                    }`
+                  : transfer.truckName || transfer.truck?.name || "—"}
                 <br />
                 <span style={{ color: "#6B7280" }}>
-                  {transfer.truck?.code || transfer.truckCode || ""}
-                  {transfer.truck?.licensePlate || transfer.truckLicensePlate
+                  {transfer.type === "TRUCK_TO_TRUCK"
+                    ? `${transfer.sourceTruckCode || transfer.sourceTruck?.code || ""} · ${
+                        transfer.sourceTruckLicensePlate || transfer.sourceTruck?.licensePlate || ""
+                      } → ${
+                        transfer.destinationTruckCode || transfer.destinationTruck?.code || ""
+                      } · ${
+                        transfer.destinationTruckLicensePlate ||
+                        transfer.destinationTruck?.licensePlate ||
+                        ""
+                      }`
+                    : transfer.truck?.code || transfer.truckCode || ""}
+                  {transfer.type !== "TRUCK_TO_TRUCK" &&
+                  (transfer.truck?.licensePlate || transfer.truckLicensePlate)
                     ? ` · ${transfer.truck?.licensePlate || transfer.truckLicensePlate}`
                     : ""}
                 </span>
               </td>
               <td style={{ padding: 12, fontSize: 13 }}>
-                {transfer.driver?.fullName || transfer.driverName || "—"}
+                {transfer.type === "TRUCK_TO_TRUCK"
+                  ? `${transfer.sourceDriverName || transfer.sourceDriver?.fullName || "—"} → ${
+                      transfer.destinationDriverName || transfer.destinationDriver?.fullName || "—"
+                    }`
+                  : transfer.driver?.fullName || transfer.driverName || "—"}
                 <br />
                 <span style={{ color: "#6B7280" }}>
                   {transfer.driver?.employeeCode || transfer.driverCode || ""}
@@ -1051,6 +1394,15 @@ function TransferTable({ transfers }) {
                 {transfer.createdBy?.fullName || transfer.createdBy?.username || "—"}
               </td>
               <td style={{ padding: 12, fontSize: 13 }}>{transfer.note || "—"}</td>
+              <td style={{ padding: 12 }}>
+                {transfer.type === "TRUCK_TO_TRUCK" && !transfer.reversalOf && (
+                  <Tooltip title="Tạo phiếu chuyển ngược">
+                    <IconButton size="small" onClick={() => onReverse(transfer)}>
+                      <Icon color="warning">swap_horiz</Icon>
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

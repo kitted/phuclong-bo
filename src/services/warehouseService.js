@@ -406,6 +406,10 @@ export const TruckService = {
   delete: (id) => AxiosInstance.delete(`/admin/trucks/${id}`),
   loadGoods: (id, payload) => AxiosInstance.post(`/admin/trucks/${id}/load`, payload),
   returnGoods: (id, payload) => AxiosInstance.post(`/admin/trucks/${id}/return`, payload),
+  previewTruckTransfer: (id, payload) =>
+    AxiosInstance.post(`/admin/trucks/${id}/transfer/preview`, payload),
+  transferToTruck: (id, payload) => AxiosInstance.post(`/admin/trucks/${id}/transfer`, payload),
+  reverseTransfer: (id) => AxiosInstance.post(`/admin/truck-transfers/${id}/reverse`),
   getTransfers: (params = {}) => AxiosInstance.get("/admin/truck-transfers", { params }),
   getTransferSummary: (params = {}) =>
     AxiosInstance.get("/admin/truck-transfers/summary", { params }),
