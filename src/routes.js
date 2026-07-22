@@ -19,6 +19,7 @@ import BaoCao from "layouts/bao-cao";
 import KhachHang from "layouts/khach-hang";
 import KhuyenMai from "layouts/khuyen-mai";
 import NhanVien from "layouts/nhan-vien";
+import AuditLogs from "layouts/audit-logs";
 
 const routes = [
   // ─── Dashboard ────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ const routes = [
     type: "collapse",
     name: "Danh mục", // <-- Route Danh mục mới thêm
     key: "danh-muc",
-    icon: <Document size="12px" />, 
+    icon: <Document size="12px" />,
     route: "/danh-muc",
     noCollapse: true,
     component: <DanhMuc />,
@@ -135,6 +136,16 @@ const routes = [
     route: "/nhan-vien",
     noCollapse: true,
     component: <NhanVien />,
+    permission: ["admin"],
+  },
+  {
+    type: "collapse",
+    name: "Nhật ký hoạt động",
+    key: "audit-logs",
+    icon: <Document size="12px" />,
+    route: "/audit-logs",
+    noCollapse: true,
+    component: <AuditLogs />,
     permission: ["admin"],
   },
 

@@ -24,9 +24,7 @@ const STATUS_QUERY = {
 };
 
 const fmtCurrency = (value) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(
-    Number(value) || 0
-  );
+  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
 
 const unwrap = (response) => {
   const body = response?.data ?? response ?? {};
@@ -60,9 +58,7 @@ const normalizeItem = (item) => {
     productCode: item.productCode || product.code || item.code || "—",
     productName: item.productName || product.name || item.name || "—",
     categoryName:
-      (typeof rawCategory === "object" ? rawCategory?.name : undefined) ||
-      item.categoryName ||
-      "—",
+      (typeof rawCategory === "object" ? rawCategory?.name : undefined) || item.categoryName || "—",
     unit: item.unit || product.unit || "—",
     warehouseQuantity,
     truckQuantity,
@@ -121,46 +117,116 @@ function InventoryDetailModal({ productId, open, onClose }) {
 
   return (
     <Modal open={open} onClose={onClose}>
-      <SoftBox sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: { xs: "92%", md: 760 }, maxHeight: "88vh", overflowY: "auto", bgcolor: "background.paper", borderRadius: 3, boxShadow: 24, p: 3 }}>
+      <SoftBox
+        sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "92%", md: 760 },
+          maxHeight: "88vh",
+          overflowY: "auto",
+          bgcolor: "background.paper",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: 3,
+        }}
+      >
         <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <SoftTypography variant="h5" fontWeight="bold">Chi tiết tồn kho</SoftTypography>
-          <IconButton onClick={onClose}><Icon>close</Icon></IconButton>
+          <SoftTypography variant="h5" fontWeight="bold">
+            Chi tiết tồn kho
+          </SoftTypography>
+          <IconButton onClick={onClose}>
+            <Icon>close</Icon>
+          </IconButton>
         </SoftBox>
         {loading ? (
-          <SoftTypography variant="button" color="text">Đang tải dữ liệu...</SoftTypography>
+          <SoftTypography variant="button" color="text">
+            Đang tải dữ liệu...
+          </SoftTypography>
         ) : (
           <>
             <SoftTypography variant="h6" fontWeight="bold">
-              {product.code || product.productCode || "—"} · {product.name || product.productName || "—"}
+              {product.code || product.productCode || "—"} ·{" "}
+              {product.name || product.productName || "—"}
             </SoftTypography>
             <SoftBox display="flex" gap={3} flexWrap="wrap" my={2}>
-              <SoftTypography variant="button">Trong kho: <b>{detail?.warehouseQuantity ?? product.warehouseQuantity ?? 0}</b></SoftTypography>
-              <SoftTypography variant="button">Trên xe: <b>{detail?.truckQuantity ?? product.truckQuantity ?? 0}</b></SoftTypography>
-              <SoftTypography variant="button">Tổng cộng: <b>{detail?.totalQuantity ?? 0}</b></SoftTypography>
+              <SoftTypography variant="button">
+                Trong kho: <b>{detail?.warehouseQuantity ?? product.warehouseQuantity ?? 0}</b>
+              </SoftTypography>
+              <SoftTypography variant="button">
+                Trên xe: <b>{detail?.truckQuantity ?? product.truckQuantity ?? 0}</b>
+              </SoftTypography>
+              <SoftTypography variant="button">
+                Tổng cộng: <b>{detail?.totalQuantity ?? 0}</b>
+              </SoftTypography>
             </SoftBox>
             {trucks.length > 0 && (
               <SoftBox mb={3}>
-                <SoftTypography variant="button" fontWeight="bold">Phân bổ trên xe</SoftTypography>
+                <SoftTypography variant="button" fontWeight="bold">
+                  Phân bổ trên xe
+                </SoftTypography>
                 {trucks.map((truck) => (
-                  <SoftTypography key={truck.truckId || truck.id} variant="caption" display="block" color="text">
-                    {truck.truckCode || truck.code || truck.truckName || "Xe"}: {truck.quantity || 0}
+                  <SoftTypography
+                    key={truck.truckId || truck.id}
+                    variant="caption"
+                    display="block"
+                    color="text"
+                  >
+                    {truck.truckCode || truck.code || truck.truckName || "Xe"}:{" "}
+                    {truck.quantity || 0}
                   </SoftTypography>
                 ))}
               </SoftBox>
             )}
-            <SoftTypography variant="button" fontWeight="bold">10 biến động gần nhất</SoftTypography>
+            <SoftTypography variant="button" fontWeight="bold">
+              10 biến động gần nhất
+            </SoftTypography>
             <SoftBox sx={{ overflowX: "auto", mt: 1 }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead><tr style={{ background: "#F8F9FA" }}>{["Thời gian", "Loại", "Thay đổi", "Tồn sau", "Tham chiếu"].map((h) => <th key={h} style={{ padding: "8px", textAlign: "left", fontSize: 12 }}>{h}</th>)}</tr></thead>
+                <thead>
+                  <tr style={{ background: "#F8F9FA" }}>
+                    {["Thời gian", "Loại", "Thay đổi", "Tồn sau", "Tham chiếu"].map((h) => (
+                      <th key={h} style={{ padding: "8px", textAlign: "left", fontSize: 12 }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody>
-                  {movements.length === 0 && <tr><td colSpan={5} style={{ padding: 20, textAlign: "center", color: "#9E9E9E" }}>Chưa có biến động</td></tr>}
+                  {movements.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        style={{ padding: 20, textAlign: "center", color: "#9E9E9E" }}
+                      >
+                        Chưa có biến động
+                      </td>
+                    </tr>
+                  )}
                   {movements.map((movement) => (
-                    <tr key={movement.id || movement._id} style={{ borderBottom: "1px solid #eee" }}>
-                      <td style={{ padding: 8, fontSize: 12 }}>{movement.createdAt ? new Date(movement.createdAt).toLocaleString("vi-VN") : "—"}</td>
-                      <td style={{ padding: 8, fontSize: 12 }}>{movement.type || movement.movementType || "—"}</td>
-                      <td style={{ padding: 8, fontSize: 12, fontWeight: 600 }}>{Number(movement.quantityChange ?? movement.quantity ?? 0) > 0 ? "+" : ""}{movement.quantityChange ?? movement.quantity ?? 0}</td>
-                      <td style={{ padding: 8, fontSize: 12 }}>{movement.quantityAfter ?? movement.balanceAfter ?? "—"}</td>
-                      <td style={{ padding: 8, fontSize: 12 }}>{movement.reference?.code || movement.referenceCode || "—"}</td>
+                    <tr
+                      key={movement.id || movement._id}
+                      style={{ borderBottom: "1px solid #eee" }}
+                    >
+                      <td style={{ padding: 8, fontSize: 12 }}>
+                        {movement.createdAt
+                          ? new Date(movement.createdAt).toLocaleString("vi-VN")
+                          : "—"}
+                      </td>
+                      <td style={{ padding: 8, fontSize: 12 }}>
+                        {movement.type || movement.movementType || "—"}
+                      </td>
+                      <td style={{ padding: 8, fontSize: 12, fontWeight: 600 }}>
+                        {Number(movement.quantityChange ?? movement.quantity ?? 0) > 0 ? "+" : ""}
+                        {movement.quantityChange ?? movement.quantity ?? 0}
+                      </td>
+                      <td style={{ padding: 8, fontSize: 12 }}>
+                        {movement.quantityAfter ?? movement.balanceAfter ?? "—"}
+                      </td>
+                      <td style={{ padding: 8, fontSize: 12 }}>
+                        {movement.reference?.code || movement.referenceCode || "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -228,9 +294,18 @@ function TonKho() {
   const counts = summary.statusCounts || {};
   const totalProducts = Number(summary.totalProducts ?? counts.total ?? meta.totalItems ?? 0);
   const lowStock = Number(summary.lowStockCount ?? counts.lowStock ?? counts.LOW_STOCK ?? 0);
-  const outOfStock = Number(summary.outOfStockCount ?? counts.outOfStock ?? counts.OUT_OF_STOCK ?? 0);
-  const inStock = Number(summary.inStockCount ?? counts.inStock ?? counts.IN_STOCK ?? Math.max(0, totalProducts - lowStock - outOfStock));
-  const totalValue = Number(summary.warehouseStockValue ?? summary.totalStockValue ?? summary.totalInventoryValue ?? 0);
+  const outOfStock = Number(
+    summary.outOfStockCount ?? counts.outOfStock ?? counts.OUT_OF_STOCK ?? 0
+  );
+  const inStock = Number(
+    summary.inStockCount ??
+      counts.inStock ??
+      counts.IN_STOCK ??
+      Math.max(0, totalProducts - lowStock - outOfStock)
+  );
+  const totalValue = Number(
+    summary.warehouseStockValue ?? summary.totalStockValue ?? summary.totalInventoryValue ?? 0
+  );
 
   const handleExport = async () => {
     try {
@@ -255,7 +330,19 @@ function TonKho() {
   };
 
   const FilterBtn = ({ value, label, count }) => (
-    <button onClick={() => setFilterStatus(value)} style={{ padding: "6px 16px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 13, background: filterStatus === value ? "#3B82F6" : "#F3F4F6", color: filterStatus === value ? "#fff" : "#374151", fontWeight: filterStatus === value ? 600 : 400 }}>
+    <button
+      onClick={() => setFilterStatus(value)}
+      style={{
+        padding: "6px 16px",
+        borderRadius: 20,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 13,
+        background: filterStatus === value ? "#3B82F6" : "#F3F4F6",
+        color: filterStatus === value ? "#fff" : "#374151",
+        fontWeight: filterStatus === value ? 600 : 400,
+      }}
+    >
       {label} <span style={{ fontSize: 11 }}>({count})</span>
     </button>
   );
@@ -271,40 +358,264 @@ function TonKho() {
             ["Sắp hết hàng", lowStock, "warning_amber", "#FFF3E0", "#E65100"],
             ["Hết hàng", outOfStock, "remove_shopping_cart", "#FFEBEE", "#C62828"],
           ].map(([label, value, icon, bg, color]) => (
-            <Card key={label} sx={{ flex: 1, minWidth: 180 }}><SoftBox p={2.5} display="flex" alignItems="center" gap={2}><SoftBox sx={{ width: 44, height: 44, borderRadius: 2, background: bg, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon sx={{ color }}>{icon}</Icon></SoftBox><SoftBox><SoftTypography variant="caption" color="text">{label}</SoftTypography><SoftTypography variant={label === "Giá trị tồn kho" ? "h6" : "h5"} fontWeight="bold" sx={{ color: label.includes("hàng") ? color : undefined }}>{value}</SoftTypography></SoftBox></SoftBox></Card>
+            <Card key={label} sx={{ flex: 1, minWidth: 180 }}>
+              <SoftBox p={2.5} display="flex" alignItems="center" gap={2}>
+                <SoftBox
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 2,
+                    background: bg,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Icon sx={{ color }}>{icon}</Icon>
+                </SoftBox>
+                <SoftBox>
+                  <SoftTypography variant="caption" color="text">
+                    {label}
+                  </SoftTypography>
+                  <SoftTypography
+                    variant={label === "Giá trị tồn kho" ? "h6" : "h5"}
+                    fontWeight="bold"
+                    sx={{ color: label.includes("hàng") ? color : undefined }}
+                  >
+                    {value}
+                  </SoftTypography>
+                </SoftBox>
+              </SoftBox>
+            </Card>
           ))}
         </SoftBox>
 
-        <Card><SoftBox p={3}>
-          <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={2} gap={2} flexWrap="wrap">
-            <SoftTypography variant="h5" fontWeight="bold">Báo cáo Tồn kho</SoftTypography>
-            <SoftButton variant="outlined" color="info" startIcon={<Icon>download</Icon>} disabled={exporting} onClick={handleExport}>{exporting ? "Đang xuất..." : "Xuất Excel"}</SoftButton>
+        <Card>
+          <SoftBox p={3}>
+            <SoftBox
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+              mb={2}
+              gap={2}
+              flexWrap="wrap"
+            >
+              <SoftTypography variant="h5" fontWeight="bold">
+                Báo cáo Tồn kho
+              </SoftTypography>
+              <SoftButton
+                variant="outlined"
+                color="info"
+                startIcon={<Icon>download</Icon>}
+                disabled={exporting}
+                onClick={handleExport}
+              >
+                {exporting ? "Đang xuất..." : "Xuất Excel"}
+              </SoftButton>
+            </SoftBox>
+            <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap" alignItems="center">
+              <SoftBox sx={{ flex: 1, minWidth: 220 }}>
+                <SoftInput
+                  placeholder="Tìm tên hoặc mã sản phẩm..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  icon={{ component: "search", direction: "left" }}
+                />
+              </SoftBox>
+              <SoftBox display="flex" gap={1} flexWrap="wrap">
+                <FilterBtn value="all" label="Tất cả" count={totalProducts} />
+                <FilterBtn value="ok" label="Còn hàng" count={inStock} />
+                <FilterBtn value="low" label="Sắp hết" count={lowStock} />
+                <FilterBtn value="out" label="Hết hàng" count={outOfStock} />
+              </SoftBox>
+            </SoftBox>
+            <SoftBox sx={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#F8F9FA" }}>
+                    {[
+                      "Mã SP",
+                      "Tên sản phẩm",
+                      "Danh mục",
+                      "ĐVT",
+                      "Tồn kho",
+                      "Trên xe tải",
+                      "Tồn min",
+                      "Giá trị tồn",
+                      "Trạng thái",
+                      "",
+                    ].map((heading, index) => (
+                      <th
+                        key={`${heading}-${index}`}
+                        style={{
+                          padding: "10px 12px",
+                          textAlign: "left",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "#6B7280",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading && (
+                    <tr>
+                      <td
+                        colSpan={10}
+                        style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}
+                      >
+                        Đang tải dữ liệu...
+                      </td>
+                    </tr>
+                  )}
+                  {!loading && items.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={10}
+                        style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}
+                      >
+                        Không tìm thấy sản phẩm
+                      </td>
+                    </tr>
+                  )}
+                  {!loading &&
+                    items.map((item, index) => {
+                      const badge = statusBadge(item.status);
+                      const pct =
+                        item.minStock > 0
+                          ? Math.min((item.warehouseQuantity / item.minStock) * 100, 100)
+                          : 100;
+                      return (
+                        <tr
+                          key={item.productId || `${item.productCode}-${index}`}
+                          style={{
+                            borderBottom: "1px solid #F0F0F0",
+                            background: index % 2 === 0 ? "#fff" : "#FAFAFA",
+                          }}
+                        >
+                          <td
+                            style={{
+                              padding: "10px 12px",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: "#3B82F6",
+                            }}
+                          >
+                            {item.productCode}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontSize: 13 }}>{item.productName}</td>
+                          <td style={{ padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>
+                            {item.categoryName}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontSize: 13 }}>{item.unit}</td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <SoftTypography
+                              variant="button"
+                              fontWeight="bold"
+                              sx={{ color: badge.color }}
+                            >
+                              {item.warehouseQuantity}
+                            </SoftTypography>
+                            <SoftBox
+                              sx={{
+                                width: 80,
+                                height: 4,
+                                borderRadius: 2,
+                                background: "#E5E7EB",
+                                mt: 0.5,
+                              }}
+                            >
+                              <SoftBox
+                                sx={{
+                                  width: `${pct}%`,
+                                  height: "100%",
+                                  borderRadius: 2,
+                                  background: badge.color,
+                                }}
+                              />
+                            </SoftBox>
+                          </td>
+                          <td
+                            style={{
+                              padding: "10px 12px",
+                              fontSize: 13,
+                              color: "#1565C0",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {item.truckQuantity > 0 ? `🚛 ${item.truckQuantity}` : "—"}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>
+                            {item.minStock}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600 }}>
+                            {fmtCurrency(item.warehouseStockValue)}
+                          </td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <span
+                              style={{
+                                padding: "3px 10px",
+                                borderRadius: 12,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                background: badge.bg,
+                                color: badge.color,
+                              }}
+                            >
+                              {badge.label}
+                            </span>
+                          </td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <Tooltip title="Xem chi tiết và biến động">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  disabled={!item.productId}
+                                  onClick={() => setDetailProductId(item.productId)}
+                                >
+                                  <Icon sx={{ fontSize: 18, color: "#3B82F6" }}>visibility</Icon>
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </SoftBox>
+            {!loading && meta.totalPages > 1 && (
+              <SoftBox
+                mt={3}
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+                flexWrap="wrap"
+                gap={1}
+              >
+                <SoftTypography variant="caption" color="text">
+                  Tổng {meta.totalItems} sản phẩm
+                </SoftTypography>
+                <Pagination
+                  page={page}
+                  count={meta.totalPages}
+                  color="primary"
+                  onChange={(_, value) => setPage(value)}
+                />
+              </SoftBox>
+            )}
           </SoftBox>
-          <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap" alignItems="center">
-            <SoftBox sx={{ flex: 1, minWidth: 220 }}><SoftInput placeholder="Tìm tên hoặc mã sản phẩm..." value={search} onChange={(event) => setSearch(event.target.value)} icon={{ component: "search", direction: "left" }} /></SoftBox>
-            <SoftBox display="flex" gap={1} flexWrap="wrap"><FilterBtn value="all" label="Tất cả" count={totalProducts} /><FilterBtn value="ok" label="Còn hàng" count={inStock} /><FilterBtn value="low" label="Sắp hết" count={lowStock} /><FilterBtn value="out" label="Hết hàng" count={outOfStock} /></SoftBox>
-          </SoftBox>
-          <SoftBox sx={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr style={{ background: "#F8F9FA" }}>{["Mã SP", "Tên sản phẩm", "Danh mục", "ĐVT", "Tồn kho", "Trên xe tải", "Tồn min", "Giá trị tồn", "Trạng thái", ""].map((heading, index) => <th key={`${heading}-${index}`} style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "#6B7280", whiteSpace: "nowrap" }}>{heading}</th>)}</tr></thead>
-            <tbody>
-              {loading && <tr><td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}>Đang tải dữ liệu...</td></tr>}
-              {!loading && items.length === 0 && <tr><td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}>Không tìm thấy sản phẩm</td></tr>}
-              {!loading && items.map((item, index) => {
-                const badge = statusBadge(item.status);
-                const pct = item.minStock > 0 ? Math.min((item.warehouseQuantity / item.minStock) * 100, 100) : 100;
-                return <tr key={item.productId || `${item.productCode}-${index}`} style={{ borderBottom: "1px solid #F0F0F0", background: index % 2 === 0 ? "#fff" : "#FAFAFA" }}>
-                  <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "#3B82F6" }}>{item.productCode}</td><td style={{ padding: "10px 12px", fontSize: 13 }}>{item.productName}</td><td style={{ padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>{item.categoryName}</td><td style={{ padding: "10px 12px", fontSize: 13 }}>{item.unit}</td>
-                  <td style={{ padding: "10px 12px" }}><SoftTypography variant="button" fontWeight="bold" sx={{ color: badge.color }}>{item.warehouseQuantity}</SoftTypography><SoftBox sx={{ width: 80, height: 4, borderRadius: 2, background: "#E5E7EB", mt: 0.5 }}><SoftBox sx={{ width: `${pct}%`, height: "100%", borderRadius: 2, background: badge.color }} /></SoftBox></td>
-                  <td style={{ padding: "10px 12px", fontSize: 13, color: "#1565C0", fontWeight: 600 }}>{item.truckQuantity > 0 ? `🚛 ${item.truckQuantity}` : "—"}</td><td style={{ padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>{item.minStock}</td><td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600 }}>{fmtCurrency(item.warehouseStockValue)}</td><td style={{ padding: "10px 12px" }}><span style={{ padding: "3px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: badge.bg, color: badge.color }}>{badge.label}</span></td>
-                  <td style={{ padding: "10px 12px" }}><Tooltip title="Xem chi tiết và biến động"><span><IconButton size="small" disabled={!item.productId} onClick={() => setDetailProductId(item.productId)}><Icon sx={{ fontSize: 18, color: "#3B82F6" }}>visibility</Icon></IconButton></span></Tooltip></td>
-                </tr>;
-              })}
-            </tbody>
-          </table></SoftBox>
-          {!loading && meta.totalPages > 1 && <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}><SoftTypography variant="caption" color="text">Tổng {meta.totalItems} sản phẩm</SoftTypography><Pagination page={page} count={meta.totalPages} color="primary" onChange={(_, value) => setPage(value)} /></SoftBox>}
-        </SoftBox></Card>
+        </Card>
       </SoftBox>
-      <InventoryDetailModal productId={detailProductId} open={Boolean(detailProductId)} onClose={() => setDetailProductId(null)} />
+      <InventoryDetailModal
+        productId={detailProductId}
+        open={Boolean(detailProductId)}
+        onClose={() => setDetailProductId(null)}
+      />
     </DashboardLayout>
   );
 }
