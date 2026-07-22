@@ -18,6 +18,7 @@ import NhaCungCap from "layouts/nha-cung-cap";
 import BaoCao from "layouts/bao-cao";
 import KhachHang from "layouts/khach-hang";
 import KhuyenMai from "layouts/khuyen-mai";
+import NhanVien from "layouts/nhan-vien";
 
 const routes = [
   // ─── Dashboard ────────────────────────────────────────────────────────────
@@ -125,6 +126,17 @@ const routes = [
 
   // ─── Section: Quản trị (admin only) ──────────────────────────────────────
   { type: "title", title: "Quản trị", key: "title-quan-tri", permission: ["admin"] },
+
+  {
+    type: "collapse",
+    name: "Nhân viên",
+    key: "nhan-vien",
+    icon: <CustomerSupport size="12px" />,
+    route: "/nhan-vien",
+    noCollapse: true,
+    component: <NhanVien />,
+    permission: ["admin"],
+  },
 
   {
     type: "collapse",

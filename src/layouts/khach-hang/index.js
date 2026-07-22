@@ -41,7 +41,7 @@ function CustomerForm({ open, customer, onClose, onSaved }) {
       const payload = { ...form, debtLimit: Number(form.debtLimit) || 0 };
       if (customer?.id) await CustomerService.update(customer.id, payload); else await CustomerService.create(payload);
       toast.success(customer ? "Đã cập nhật khách hàng" : "Đã thêm khách hàng");
-      onSaved(); onClose();
+      onSaved(!customer); onClose();
     } catch (error) { toast.error(error.response?.data?.message || "Không thể lưu khách hàng"); } finally { setSaving(false); }
   };
   return <Modal open={open} onClose={onClose}><SoftBox sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: { xs: "92%", md: 650 }, maxHeight: "90vh", overflowY: "auto", bgcolor: "background.paper", borderRadius: 3, boxShadow: 24, p: 4 }}>
@@ -111,7 +111,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
 function DataTable({ headers, rows }) { return <SoftBox sx={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr style={{ background: "#F8F9FA" }}>{headers.map((item) => <th key={item} style={{ padding: 10, textAlign: "left", fontSize: 12, color: "#6B7280" }}>{item}</th>)}</tr></thead><tbody>{rows.length === 0 && <tr><td colSpan={headers.length} style={{ textAlign: "center", padding: 24, color: "#9E9E9E" }}>Chưa có dữ liệu</td></tr>}{rows.map((row, index) => <tr key={index} style={{ borderBottom: "1px solid #eee" }}>{row.map((cell, cellIndex) => <td key={cellIndex} style={{ padding: 10, fontSize: 13 }}>{cell}</td>)}</tr>)}</tbody></table></SoftBox>; }
 
 export default function KhachHang() {
-  const [customers, setCustomers] = useState([]); const [summary, setSummary] = useState({}); const [search, setSearch] = useState(""); const [debouncedSearch, setDebouncedSearch] = useState(""); const [segment, setSegment] = useState(""); const [source, setSource] = useState(""); const [zalo, setZalo] = useState(""); const [debtWarning, setDebtWarning] = useState(false); const [page, setPage] = useState(1); const [meta, setMeta] = useState({ totalPages: 1, totalItems: 0 }); const [loading, setLoading] = useState(true); const [formOpen, setFormOpen] = useState(false); const [selected, setSelected] = useState(null); const [detailId, setDetailId] = useState(null);
+  const [customers, setCustomers] = useState([]); const [summary, setSummary] = useState({}); const [search, setSearch] = useState(""); const [debouncedSearch, setDebouncedSearch] = useState(""); const [segment, setSegment] = useState(""); const [source, setSource] = useState(""); const [zalo, setZalo] = useState(""); const [debtWarning, setDebtWarning] = useState(false); const [page, setPage] = useState(1); const [refreshKey, setRefreshKey] = useState(0); const [meta, setMeta] = useState({ totalPages: 1, totalItems: 0 }); const [loading, setLoading] = useState(true); const [formOpen, setFormOpen] = useState(false); const [selected, setSelected] = useState(null); const [detailId, setDetailId] = useState(null);
   const [importing, setImporting] = useState(false); const importInputRef = useRef(null);
   useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(search.trim()), 400); return () => clearTimeout(timer); }, [search]);
   useEffect(() => setPage(1), [debouncedSearch, segment, source, zalo, debtWarning]);
@@ -122,7 +122,8 @@ export default function KhachHang() {
       .catch((error) => { setCustomers([]); toast.error(error.response?.data?.message || "Không thể tải danh sách khách hàng"); })
       .finally(() => setLoading(false));
   };
-  useEffect(load, [page, debouncedSearch, segment, source, zalo, debtWarning]);
+  useEffect(load, [page, debouncedSearch, segment, source, zalo, debtWarning, refreshKey]);
+  const refresh = (firstPage = false) => { if (firstPage) setPage(1); setRefreshKey((value) => value + 1); };
   const handleExport = async () => {
     try {
       const response = await CustomerService.exportExcel();
@@ -139,7 +140,7 @@ export default function KhachHang() {
       const result = response.data?.data || {};
       toast.success(`Import ${result.totalRows || 0} dòng: thêm ${result.created || 0}, cập nhật ${result.updated || 0}, lỗi ${result.failed || 0}`);
       if (result.errors?.length) exportExcel(result.errors.map((error) => ({ "Dòng": error.row, "Lỗi import": error.message, "Dữ liệu": JSON.stringify(error.data || {}) })), `loi-import-khach-hang-${Date.now()}.xlsx`, "Loi import");
-      load();
+      refresh(true);
     } catch (error) { toast.error(error.response?.data?.message || error.message || "Không thể import file Excel"); }
     finally { setImporting(false); event.target.value = ""; }
   };
@@ -150,5 +151,5 @@ export default function KhachHang() {
       <SoftBox sx={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr style={{ background: "#F8F9FA" }}>{["Khách hàng", "Liên hệ", "Nguồn", "Phân loại", "Zalo", "Công nợ / Hạn mức", "Ngày tạo", ""].map((item, index) => <th key={`${item}-${index}`} style={{ padding: 10, textAlign: "left", fontSize: 12, color: "#6B7280" }}>{item}</th>)}</tr></thead><tbody>{loading && <tr><td colSpan={8} style={{ padding: 30, textAlign: "center" }}>Đang tải...</td></tr>}{!loading && customers.length === 0 && <tr><td colSpan={8} style={{ padding: 30, textAlign: "center", color: "#9E9E9E" }}>Không tìm thấy khách hàng</td></tr>}{!loading && customers.map((item) => { const warning = item.debtLimit > 0 && item.debt >= item.debtLimit; return <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}><td style={{ padding: 10 }}><SoftTypography variant="button" fontWeight="bold">{item.name}</SoftTypography><SoftTypography variant="caption" display="block" color="text">{item.code}</SoftTypography></td><td style={{ padding: 10, fontSize: 13 }}>{item.phone}<br /><span style={{ color: "#6B7280" }}>{item.email || "—"}</span></td><td style={{ padding: 10 }}>{badge(item.source === "LEGACY" ? "Hệ thống cũ" : item.source === "LEAD" ? "Lead" : "Khách mới", "#1565C0", "#E3F2FD")}</td><td style={{ padding: 10 }}>{badge(item.segment, "#6A1B9A", "#F3E5F5")}</td><td style={{ padding: 10 }}>{item.zaloConnected ? badge("Đã kết bạn", "#2E7D32", "#E8F5E9") : badge("Chưa kết bạn", "#6B7280", "#F3F4F6")}</td><td style={{ padding: 10, fontSize: 13, color: warning ? "#C62828" : "inherit", fontWeight: warning ? 700 : 400 }}>{money(item.debt)}<br /><span style={{ fontSize: 11, color: "#6B7280" }}>/ {money(item.debtLimit)}</span>{warning && <Icon sx={{ fontSize: 16, ml: 0.5 }}>warning</Icon>}</td><td style={{ padding: 10, fontSize: 13 }}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN") : "—"}</td><td style={{ padding: 10 }}><Tooltip title="Xem hồ sơ 360°"><IconButton onClick={() => setDetailId(item.id)}><Icon color="info">visibility</Icon></IconButton></Tooltip><Tooltip title="Chỉnh sửa"><IconButton onClick={() => { setSelected(item); setFormOpen(true); }}><Icon color="info">edit</Icon></IconButton></Tooltip></td></tr>; })}</tbody></table></SoftBox>
       {meta.totalPages > 1 && <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center"><SoftTypography variant="caption" color="text">Tổng {meta.totalItems} khách hàng</SoftTypography><Pagination page={page} count={meta.totalPages} color="primary" onChange={(_, value) => setPage(value)} /></SoftBox>}
     </SoftBox></Card>
-  </SoftBox><CustomerForm open={formOpen} customer={selected} onClose={() => setFormOpen(false)} onSaved={load} /><CustomerDetail customerId={detailId} open={Boolean(detailId)} onClose={() => setDetailId(null)} onEdit={(customer) => { setDetailId(null); setSelected(customer); setFormOpen(true); }} /></DashboardLayout>;
+  </SoftBox><CustomerForm open={formOpen} customer={selected} onClose={() => setFormOpen(false)} onSaved={(created) => refresh(created)} /><CustomerDetail customerId={detailId} open={Boolean(detailId)} onClose={() => setDetailId(null)} onEdit={(customer) => { setDetailId(null); setSelected(customer); setFormOpen(true); }} /></DashboardLayout>;
 }
