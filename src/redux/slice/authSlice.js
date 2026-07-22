@@ -11,6 +11,7 @@ const authSlice = createSlice({
       state.user = {};
       localStorage.removeItem("access_token");
       localStorage.removeItem("reset_token");
+      localStorage.removeItem("persist:root");
     },
   },
   extraReducers: () => {},

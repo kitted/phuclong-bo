@@ -22,6 +22,7 @@ export default function StaffAccountMenu() {
     close();
     dispatch(logout());
     navigate("/", { replace: true });
+    window.setTimeout(() => window.location.replace("/"), 0);
   };
   return (
     <>

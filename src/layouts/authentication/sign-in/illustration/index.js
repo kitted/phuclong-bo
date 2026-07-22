@@ -89,17 +89,7 @@ function Illustration() {
   };
 
   return (
-    <div className="relative w-full h-full">
-      <div className="absolute z-10  bg-red w-full h-20 p-6">
-        <div className=" flex items-center justify-start gap-4">
-          {/* <img src={brand} className="w-52" /> */}
-          {/* <h5 className="text-[14px] font-bold text-center text-text ">
-            Đại Học Bách Khoa <br /> TPHCM
-          </h5> */}
-        </div>
-      </div>
-      <div className="absolute z-1 w-full h-full">
-        <IllustrationLayout
+    <IllustrationLayout
           title="Đăng nhập"
           description={
             err ? <p style={{ color: "red" }}>{err}</p> : "Nhập tài khoản và mật khẩu để tiếp tục"
@@ -166,9 +156,7 @@ function Illustration() {
           </SoftTypography>
         </SoftBox> */}
           </SoftBox>
-        </IllustrationLayout>
-      </div>
-    </div>
+    </IllustrationLayout>
   );
 }
 

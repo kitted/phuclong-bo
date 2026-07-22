@@ -32,8 +32,7 @@ import { useSoftUIController, setMiniSidenav } from "context";
 import brand1 from "assets/images/logoAstraea.png";
 import brand2 from "assets/images/logoAstraea2.png";
 
-function Sidenav({ color, routes, subTitle, ...rest }) {
-  const { user } = rest;
+function Sidenav({ color, routes, subTitle, brandName, user, ...rest }) {
   const [openCollapse, setOpenCollapse] = useState(false);
   const [openNestedCollapse, setOpenNestedCollapse] = useState(false);
   const [controller, dispatch] = useSoftUIController();
@@ -231,11 +230,11 @@ function Sidenav({ color, routes, subTitle, ...rest }) {
           <SoftBox sx={(theme) => sidenavLogoLabel(theme, { miniSidenav })}>
             <div className="flex flex-col items-center">
               <SoftTypography component="h6" variant="button" fontWeight="bold" sx={{ fontSize: miniSidenav ? 10 : 14, textAlign: "center", lineHeight: 1.2 }}>
-                {miniSidenav ? "PL" : "Phúc Long"}
+                {miniSidenav ? "PL" : brandName || "Phúc Long"}
               </SoftTypography>
               {!miniSidenav && (
                 <SoftTypography component="span" variant="caption" sx={{ fontSize: 10, opacity: 0.7, textAlign: "center" }}>
-                  Quản lý Kho
+                  {subTitle || "Quản lý Kho"}
                 </SoftTypography>
               )}
             </div>
@@ -259,7 +258,9 @@ Sidenav.defaultProps = {
 Sidenav.propTypes = {
   color: PropTypes.oneOf(["primary", "secondary", "info", "success", "warning", "error", "dark"]),
   // brand: PropTypes.string,
-  // brandName: PropTypes.string.isRequired,
+  brandName: PropTypes.string,
+  subTitle: PropTypes.string,
+  user: PropTypes.object,
   routes: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 

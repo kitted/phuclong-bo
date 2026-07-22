@@ -41,6 +41,9 @@ export default function App() {
   const [onMouseEnter, setOnMouseEnter] = useState(false);
   const { pathname } = useLocation();
   const { user } = useSelector(authSelector);
+  const normalizedRole = String(user?.role || "").toLowerCase();
+  const hasAccessToken = Boolean(localStorage.getItem("access_token"));
+  const isAuthenticated = hasAccessToken && ["admin", "staff"].includes(normalizedRole);
 
   // Open sidenav when mouse enter on mini sidenav
   const handleOnMouseEnter = () => {
@@ -140,7 +143,7 @@ export default function App() {
   return (
     <ThemeProvider theme={themeRTL}>
       <CssBaseline />
-      {layout === "dashboard" && pathname !== "/staff-home" && (
+      {isAuthenticated && layout === "dashboard" && pathname !== "/staff-home" && (
         <>
           <Sidenav
             color={sidenavColor}
@@ -154,16 +157,14 @@ export default function App() {
         </>
       )}
       <Routes>
-        {!user || Object.keys(user).length <= 0 ? (
+        {!isAuthenticated ? (
           <>
-            <Route exact path="*" element={<Illustration />} key="sign-in" />
             <Route
-              exact
               path="/dashboards/forgot-password"
               element={<ForgotPassword />}
               key="forgot-password"
             />
-            <Route path="*" element={<Navigate to="" />} />
+            <Route path="*" element={<Illustration />} key="sign-in" />
           </>
         ) : (
           <>
@@ -172,12 +173,12 @@ export default function App() {
             <Route exact path="/user/change-password" element={<ChangePassword />} />
             <Route
               path="*"
-              element={<Navigate to={user?.role === "staff" ? "/staff-home" : "/dashboards"} />}
+              element={<Navigate to={normalizedRole === "staff" ? "/staff-home" : "/dashboards"} />}
             />
           </>
         )}
       </Routes>
-      {user?.role === "staff" && <StaffMobileNav />}
+      {isAuthenticated && normalizedRole === "staff" && <StaffMobileNav />}
       <ToastContainer autoClose={5000} />
     </ThemeProvider>
   );
