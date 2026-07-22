@@ -22,6 +22,9 @@ import SoftTypography from "components/SoftTypography";
 import { TruckService } from "services/warehouseService";
 import { downloadBlob } from "utils/excel";
 import { toast } from "react-toastify";
+import { useSelector } from "react-redux";
+import StaffMobileHeader from "components/StaffMobileHeader";
+import MobileLoadMore from "components/MobileLoadMore";
 
 const EMPTY_TRUCK = { code: "", name: "", licensePlate: "", driverId: "", status: "active" };
 const EMPTY_META = { totalPages: 1, totalItems: 0 };
@@ -653,6 +656,7 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
 }
 
 export default function QuanLyXe() {
+  const isStaff = useSelector((state) => state.auth?.user?.role === "staff");
   const [tab, setTab] = useState(0);
   const [trucks, setTrucks] = useState([]);
   const [summary, setSummary] = useState({});
@@ -723,10 +727,12 @@ export default function QuanLyXe() {
       .then(([listResponse, summaryResponse]) => {
         if (!active) return;
         if (tab === 0) {
-          setTrucks(listOf(listResponse));
+          const nextTrucks = listOf(listResponse);
+          setTrucks((current) => (isStaff && page > 1 ? [...current, ...nextTrucks] : nextTrucks));
           setMeta(metaOf(listResponse));
         } else {
-          setTransfers(listOf(listResponse));
+          const nextTransfers = listOf(listResponse);
+          setTransfers((current) => (isStaff && transferPage > 1 ? [...current, ...nextTransfers] : nextTransfers));
           setTransferMeta(metaOf(listResponse));
           setTransferSummary(unwrap(summaryResponse) || {});
         }
@@ -748,6 +754,7 @@ export default function QuanLyXe() {
     transferFrom,
     transferTo,
     refreshKey,
+    isStaff,
   ]);
   useEffect(() => {
     if (tab !== 1 || truckOptions.length) return;
@@ -835,14 +842,15 @@ export default function QuanLyXe() {
     ["Giá trị tồn trên xe", money(summary.totalTruckInventoryValue), "payments", "#7B1FA2"],
   ];
   return (
-    <DashboardLayout>
-      <DashboardNavbar />
-      <SoftBox py={3}>
-        <Grid container spacing={2} mb={3}>
+    <DashboardLayout compactMobile={isStaff}>
+      {!isStaff && <DashboardNavbar />}
+      {isStaff && <StaffMobileHeader title="Xe hàng" subtitle="Tồn xe và lịch sử hàng hóa" onRefresh={() => refresh()} />}
+      <SoftBox py={{ xs: isStaff ? 1 : 3, md: 3 }} pb={{ xs: isStaff ? 10 : 3, md: 3 }} sx={{ bgcolor: { xs: isStaff ? "#f0f2f5" : "transparent", md: "transparent" }, minHeight: "100vh" }}>
+        <Grid container spacing={{ xs: isStaff ? 1 : 2, md: 2 }} mb={{ xs: isStaff ? 1 : 3, md: 3 }} px={{ xs: isStaff ? 1 : 0, md: 0 }} sx={{ flexWrap: { xs: isStaff ? "nowrap" : "wrap", md: "wrap" }, overflowX: { xs: "auto", md: "visible" } }}>
           {kpis.map(([label, value, icon, color]) => (
-            <Grid item xs={12} sm={6} lg={3} key={label}>
-              <Card>
-                <SoftBox p={2.5} display="flex" alignItems="center" gap={2}>
+            <Grid item xs={isStaff ? 7 : 12} sm={6} lg={3} key={label} sx={{ flexShrink: 0 }}>
+              <Card sx={{ boxShadow: { xs: isStaff ? "none" : undefined, md: undefined } }}>
+                <SoftBox p={{ xs: isStaff ? 1.5 : 2.5, md: 2.5 }} display="flex" alignItems="center" gap={1.25}>
                   <Icon sx={{ color }}>{icon}</Icon>
                   <SoftBox>
                     <SoftTypography variant="caption" color="text">
@@ -857,8 +865,8 @@ export default function QuanLyXe() {
             </Grid>
           ))}
         </Grid>
-        <Card>
-          <SoftBox p={3}>
+        <Card sx={{ borderRadius: { xs: isStaff ? 0 : undefined, md: undefined }, boxShadow: { xs: isStaff ? "none" : undefined, md: undefined } }}>
+          <SoftBox p={{ xs: isStaff ? 2 : 3, md: 3 }}>
             <SoftBox
               display="flex"
               justifyContent="space-between"
@@ -866,7 +874,7 @@ export default function QuanLyXe() {
               gap={2}
               flexWrap="wrap"
             >
-              <SoftBox>
+              <SoftBox sx={{ display: { xs: isStaff ? "none" : "block", md: "block" } }}>
                 <SoftTypography variant="h5" fontWeight="bold">
                   Quản lý xe tải
                 </SoftTypography>
@@ -874,7 +882,7 @@ export default function QuanLyXe() {
                   Tồn xe và lịch sử điều chuyển kho
                 </SoftTypography>
               </SoftBox>
-              {tab === 0 ? (
+              {!isStaff && (tab === 0 ? (
                 <SoftButton
                   variant="gradient"
                   color="info"
@@ -896,7 +904,7 @@ export default function QuanLyXe() {
                 >
                   {exporting ? "Đang xuất..." : "Xuất Excel"}
                 </SoftButton>
-              )}
+              ))}
             </SoftBox>
             <Tabs
               value={tab}
@@ -921,7 +929,7 @@ export default function QuanLyXe() {
                 />
               </SoftBox>
               {tab === 0 ? (
-                <FormControl size="small" sx={{ minWidth: 180 }}>
+                <FormControl size="small" sx={{ minWidth: 180, display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" } }}>
                   <Select displayEmpty value={status} onChange={(e) => setStatus(e.target.value)}>
                     <MenuItem value="">Mọi trạng thái</MenuItem>
                     <MenuItem value="active">Hoạt động</MenuItem>
@@ -1032,9 +1040,10 @@ export default function QuanLyXe() {
                 Đang tải...
               </SoftTypography>
             )}
-            {!loading && tab === 0 && (
+            {tab === 0 && (trucks.length > 0 || !loading) && (
               <TruckGrid
                 trucks={trucks}
+                readOnly={isStaff}
                 onLoad={(truck) => setTransferModal({ truck, type: "LOAD" })}
                 onReturn={(truck) => setTransferModal({ truck, type: "RETURN" })}
                 onTransfer={(truck) => setTruckToTruck(truck)}
@@ -1046,13 +1055,15 @@ export default function QuanLyXe() {
                 onDelete={remove}
               />
             )}
-            {!loading && tab === 1 && (
-              <TransferTable transfers={transfers} onReverse={reverseTransfer} />
+            {tab === 1 && (transfers.length > 0 || !loading) && (
+              <TransferTable transfers={transfers} onReverse={reverseTransfer} readOnly={isStaff} />
             )}
-            {tab === 0 && meta.totalPages > 1 && (
+            {isStaff && tab === 0 && <MobileLoadMore loading={loading} hasMore={page < (meta.totalPages || 1)} onLoadMore={() => setPage((value) => value + 1)} />}
+            {isStaff && tab === 1 && <MobileLoadMore loading={loading} hasMore={transferPage < (transferMeta.totalPages || 1)} onLoadMore={() => setTransferPage((value) => value + 1)} />}
+            {!isStaff && tab === 0 && meta.totalPages > 1 && (
               <Pager meta={meta} page={page} setPage={setPage} label="xe" />
             )}
-            {tab === 1 && transferMeta.totalPages > 1 && (
+            {!isStaff && tab === 1 && transferMeta.totalPages > 1 && (
               <Pager
                 meta={transferMeta}
                 page={transferPage}
@@ -1090,7 +1101,7 @@ export default function QuanLyXe() {
   );
 }
 
-function TruckGrid({ trucks, onLoad, onReturn, onTransfer, onEdit, onStatus, onDelete }) {
+function TruckGrid({ trucks, onLoad, onReturn, onTransfer, onEdit, onStatus, onDelete, readOnly }) {
   if (!trucks.length)
     return (
       <SoftTypography variant="button" color="text" display="block" textAlign="center" py={5}>
@@ -1178,7 +1189,7 @@ function TruckGrid({ trucks, onLoad, onReturn, onTransfer, onEdit, onStatus, onD
                     </SoftBox>
                   );
                 })}
-                <SoftBox display="flex" gap={0.5} mt={2} flexWrap="wrap">
+                {!readOnly && <SoftBox display="flex" gap={0.5} mt={2} flexWrap="wrap">
                   <SoftButton
                     size="small"
                     variant="outlined"
@@ -1225,7 +1236,7 @@ function TruckGrid({ trucks, onLoad, onReturn, onTransfer, onEdit, onStatus, onD
                       <Icon color="error">delete</Icon>
                     </IconButton>
                   </Tooltip>
-                </SoftBox>
+                </SoftBox>}
               </SoftBox>
             </Card>
           </Grid>
@@ -1235,9 +1246,20 @@ function TruckGrid({ trucks, onLoad, onReturn, onTransfer, onEdit, onStatus, onD
   );
 }
 
-function TransferTable({ transfers, onReverse }) {
+function TransferTable({ transfers, onReverse, readOnly }) {
   return (
-    <SoftBox sx={{ overflowX: "auto" }}>
+    <>
+    {readOnly && <SoftBox display={{ xs: "block", md: "none" }}>
+      {!transfers.length && <SoftTypography variant="button" color="text" display="block" textAlign="center" py={4}>Chưa có phiếu điều chuyển</SoftTypography>}
+      {transfers.map((transfer) => <SoftBox key={getId(transfer)} py={1.75} sx={{ borderBottom: "1px solid #edf0f5" }}>
+        <SoftBox display="flex" justifyContent="space-between" gap={1} mb={0.75}><SoftTypography variant="button" fontWeight="bold">{transfer.code}</SoftTypography><SoftTypography variant="caption" color="text">{date(transfer.date || transfer.createdAt)}</SoftTypography></SoftBox>
+        <SoftTypography variant="caption" fontWeight="bold" display="block">{transfer.type === "LOAD" ? "Xuất hàng lên xe" : transfer.type === "RETURN" ? "Hoàn hàng về kho" : "Chuyển hàng giữa xe"}</SoftTypography>
+        <SoftTypography variant="caption" color="text" display="block">{transfer.type === "TRUCK_TO_TRUCK" ? `${transfer.sourceTruckName || "Xe nguồn"} → ${transfer.destinationTruckName || "Xe nhận"}` : transfer.truckName || transfer.truck?.name || "—"}</SoftTypography>
+        <SoftBox mt={1} p={1.25} borderRadius={2} bgcolor="#f0f2f5">{(transfer.items || []).slice(0, 4).map((item, index) => <SoftBox key={`${item.productId || index}`} display="flex" justifyContent="space-between" py={0.4}><SoftTypography variant="caption">{item.productName || item.name || "Sản phẩm"}</SoftTypography><SoftTypography variant="caption" fontWeight="bold">{quantityOf(item)} {item.unit || ""}</SoftTypography></SoftBox>)}</SoftBox>
+        <SoftBox display="flex" justifyContent="space-between" mt={1}><SoftTypography variant="caption" color="text">Tổng {transfer.totalQuantity || 0} sản phẩm</SoftTypography><SoftTypography variant="button" fontWeight="bold">{money(transfer.totalValue)}</SoftTypography></SoftBox>
+      </SoftBox>)}
+    </SoftBox>}
+    <SoftBox sx={{ overflowX: "auto", display: { xs: readOnly ? "none" : "block", md: "block" } }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: "#F8F9FA" }}>
@@ -1395,7 +1417,7 @@ function TransferTable({ transfers, onReverse }) {
               </td>
               <td style={{ padding: 12, fontSize: 13 }}>{transfer.note || "—"}</td>
               <td style={{ padding: 12 }}>
-                {transfer.type === "TRUCK_TO_TRUCK" && !transfer.reversalOf && (
+                {!readOnly && transfer.type === "TRUCK_TO_TRUCK" && !transfer.reversalOf && (
                   <Tooltip title="Tạo phiếu chuyển ngược">
                     <IconButton size="small" onClick={() => onReverse(transfer)}>
                       <Icon color="warning">swap_horiz</Icon>
@@ -1408,6 +1430,7 @@ function TransferTable({ transfers, onReverse }) {
         </tbody>
       </table>
     </SoftBox>
+    </>
   );
 }
 

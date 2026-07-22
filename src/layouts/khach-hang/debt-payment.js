@@ -14,7 +14,7 @@ const money = (value) => `${Number(value || 0).toLocaleString("vi-VN")} ₫`;
 const numberValue = (value) => Number(String(value || "").replace(/\D/g, "")) || 0;
 const idOf = (value) => value?.id || value?._id;
 
-export function DebtPaymentModal({ open, customer, onClose, onCreated }) {
+export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = false }) {
   const [form, setForm] = useState({
     cash: "",
     bank: "",
@@ -77,16 +77,17 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated }) {
       <SoftBox
         sx={{
           position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: { xs: "94%", md: 720 },
-          maxHeight: "90vh",
+          top: { xs: mobile ? 0 : "50%", md: "50%" },
+          left: { xs: mobile ? 0 : "50%", md: "50%" },
+          transform: { xs: mobile ? "none" : "translate(-50%, -50%)", md: "translate(-50%, -50%)" },
+          width: { xs: mobile ? "100%" : "94%", md: 720 },
+          height: { xs: mobile ? "100%" : "auto", md: "auto" },
+          maxHeight: { xs: mobile ? "100%" : "90vh", md: "90vh" },
           overflowY: "auto",
           bgcolor: "background.paper",
-          borderRadius: 3,
+          borderRadius: { xs: mobile ? 0 : 3, md: 3 },
           boxShadow: 24,
-          p: 4,
+          p: { xs: mobile ? 2 : 4, md: 4 },
         }}
       >
         <SoftTypography variant="h5" fontWeight="bold">

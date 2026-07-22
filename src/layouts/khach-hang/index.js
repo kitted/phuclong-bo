@@ -11,6 +11,7 @@ import FormControl from "@mui/material/FormControl";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Tooltip from "@mui/material/Tooltip";
+import { useSelector } from "react-redux";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
@@ -21,6 +22,8 @@ import { CustomerService, CUSTOMER_SEGMENTS } from "services/crmService";
 import { toast } from "react-toastify";
 import { downloadBlob, exportExcel, readExcelFile } from "utils/excel";
 import { DebtPaymentHistory, DebtPaymentModal } from "./debt-payment";
+import StaffMobileHeader from "components/StaffMobileHeader";
+import MobileLoadMore from "components/MobileLoadMore";
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
@@ -194,7 +197,7 @@ function CustomerForm({ open, customer, onClose, onSaved }) {
   );
 }
 
-function CustomerDetail({ customerId, open, onClose, onEdit }) {
+function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false }) {
   const [customer, setCustomer] = useState(null);
   const [tab, setTab] = useState(0);
   const [interactionOpen, setInteractionOpen] = useState(false);
@@ -255,16 +258,16 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
       <SoftBox
         sx={{
           position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: { xs: "95%", lg: 1000 },
-          height: "88vh",
+          top: { xs: readOnly ? 0 : "50%", md: "50%" },
+          left: { xs: readOnly ? 0 : "50%", md: "50%" },
+          transform: { xs: readOnly ? "none" : "translate(-50%, -50%)", md: "translate(-50%, -50%)" },
+          width: { xs: readOnly ? "100%" : "95%", lg: 1000 },
+          height: { xs: readOnly ? "100%" : "88vh", md: "88vh" },
           overflowY: "auto",
           bgcolor: "#F8F9FA",
-          borderRadius: 3,
+          borderRadius: { xs: readOnly ? 0 : 3, md: 3 },
           boxShadow: 24,
-          p: 3,
+          p: { xs: readOnly ? 2 : 3, md: 3 },
         }}
       >
         {!customer ? (
@@ -285,7 +288,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
                 </SoftTypography>
               </SoftBox>
               <SoftBox display="flex" gap={1}>
-                {Number(customer.debt || 0) > 0 && (
+                {!readOnly && Number(customer.debt || 0) > 0 && (
                   <SoftButton
                     size="small"
                     color="success"
@@ -296,7 +299,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
                     Thu công nợ
                   </SoftButton>
                 )}
-                <SoftButton
+                {!readOnly && <SoftButton
                   size="small"
                   color="success"
                   variant="outlined"
@@ -304,8 +307,8 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
                   onClick={() => setInteractionOpen(true)}
                 >
                   Ghi nhận tương tác
-                </SoftButton>
-                <SoftButton
+                </SoftButton>}
+                {!readOnly && <SoftButton
                   size="small"
                   color="info"
                   variant="outlined"
@@ -313,7 +316,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
                   onClick={() => onEdit(customer)}
                 >
                   Chỉnh sửa
-                </SoftButton>
+                </SoftButton>}
                 <IconButton onClick={onClose}>
                   <Icon>close</Icon>
                 </IconButton>
@@ -383,13 +386,61 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
                 </Card>
               </Grid>
             </Grid>
-            <Card sx={{ mt: 2 }}>
+            <Card sx={{ mt: 2, overflow: "hidden", borderRadius: { xs: readOnly ? 0 : 2, md: 2 } }}>
+              {readOnly ? (
+                <SoftBox
+                  display="flex"
+                  sx={{
+                    overflowX: "auto",
+                    WebkitOverflowScrolling: "touch",
+                    scrollbarWidth: "none",
+                    borderBottom: "1px solid #e4e6eb",
+                    "&::-webkit-scrollbar": { display: "none" },
+                  }}
+                >
+                  {[
+                    "Hồ sơ",
+                    `Hóa đơn (${customer.invoices.length})`,
+                    `Voucher (${customer.vouchers.length})`,
+                    `Mã kích hoạt (${activations.length})`,
+                    "Phiếu thu công nợ",
+                    `Tương tác (${customer.interactions.length})`,
+                  ].map((label, index) => (
+                    <SoftBox
+                      key={label}
+                      component="button"
+                      type="button"
+                      onClick={() => setTab(index)}
+                      px={1.75}
+                      py={1.5}
+                      flexShrink={0}
+                      sx={{
+                        border: 0,
+                        borderBottom: tab === index ? "3px solid #1877f2" : "3px solid transparent",
+                        background: "#fff",
+                        color: tab === index ? "#1877f2" : "#65676b",
+                        fontSize: 12,
+                        fontWeight: tab === index ? 700 : 500,
+                        whiteSpace: "nowrap",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {label}
+                    </SoftBox>
+                  ))}
+                </SoftBox>
+              ) : (
               <Tabs
                 value={tab}
                 onChange={(_, value) => setTab(value)}
                 sx={{
-                  "& .MuiTabs-flexContainer": { flexWrap: { xs: "wrap", md: "nowrap" } },
-                  "& .MuiTab-root": { minWidth: { xs: "50%", md: "auto" }, flex: { md: 1 } },
+                  borderBottom: "1px solid #e4e6eb",
+                  "& .MuiTabs-flexContainer": { flexWrap: "nowrap" },
+                  "& .MuiTab-root": {
+                    minWidth: { xs: "50%", md: "auto" },
+                    flex: { md: 1 },
+                    whiteSpace: "nowrap",
+                  },
                 }}
               >
                 <Tab label="Hồ sơ" />
@@ -399,7 +450,8 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
                 <Tab label="Phiếu thu công nợ" />
                 <Tab label={`Lịch sử tương tác (${customer.interactions.length})`} />
               </Tabs>
-              <SoftBox p={3}>
+              )}
+              <SoftBox p={{ xs: readOnly ? 1.5 : 3, md: 3 }} sx={{ overflow: "hidden" }}>
                 {tab === 0 && (
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
@@ -611,8 +663,8 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
 
 function DataTable({ headers, rows }) {
   return (
-    <SoftBox sx={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <SoftBox sx={{ width: "100%", maxWidth: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+      <table style={{ width: "100%", minWidth: 620, borderCollapse: "collapse", tableLayout: "auto" }}>
         <thead>
           <tr style={{ background: "#F8F9FA" }}>
             {headers.map((item) => (
@@ -652,6 +704,7 @@ function DataTable({ headers, rows }) {
 }
 
 export default function KhachHang() {
+  const isStaff = useSelector((state) => state.auth?.user?.role === "staff");
   const [customers, setCustomers] = useState([]);
   const [summary, setSummary] = useState({});
   const [search, setSearch] = useState("");
@@ -689,7 +742,8 @@ export default function KhachHang() {
       CustomerService.getSummary(),
     ])
       .then(([listResponse, summaryResponse]) => {
-        setCustomers(Array.isArray(listResponse.data?.data) ? listResponse.data.data : []);
+        const nextCustomers = Array.isArray(listResponse.data?.data) ? listResponse.data.data : [];
+        setCustomers((current) => (isStaff && page > 1 ? [...current, ...nextCustomers] : nextCustomers));
         setMeta(listResponse.data?.meta || { totalPages: 1, totalItems: 0 });
         setSummary(summaryResponse.data?.data || {});
       })
@@ -699,7 +753,7 @@ export default function KhachHang() {
       })
       .finally(() => setLoading(false));
   };
-  useEffect(load, [page, debouncedSearch, segment, source, zalo, debtWarning, refreshKey]);
+  useEffect(load, [page, debouncedSearch, segment, source, zalo, debtWarning, refreshKey, isStaff]);
   const refresh = (firstPage = false) => {
     if (firstPage) setPage(1);
     setRefreshKey((value) => value + 1);
@@ -745,18 +799,19 @@ export default function KhachHang() {
     }
   };
   return (
-    <DashboardLayout>
-      <DashboardNavbar />
-      <SoftBox py={3}>
-        <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
+    <DashboardLayout compactMobile={isStaff}>
+      {!isStaff && <DashboardNavbar />}
+      {isStaff && <StaffMobileHeader title="Khách hàng" subtitle="Danh bạ và hồ sơ khách hàng" onRefresh={() => refresh()} />}
+      <SoftBox py={{ xs: isStaff ? 1 : 3, md: 3 }} pb={{ xs: isStaff ? 10 : 3, md: 3 }} sx={{ bgcolor: { xs: isStaff ? "#f0f2f5" : "transparent", md: "transparent" }, minHeight: "100vh" }}>
+        <SoftBox display="flex" gap={{ xs: 1, md: 2 }} mb={{ xs: 1, md: 3 }} flexWrap={{ xs: isStaff ? "nowrap" : "wrap", md: "wrap" }} sx={{ overflowX: { xs: "auto", md: "visible" }, px: { xs: isStaff ? 1.5 : 0, md: 0 }, scrollbarWidth: "none" }}>
           {[
             ["Tổng khách hàng", summary.totalCustomers || 0, "groups", "#1565C0"],
             ["Đã kết bạn Zalo", summary.zaloConnected || 0, "chat", "#2E7D32"],
             ["Khách lead", summary.leads || 0, "person_add", "#7B1FA2"],
             ["Cảnh báo công nợ", summary.debtWarnings || 0, "warning", "#C62828"],
           ].map(([label, value, icon, color]) => (
-            <Card key={label} sx={{ flex: 1, minWidth: 180 }}>
-              <SoftBox p={2.5} display="flex" gap={2} alignItems="center">
+            <Card key={label} sx={{ flex: 1, minWidth: { xs: isStaff ? 145 : 180, md: 180 }, borderRadius: { xs: isStaff ? 2 : undefined, md: undefined }, boxShadow: { xs: isStaff ? "none" : undefined, md: undefined } }}>
+              <SoftBox p={{ xs: isStaff ? 1.5 : 2.5, md: 2.5 }} display="flex" gap={1.25} alignItems="center">
                 <Icon sx={{ color }}>{icon}</Icon>
                 <SoftBox>
                   <SoftTypography variant="caption">{label}</SoftTypography>
@@ -768,8 +823,8 @@ export default function KhachHang() {
             </Card>
           ))}
         </SoftBox>
-        <Card>
-          <SoftBox p={3}>
+        <Card sx={{ borderRadius: { xs: isStaff ? 0 : undefined, md: undefined }, boxShadow: { xs: isStaff ? "none" : undefined, md: undefined } }}>
+          <SoftBox p={{ xs: isStaff ? 2 : 3, md: 3 }}>
             <SoftBox
               display="flex"
               justifyContent="space-between"
@@ -778,7 +833,7 @@ export default function KhachHang() {
               flexWrap="wrap"
               gap={2}
             >
-              <SoftBox>
+              <SoftBox sx={{ display: { xs: isStaff ? "none" : "block", md: "block" } }}>
                 <SoftTypography variant="h5" fontWeight="bold">
                   Quản lý khách hàng
                 </SoftTypography>
@@ -786,7 +841,7 @@ export default function KhachHang() {
                   Hồ sơ 360°, công nợ, hóa đơn và tương tác
                 </SoftTypography>
               </SoftBox>
-              <SoftBox display="flex" gap={1} flexWrap="wrap">
+              {!isStaff && <SoftBox display="flex" gap={1} flexWrap="wrap">
                 <input
                   ref={importInputRef}
                   type="file"
@@ -822,7 +877,7 @@ export default function KhachHang() {
                 >
                   Thêm khách hàng
                 </SoftButton>
-              </SoftBox>
+              </SoftBox>}
             </SoftBox>
             <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
               <SoftBox sx={{ flex: 1, minWidth: 230 }}>
@@ -833,7 +888,7 @@ export default function KhachHang() {
                   icon={{ component: "search", direction: "left" }}
                 />
               </SoftBox>
-              <FormControl size="small" sx={{ minWidth: 150 }}>
+              <FormControl size="small" sx={{ minWidth: 150, display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" } }}>
                 <Select displayEmpty value={segment} onChange={(e) => setSegment(e.target.value)}>
                   <MenuItem value="">Mọi phân loại</MenuItem>
                   {CUSTOMER_SEGMENTS.map((item) => (
@@ -843,7 +898,7 @@ export default function KhachHang() {
                   ))}
                 </Select>
               </FormControl>
-              <FormControl size="small" sx={{ minWidth: 150 }}>
+              <FormControl size="small" sx={{ minWidth: 150, display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" } }}>
                 <Select displayEmpty value={source} onChange={(e) => setSource(e.target.value)}>
                   <MenuItem value="">Mọi nguồn</MenuItem>
                   <MenuItem value="LEAD">Khách lead</MenuItem>
@@ -851,14 +906,14 @@ export default function KhachHang() {
                   <MenuItem value="NEW">Khách mới</MenuItem>
                 </Select>
               </FormControl>
-              <FormControl size="small" sx={{ minWidth: 150 }}>
+              <FormControl size="small" sx={{ minWidth: 150, display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" } }}>
                 <Select displayEmpty value={zalo} onChange={(e) => setZalo(e.target.value)}>
                   <MenuItem value="">Mọi trạng thái Zalo</MenuItem>
                   <MenuItem value="true">Đã kết bạn Zalo</MenuItem>
                   <MenuItem value="false">Chưa kết bạn</MenuItem>
                 </Select>
               </FormControl>
-              <FormControl size="small" sx={{ minWidth: 190 }}>
+              <FormControl size="small" sx={{ minWidth: 190, display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" } }}>
                 <Select
                   displayEmpty
                   value={debtWarning}
@@ -869,7 +924,17 @@ export default function KhachHang() {
                 </Select>
               </FormControl>
             </SoftBox>
-            <SoftBox sx={{ overflowX: "auto" }}>
+            {isStaff && <SoftBox display={{ xs: "block", md: "none" }}>
+              {customers.map((item) => {
+                const warning = item.debtLimit > 0 && item.debt >= item.debtLimit;
+                return <SoftBox key={item.id || item._id} py={1.5} display="flex" gap={1.5} alignItems="center" onClick={() => setDetailId(item.id || item._id)} sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}>
+                  <SoftBox width={44} height={44} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>person</Icon></SoftBox>
+                  <SoftBox flex={1} minWidth={0}><SoftBox display="flex" alignItems="center" gap={0.75}><SoftTypography variant="button" fontWeight="bold" display="block" noWrap>{item.name}</SoftTypography>{item.zaloConnected && <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "#0068ff", bgcolor: "#e7f3ff", px: 0.75, py: 0.15, borderRadius: 1 }}>Zalo</SoftTypography>}</SoftBox><SoftTypography variant="caption" color="text">{item.code} · {item.phone}</SoftTypography><SoftTypography variant="caption" display="block" sx={{ color: warning ? "#c62828" : "#65676b" }}>Công nợ {money(item.debt)} / {money(item.debtLimit)}</SoftTypography></SoftBox>
+                  <Icon>chevron_right</Icon>
+                </SoftBox>;
+              })}
+            </SoftBox>}
+            <SoftBox sx={{ overflowX: "auto", display: { xs: isStaff ? "none" : "block", md: "block" } }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#F8F9FA" }}>
@@ -973,7 +1038,7 @@ export default function KhachHang() {
                                 <Icon color="info">visibility</Icon>
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="Chỉnh sửa">
+                            {!isStaff && <Tooltip title="Chỉnh sửa">
                               <IconButton
                                 onClick={() => {
                                   setSelected(item);
@@ -982,7 +1047,7 @@ export default function KhachHang() {
                               >
                                 <Icon color="info">edit</Icon>
                               </IconButton>
-                            </Tooltip>
+                            </Tooltip>}
                           </td>
                         </tr>
                       );
@@ -990,7 +1055,8 @@ export default function KhachHang() {
                 </tbody>
               </table>
             </SoftBox>
-            {meta.totalPages > 1 && (
+            {isStaff && <MobileLoadMore loading={loading} hasMore={page < (meta.totalPages || 1)} onLoadMore={() => setPage((value) => value + 1)} />}
+            {!isStaff && meta.totalPages > 1 && (
               <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center">
                 <SoftTypography variant="caption" color="text">
                   Tổng {meta.totalItems} khách hàng
@@ -1016,6 +1082,7 @@ export default function KhachHang() {
         customerId={detailId}
         open={Boolean(detailId)}
         onClose={() => setDetailId(null)}
+        readOnly={isStaff}
         onEdit={(customer) => {
           setDetailId(null);
           setSelected(customer);

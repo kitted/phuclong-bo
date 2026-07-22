@@ -20,8 +20,26 @@ import KhachHang from "layouts/khach-hang";
 import KhuyenMai from "layouts/khuyen-mai";
 import NhanVien from "layouts/nhan-vien";
 import AuditLogs from "layouts/audit-logs";
+import StaffHome from "layouts/staff-home";
+import ThuCongNo from "layouts/thu-cong-no";
 
 const routes = [
+  {
+    type: "route",
+    name: "Bảng tin bán hàng",
+    key: "staff-home",
+    route: "/staff-home",
+    component: <StaffHome />,
+    permission: ["staff"],
+  },
+  {
+    type: "route",
+    name: "Thu công nợ",
+    key: "thu-cong-no",
+    route: "/thu-cong-no",
+    component: <ThuCongNo />,
+    permission: ["staff"],
+  },
   // ─── Dashboard ────────────────────────────────────────────────────────────
   {
     type: "collapse",
@@ -31,7 +49,7 @@ const routes = [
     route: "/dashboards",
     noCollapse: true,
     component: <Default />,
-    permission: ["admin", "staff"],
+    permission: ["admin"],
   },
 
   // ─── Section: Kho hàng ────────────────────────────────────────────────────
@@ -45,7 +63,7 @@ const routes = [
     route: "/danh-muc",
     noCollapse: true,
     component: <DanhMuc />,
-    permission: ["admin", "staff"], // Hoặc ["admin"] nếu chỉ muốn admin truy cập
+    permission: ["admin"],
   },
   {
     type: "collapse",
@@ -55,7 +73,7 @@ const routes = [
     route: "/hang-hoa",
     noCollapse: true,
     component: <HangHoa />,
-    permission: ["admin", "staff"],
+    permission: ["admin"],
   },
   {
     type: "collapse",
@@ -65,7 +83,7 @@ const routes = [
     route: "/nhap-kho",
     noCollapse: true,
     component: <NhapKho />,
-    permission: ["admin", "staff"],
+    permission: ["admin"],
   },
   {
     type: "collapse",
@@ -75,7 +93,7 @@ const routes = [
     route: "/ton-kho",
     noCollapse: true,
     component: <TonKho />,
-    permission: ["admin", "staff"],
+    permission: ["admin"],
   },
 
   // ─── Section: Bán hàng ────────────────────────────────────────────────────
@@ -122,7 +140,7 @@ const routes = [
     route: "/khuyen-mai",
     noCollapse: true,
     component: <KhuyenMai />,
-    permission: ["admin", "staff"],
+    permission: ["admin"],
   },
 
   // ─── Section: Quản trị (admin only) ──────────────────────────────────────

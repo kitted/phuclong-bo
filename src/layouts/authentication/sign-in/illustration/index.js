@@ -74,11 +74,8 @@ function Illustration() {
           }
         }, 10 * 60 * 1000); // 10 phút
 
-        if (result.role === "admin" || result.role === "staff") {
-          navigate("/dashboards");
-        } else {
-          navigate("/dashboards");
-        }
+        const role = String(user?.role || result?.role || "").toLowerCase();
+        navigate(role === "staff" ? "/staff-home" : "/dashboards");
       }
 
       setLoading(false);
@@ -89,7 +86,6 @@ function Illustration() {
         setErr("");
       }, 3000);
     }
-    navigate("/dashboards");
   };
 
   return (

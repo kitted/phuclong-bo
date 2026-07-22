@@ -34,6 +34,7 @@ import { useSelector } from "react-redux";
 import { authSelector } from "redux/selector";
 import Illustration from "layouts/authentication/sign-in/illustration";
 import { ToastContainer } from "react-toastify";
+import StaffMobileNav from "components/StaffMobileNav";
 export default function App() {
   const [controller, dispatch] = useSoftUIController();
   const { miniSidenav, direction, layout, openConfigurator, sidenavColor } = controller;
@@ -139,7 +140,7 @@ export default function App() {
   return (
     <ThemeProvider theme={themeRTL}>
       <CssBaseline />
-      {layout === "dashboard" && (
+      {layout === "dashboard" && pathname !== "/staff-home" && (
         <>
           <Sidenav
             color={sidenavColor}
@@ -171,11 +172,12 @@ export default function App() {
             <Route exact path="/user/change-password" element={<ChangePassword />} />
             <Route
               path="*"
-              element={<Navigate to="/dashboards" />}
+              element={<Navigate to={user?.role === "staff" ? "/staff-home" : "/dashboards"} />}
             />
           </>
         )}
       </Routes>
+      {user?.role === "staff" && <StaffMobileNav />}
       <ToastContainer autoClose={5000} />
     </ThemeProvider>
   );

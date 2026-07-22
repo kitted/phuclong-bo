@@ -12,7 +12,7 @@ import SoftBox from "components/SoftBox";
 // Soft UI Dashboard PRO React context
 import { useSoftUIController, setLayout } from "context";
 
-function DashboardLayout({ children }) {
+function DashboardLayout({ children, compactMobile = false }) {
   const [controller, dispatch] = useSoftUIController();
   const { miniSidenav } = controller;
   const { pathname } = useLocation();
@@ -24,7 +24,7 @@ function DashboardLayout({ children }) {
   return (
     <SoftBox
       sx={({ breakpoints, transitions, functions: { pxToRem } }) => ({
-        p: 3,
+        p: compactMobile ? { xs: 0, md: 3 } : 3,
         position: "relative",
 
         [breakpoints.up("xl")]: {
@@ -44,6 +44,7 @@ function DashboardLayout({ children }) {
 // Typechecking props for the DashboardLayout
 DashboardLayout.propTypes = {
   children: PropTypes.node.isRequired,
+  compactMobile: PropTypes.bool,
 };
 
 export default DashboardLayout;

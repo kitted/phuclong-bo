@@ -26,6 +26,8 @@ import { InvoiceService, ProductService, TruckService } from "services/warehouse
 import { CustomerService } from "services/crmService";
 import EmployeeService from "services/employeeService";
 import { toast } from "react-toastify";
+import StaffMobileHeader from "components/StaffMobileHeader";
+import MobileLoadMore from "components/MobileLoadMore";
 
 const money = (value = 0) =>
   new Intl.NumberFormat("vi-VN", {
@@ -67,6 +69,38 @@ function Field({ label, children, xs = 12, md = 6 }) {
   );
 }
 
+function SectionTitle({ step, title, subtitle }) {
+  return (
+    <SoftBox display="flex" gap={1.25} alignItems="center" mt={2.5} mb={1.25}>
+      <SoftBox
+        width={30}
+        height={30}
+        borderRadius="50%"
+        bgcolor="success"
+        color="#fff"
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        flexShrink={0}
+      >
+        <SoftTypography variant="button" color="white" fontWeight="bold">
+          {step}
+        </SoftTypography>
+      </SoftBox>
+      <SoftBox>
+        <SoftTypography variant="button" fontWeight="bold" display="block">
+          {title}
+        </SoftTypography>
+        {subtitle && (
+          <SoftTypography variant="caption" color="text" display="block">
+            {subtitle}
+          </SoftTypography>
+        )}
+      </SoftBox>
+    </SoftBox>
+  );
+}
+
 function SearchSelect({
   value,
   onChange,
@@ -98,8 +132,9 @@ function SearchSelect({
   );
 }
 
-function CreateInvoiceModal({ open, onClose, onCreated }) {
-  const role = useSelector((state) => state.auth?.user?.role);
+export function CreateInvoiceModal({ open, onClose, onCreated }) {
+  const authUser = useSelector((state) => state.auth?.user);
+  const role = authUser?.role;
   const isAdmin = String(role || "").toLowerCase() === "admin";
   const [form, setForm] = useState({
     code: "",
@@ -149,7 +184,7 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
     setForm({
       code: "",
       date: today(),
-      sourceType: "warehouse",
+      sourceType: isAdmin ? "warehouse" : "truck",
       note: "",
       voucherCode: "",
       paymentMode: "PAY_NOW",
@@ -160,7 +195,7 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
       debtOverrideReason: "",
     });
     setCustomer(null);
-    setSalesperson(null);
+    setSalesperson(isAdmin ? null : authUser || null);
     setTruck(null);
     setItems([{ product: null, qty: 1, search: "" }]);
     setPreview(null);
@@ -169,7 +204,7 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
     setSelectedGiftPromotion(null);
     setGiftSelections({});
     setAppliedGiftPromotion(null);
-  }, [open]);
+  }, [open, isAdmin, authUser]);
   useEffect(() => {
     if (!open) return undefined;
     const timer = setTimeout(() => {
@@ -182,7 +217,11 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
     return () => clearTimeout(timer);
   }, [open, customerSearch]);
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || !isAdmin) {
+      setStaff([]);
+      setStaffLoading(false);
+      return undefined;
+    }
     const timer = setTimeout(() => {
       setStaffLoading(true);
       EmployeeService.getAll({
@@ -197,7 +236,7 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
         .finally(() => setStaffLoading(false));
     }, 350);
     return () => clearTimeout(timer);
-  }, [open, staffSearch]);
+  }, [open, staffSearch, isAdmin]);
   useEffect(() => {
     if (!open || form.sourceType !== "truck") return undefined;
     const timer = setTimeout(() => {
@@ -406,7 +445,7 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
         customerId: getId(customer) || undefined,
         sourceType: form.sourceType,
         truckId: getId(truck) || undefined,
-        salespersonId: getId(salesperson),
+        salespersonId: isAdmin ? getId(salesperson) : undefined,
         voucherCode: appliedVoucher || undefined,
         promotionApplications: appliedGiftPromotion
           ? [
@@ -508,463 +547,563 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
       <SoftBox
         sx={{
           position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: { xs: "96%", md: 900 },
-          maxHeight: "94vh",
+          top: { xs: 0, md: "50%" },
+          left: { xs: 0, md: "50%" },
+          transform: { xs: "none", md: "translate(-50%, -50%)" },
+          width: { xs: "100%", md: 900 },
+          height: { xs: "100dvh", md: "auto" },
+          maxHeight: { xs: "100dvh", md: "94vh" },
           overflowY: "auto",
           bgcolor: "background.paper",
-          borderRadius: 3,
+          borderRadius: { xs: 0, md: 3 },
           boxShadow: 24,
-          p: { xs: 2, md: 4 },
+          p: { xs: 0, md: 4 },
         }}
       >
-        <SoftTypography variant="h5" fontWeight="bold">
-          Tạo hóa đơn bán hàng
-        </SoftTypography>
-        <Grid container spacing={2} mt={0.5}>
-          <Field label="Mã hóa đơn">
-            <SoftInput
-              value={form.code}
-              onChange={(e) => set("code", e.target.value.toUpperCase())}
-              placeholder="Để trống để tự sinh"
-            />
-          </Field>
-          <Field label="Ngày hóa đơn *">
-            <SoftInput
-              type="date"
-              value={form.date}
-              onChange={(e) => set("date", e.target.value)}
-            />
-          </Field>
-          <Field label="Khách hàng" md={7}>
-            <SearchSelect
-              value={customer}
-              onChange={setCustomer}
-              options={customers}
-              loading={customersLoading}
-              inputValue={customerSearch}
-              onInputChange={setCustomerSearch}
-              placeholder="Tìm mã, tên hoặc số điện thoại..."
-              label={(item) => `${item.code || ""} · ${item.name || ""} · ${item.phone || ""}`}
-            />
-          </Field>
-          <Field label="Nhân viên xuất hóa đơn *" md={5}>
-            <SearchSelect
-              value={salesperson}
-              onChange={setSalesperson}
-              options={staff}
-              loading={staffLoading}
-              inputValue={staffSearch}
-              onInputChange={setStaffSearch}
-              placeholder="Tìm mã, tên hoặc số điện thoại..."
-              label={(item) =>
-                `${item.employeeCode || ""} · ${item.fullName || item.username || ""} · ${
-                  item.phone || ""
-                }`
-              }
-            />
-          </Field>
-        </Grid>
-        {customer && (
-          <SoftBox mt={2} p={2} borderRadius={2} bgcolor={overLimit ? "#FFF3E0" : "#F3F8FF"}>
-            <Grid container spacing={1}>
-              {[
-                ["Công nợ cũ", currentDebt],
-                ["Hạn mức", debtLimit],
-                [
-                  "Hạn mức còn lại",
-                  customer.availableDebtLimit ?? Math.max(0, debtLimit - currentDebt),
-                ],
-                ["Công nợ sau hóa đơn", projectedDebt],
-              ].map(([label, value]) => (
-                <Grid item xs={6} md={3} key={label}>
-                  <SoftTypography variant="caption" color="text">
-                    {label}
-                  </SoftTypography>
-                  <SoftTypography
-                    variant="button"
-                    fontWeight="bold"
-                    display="block"
-                    color={label === "Công nợ sau hóa đơn" && overLimit ? "error" : "dark"}
-                  >
-                    {money(value)}
-                  </SoftTypography>
-                </Grid>
-              ))}
-            </Grid>
-          </SoftBox>
-        )}
-        <SoftBox mt={2} p={2} border="1px solid #E5E7EB" borderRadius={2}>
-          <SoftTypography variant="button" fontWeight="bold">
-            Nguồn xuất hàng
-          </SoftTypography>
-          <RadioGroup
-            row
-            value={form.sourceType}
-            onChange={(e) => {
-              set("sourceType", e.target.value);
-              setTruck(null);
-              setItems([{ product: null, qty: 1, search: "" }]);
-            }}
-          >
-            <FormControlLabel
-              value="warehouse"
-              control={<Radio size="small" />}
-              label="Kho chính"
-            />
-            <FormControlLabel value="truck" control={<Radio size="small" />} label="Xe tải" />
-          </RadioGroup>
-          {form.sourceType === "truck" && (
-            <SearchSelect
-              value={truck}
-              onChange={(selected) => {
-                setTruck(selected);
-                setItems([{ product: null, qty: 1, search: "" }]);
-              }}
-              options={trucks}
-              loading={trucksLoading}
-              inputValue={truckSearch}
-              onInputChange={setTruckSearch}
-              placeholder="Tìm mã xe, tên xe, biển số hoặc tài xế..."
-              label={(item) =>
-                `${item.code || ""} · ${item.name || ""} · ${item.licensePlate || ""}`
-              }
-            />
-          )}
-        </SoftBox>
-        <SoftTypography variant="button" fontWeight="bold" display="block" mt={3} mb={1}>
-          Hàng hóa
-        </SoftTypography>
-        {items.map((item, index) => (
-          <SoftBox key={index} display="flex" gap={1} alignItems="center" mb={1.5}>
-            <SoftBox sx={{ flex: 3 }}>
-              <SearchSelect
-                value={item.product}
-                onChange={(product) => updateItem(index, { product })}
-                options={productOptions}
-                loading={productsLoading}
-                inputValue={item.search || ""}
-                onInputChange={(search) => {
-                  updateItem(index, { search });
-                  setProductSearch(search);
-                }}
-                placeholder="Tìm mã, tên hoặc barcode..."
-                label={(product) =>
-                  `${product.code || ""} · ${product.name || ""} · còn ${
-                    product.stock ?? product.quantity ?? product.warehouseQuantity ?? 0
-                  } ${product.unit || ""}`
-                }
-              />
-            </SoftBox>
-            <SoftBox sx={{ width: 110 }}>
-              <SoftInput
-                type="number"
-                inputProps={{ min: 1, step: 1 }}
-                value={item.qty}
-                onChange={(e) => updateItem(index, { qty: e.target.value })}
-              />
-            </SoftBox>
-            <IconButton
-              disabled={items.length === 1}
-              onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
-            >
-              <Icon color="error">remove_circle</Icon>
-            </IconButton>
-          </SoftBox>
-        ))}
-        <SoftButton
-          variant="text"
-          color="info"
-          startIcon={<Icon>add</Icon>}
-          onClick={() => setItems((current) => [...current, { product: null, qty: 1, search: "" }])}
+        <SoftBox
+          position={{ xs: "sticky", md: "static" }}
+          top={0}
+          zIndex={5}
+          bgcolor="background.paper"
+          px={{ xs: 2, md: 0 }}
+          py={{ xs: 1.5, md: 0 }}
+          display="flex"
+          justifyContent="space-between"
+          alignItems="center"
+          sx={{ borderBottom: { xs: "1px solid #eee", md: "none" } }}
         >
-          Thêm sản phẩm
-        </SoftButton>
-        {(giftPromotions.eligiblePromotions.length > 0 ||
-          giftPromotions.nearlyEligiblePromotions.length > 0) && (
-          <SoftBox mt={2} p={2} border="1px solid #D1E7DD" borderRadius={2}>
-            <SoftTypography variant="button" fontWeight="bold" color="success">
-              Chương trình quà tặng
+          <SoftBox>
+            <SoftTypography variant="h5" fontWeight="bold">
+              {isAdmin ? "Tạo hóa đơn bán hàng" : "Bán hàng nhanh"}
             </SoftTypography>
-            {giftPromotions.eligiblePromotions.map((promotion) => (
-              <SoftBox
-                key={promotion.promotionId}
-                mt={1}
-                p={1.5}
-                bgcolor={
-                  selectedGiftPromotion?.promotionId === promotion.promotionId
-                    ? "#E8F5E9"
-                    : "#F8F9FA"
-                }
-                borderRadius={2}
-              >
-                <FormControlLabel
-                  control={
-                    <Radio
-                      checked={selectedGiftPromotion?.promotionId === promotion.promotionId}
-                      onChange={() => chooseGiftPromotion(promotion)}
-                    />
-                  }
-                  label={`${promotion.code} · ${promotion.name} · áp dụng ${promotion.applicationCount} lần`}
-                />
-                {selectedGiftPromotion?.promotionId === promotion.promotionId && (
-                  <SoftBox pl={1}>
-                    {promotion.giftGroups.map((group) => (
-                      <SoftBox key={group.groupCode} mt={1}>
-                        <SoftTypography variant="caption" fontWeight="bold" display="block">
-                          {group.name || group.groupCode} — cần {group.requiredQuantity} sản phẩm{" "}
-                          {group.selectionMode === "ALL" ? "(tự động nhận tất cả)" : ""}
-                        </SoftTypography>
-                        {group.selectionMode !== "ALL" && (
-                          <Grid container spacing={1} mt={0}>
-                            {group.options.map((option) => (
-                              <Grid item xs={12} sm={6} key={option.productId}>
-                                <SoftBox
-                                  display="flex"
-                                  alignItems="center"
-                                  justifyContent="space-between"
-                                  gap={1}
-                                  p={1}
-                                  border="1px solid #E5E7EB"
-                                  borderRadius={1}
-                                >
-                                  <SoftTypography variant="caption">
-                                    {option.code} · {option.name}
-                                    <br />
-                                    Còn {option.availableStock}
-                                  </SoftTypography>
-                                  <SoftBox sx={{ width: 80 }}>
-                                    <SoftInput
-                                      type="number"
-                                      inputProps={{ min: 0, max: group.requiredQuantity }}
-                                      value={
-                                        giftSelections[group.groupCode]?.[option.productId] || 0
-                                      }
-                                      onChange={(event) =>
-                                        changeGiftQty(
-                                          group.groupCode,
-                                          option.productId,
-                                          event.target.value
-                                        )
-                                      }
-                                    />
-                                  </SoftBox>
-                                </SoftBox>
-                              </Grid>
-                            ))}
-                          </Grid>
-                        )}
-                      </SoftBox>
-                    ))}
-                    <SoftButton
-                      variant="outlined"
-                      color="success"
-                      size="small"
-                      sx={{ mt: 2 }}
-                      onClick={applyGift}
-                    >
-                      {appliedGiftPromotion ? "Đã xác nhận quà" : "Xác nhận quà tặng"}
-                    </SoftButton>
-                    {appliedGiftPromotion && (
-                      <SoftBox mt={1}>
-                        {(appliedGiftPromotion.gifts || []).map((gift, index) => (
-                          <SoftTypography
-                            key={`${gift.productId}-${index}`}
-                            variant="caption"
-                            display="block"
-                            color="success"
-                          >
-                            🎁 {gift.productName}: {gift.qty} {gift.unit}
-                          </SoftTypography>
-                        ))}
-                      </SoftBox>
-                    )}
-                  </SoftBox>
-                )}
-              </SoftBox>
-            ))}
-            {giftPromotions.nearlyEligiblePromotions.slice(0, 3).map((promotion) => (
-              <SoftTypography
-                key={promotion.promotionId}
-                variant="caption"
-                color="warning"
-                display="block"
-                mt={1}
-              >
-                Gợi ý: {promotion.name} — {promotion.message}
+            {!isAdmin && (
+              <SoftTypography variant="caption" color="text">
+                {authUser?.employeeCode || "NV"} · {authUser?.fullName || authUser?.username}
               </SoftTypography>
-            ))}
+            )}
           </SoftBox>
-        )}
-        <SoftBox mt={2} p={2} sx={{ border: "1px solid #e5e7eb", borderRadius: 2 }}>
-          <SoftTypography variant="button" fontWeight="bold">
-            Hình thức ghi nhận hóa đơn
-          </SoftTypography>
-          <RadioGroup
-            row
-            value={form.paymentMode}
-            onChange={(event) => {
-              const value = event.target.value;
-              setForm((current) => ({
-                ...current,
-                paymentMode: value,
-                ...(value === "DEBT" ? { cashAmount: 0, bankAmount: 0, referenceCode: "" } : {}),
-              }));
-            }}
-          >
-            <FormControlLabel
-              value="PAY_NOW"
-              control={<Radio />}
-              label="Thanh toán ngay / một phần"
-            />
-            <FormControlLabel value="DEBT" control={<Radio />} label="Ghi nợ toàn bộ" />
-          </RadioGroup>
-          {form.paymentMode === "DEBT" && (
-            <SoftTypography variant="caption" color="error">
-              Hóa đơn sẽ ở trạng thái Chưa thanh toán và toàn bộ thành tiền được cộng vào công nợ
-              khách hàng.
-            </SoftTypography>
-          )}
+          <IconButton onClick={onClose} sx={{ display: { xs: "inline-flex", md: "none" } }}>
+            <Icon>close</Icon>
+          </IconButton>
         </SoftBox>
-        <Grid container spacing={2} mt={1}>
-          <Field label="Mã khuyến mãi" md={8}>
-            <SoftBox display="flex" gap={1}>
-              <SoftInput
-                value={form.voucherCode}
-                onChange={(e) => set("voucherCode", e.target.value.toUpperCase())}
-                placeholder="Nhập mã voucher"
-              />
-              <SoftButton variant="outlined" color="info" onClick={applyVoucher}>
-                {appliedVoucher ? "Kiểm tra lại" : "Áp dụng"}
-              </SoftButton>
-              {appliedVoucher && (
-                <SoftButton
-                  variant="text"
-                  color="secondary"
-                  onClick={() => {
-                    setAppliedVoucher("");
-                    set("voucherCode", "");
-                  }}
-                >
-                  Bỏ mã
-                </SoftButton>
-              )}
-            </SoftBox>
-          </Field>
-          <Field label="Ghi chú" md={4}>
-            <SoftInput value={form.note} onChange={(e) => set("note", e.target.value)} />
-          </Field>
-        </Grid>
-        {previewError && (
-          <SoftTypography variant="caption" color="error" display="block" mt={1}>
-            {previewError}
-          </SoftTypography>
-        )}
-        <SoftBox mt={2} p={2} bgcolor="#F8F9FA" borderRadius={2}>
-          <SoftBox display="flex" justifyContent="space-between">
-            <SoftTypography variant="button">Tạm tính</SoftTypography>
-            <SoftTypography variant="button">{money(preview?.subtotal)}</SoftTypography>
-          </SoftBox>
-          <SoftBox display="flex" justifyContent="space-between">
-            <SoftTypography variant="button" color="success">
-              Khuyến mãi {preview?.promotion?.name ? `(${preview.promotion.name})` : ""}
-            </SoftTypography>
-            <SoftTypography variant="button" color="success">
-              -{money(preview?.discountAmount)}
-            </SoftTypography>
-          </SoftBox>
-          <SoftBox display="flex" justifyContent="space-between" mt={1}>
-            <SoftTypography variant="h6" fontWeight="bold">
-              Thành tiền
-            </SoftTypography>
-            <SoftTypography variant="h6" fontWeight="bold">
-              {money(grandTotal)}
-            </SoftTypography>
-          </SoftBox>
-        </SoftBox>
-        {form.paymentMode !== "DEBT" && (
-          <Grid container spacing={2} mt={1}>
-            <Field label="Tiền mặt">
-              <SoftInput
-                value={numberText(form.cashAmount)}
-                onChange={(e) => set("cashAmount", moneyValue(e.target.value))}
-                inputProps={{ inputMode: "numeric" }}
+        <SoftBox px={{ xs: 2, md: 0 }} pb={{ xs: 12, md: 0 }}>
+          <SectionTitle
+            step="1"
+            title="Khách hàng"
+            subtitle="Tìm nhanh theo tên hoặc số điện thoại"
+          />
+          <Grid container spacing={2} mt={0}>
+            {isAdmin && (
+              <>
+                <Field label="Mã hóa đơn">
+                  <SoftInput
+                    value={form.code}
+                    onChange={(e) => set("code", e.target.value.toUpperCase())}
+                    placeholder="Để trống để tự sinh"
+                  />
+                </Field>
+                <Field label="Ngày hóa đơn *">
+                  <SoftInput
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => set("date", e.target.value)}
+                  />
+                </Field>
+              </>
+            )}
+            <Field label="Khách hàng" md={7}>
+              <SearchSelect
+                value={customer}
+                onChange={setCustomer}
+                options={customers}
+                loading={customersLoading}
+                inputValue={customerSearch}
+                onInputChange={setCustomerSearch}
+                placeholder="Tìm mã, tên hoặc số điện thoại..."
+                label={(item) => `${item.code || ""} · ${item.name || ""} · ${item.phone || ""}`}
               />
             </Field>
-            <Field label="Chuyển khoản">
-              <SoftInput
-                value={numberText(form.bankAmount)}
-                onChange={(e) => set("bankAmount", moneyValue(e.target.value))}
-                inputProps={{ inputMode: "numeric" }}
-              />
-            </Field>
-            {Number(form.bankAmount) > 0 && (
-              <Field label="Mã giao dịch" md={12}>
-                <SoftInput
-                  value={form.referenceCode}
-                  onChange={(e) => set("referenceCode", e.target.value)}
+            {isAdmin && (
+              <Field label="Nhân viên xuất hóa đơn *" md={5}>
+                <SearchSelect
+                  value={salesperson}
+                  onChange={setSalesperson}
+                  options={staff}
+                  loading={staffLoading}
+                  inputValue={staffSearch}
+                  onInputChange={setStaffSearch}
+                  placeholder="Tìm mã, tên hoặc số điện thoại..."
+                  label={(item) =>
+                    `${item.employeeCode || ""} · ${item.fullName || item.username || ""} · ${
+                      item.phone || ""
+                    }`
+                  }
                 />
               </Field>
             )}
           </Grid>
-        )}
-        <SoftBox display="flex" justifyContent="space-between" mt={2}>
-          <SoftTypography variant="button">
-            Đã thanh toán: <b>{money(paidAmount)}</b>
-          </SoftTypography>
-          <SoftTypography variant="button" color={invoiceDebt > 0 ? "error" : "success"}>
-            Còn nợ: <b>{money(invoiceDebt)}</b>
-          </SoftTypography>
-        </SoftBox>
-        {overLimit && (
-          <SoftBox mt={2} p={2} bgcolor="#FFF3E0" borderRadius={2}>
-            <SoftTypography variant="button" color="error" fontWeight="bold">
-              Hóa đơn vượt hạn mức công nợ {money(projectedDebt - debtLimit)}
+          {customer && (
+            <SoftBox mt={2} p={2} borderRadius={2} bgcolor={overLimit ? "#FFF3E0" : "#F3F8FF"}>
+              <Grid container spacing={1}>
+                {[
+                  ["Công nợ cũ", currentDebt],
+                  ["Hạn mức", debtLimit],
+                  [
+                    "Hạn mức còn lại",
+                    customer.availableDebtLimit ?? Math.max(0, debtLimit - currentDebt),
+                  ],
+                  ["Công nợ sau hóa đơn", projectedDebt],
+                ].map(([label, value]) => (
+                  <Grid item xs={6} md={3} key={label}>
+                    <SoftTypography variant="caption" color="text">
+                      {label}
+                    </SoftTypography>
+                    <SoftTypography
+                      variant="button"
+                      fontWeight="bold"
+                      display="block"
+                      color={label === "Công nợ sau hóa đơn" && overLimit ? "error" : "dark"}
+                    >
+                      {money(value)}
+                    </SoftTypography>
+                  </Grid>
+                ))}
+              </Grid>
+            </SoftBox>
+          )}
+          <SectionTitle
+            step="2"
+            title="Nguồn hàng"
+            subtitle="Chọn kho chính hoặc xe đang đi thị trường"
+          />
+          <SoftBox p={2} border="1px solid #E5E7EB" borderRadius={2}>
+            <SoftTypography variant="button" fontWeight="bold">
+              Nguồn xuất hàng
             </SoftTypography>
-            {isAdmin && (
-              <>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={form.allowDebtLimitOverride}
-                      onChange={(e) => set("allowDebtLimitOverride", e.target.checked)}
-                    />
-                  }
-                  label="Admin cho phép vượt hạn mức"
-                />
-                {form.allowDebtLimitOverride && (
-                  <SoftInput
-                    value={form.debtOverrideReason}
-                    onChange={(e) => set("debtOverrideReason", e.target.value)}
-                    placeholder="Lý do phê duyệt bắt buộc"
-                  />
-                )}
-              </>
+            <RadioGroup
+              row
+              value={form.sourceType}
+              onChange={(e) => {
+                set("sourceType", e.target.value);
+                setTruck(null);
+                setItems([{ product: null, qty: 1, search: "" }]);
+              }}
+            >
+              <FormControlLabel
+                value="warehouse"
+                control={<Radio size="small" />}
+                label="Kho chính"
+              />
+              <FormControlLabel value="truck" control={<Radio size="small" />} label="Xe tải" />
+            </RadioGroup>
+            {form.sourceType === "truck" && (
+              <SearchSelect
+                value={truck}
+                onChange={(selected) => {
+                  setTruck(selected);
+                  setItems([{ product: null, qty: 1, search: "" }]);
+                }}
+                options={trucks}
+                loading={trucksLoading}
+                inputValue={truckSearch}
+                onInputChange={setTruckSearch}
+                placeholder="Tìm mã xe, tên xe, biển số hoặc tài xế..."
+                label={(item) =>
+                  `${item.code || ""} · ${item.name || ""} · ${item.licensePlate || ""}`
+                }
+              />
             )}
           </SoftBox>
-        )}
-        <SoftBox display="flex" gap={2} mt={3}>
-          <SoftButton variant="outlined" color="secondary" fullWidth onClick={onClose}>
-            Hủy
-          </SoftButton>
+          <SectionTitle step="3" title="Hàng hóa" subtitle="Tìm theo mã, tên hoặc barcode" />
+          {items.map((item, index) => (
+            <SoftBox
+              key={index}
+              display="flex"
+              flexDirection={{ xs: "column", sm: "row" }}
+              gap={1}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              mb={1.5}
+              p={{ xs: 1.25, sm: 0 }}
+              sx={{ border: { xs: "1px solid #eee", sm: "none" }, borderRadius: 2 }}
+            >
+              <SoftBox sx={{ flex: 3 }}>
+                <SearchSelect
+                  value={item.product}
+                  onChange={(product) => updateItem(index, { product })}
+                  options={productOptions}
+                  loading={productsLoading}
+                  inputValue={item.search || ""}
+                  onInputChange={(search) => {
+                    updateItem(index, { search });
+                    setProductSearch(search);
+                  }}
+                  placeholder="Tìm mã, tên hoặc barcode..."
+                  label={(product) =>
+                    `${product.code || ""} · ${product.name || ""} · còn ${
+                      product.stock ?? product.quantity ?? product.warehouseQuantity ?? 0
+                    } ${product.unit || ""}`
+                  }
+                />
+              </SoftBox>
+              <SoftBox
+                display="flex"
+                alignItems="center"
+                gap={1}
+                sx={{ width: { xs: "100%", sm: 110 } }}
+              >
+                <SoftTypography
+                  variant="caption"
+                  sx={{ display: { xs: "block", sm: "none" }, minWidth: 65 }}
+                >
+                  Số lượng
+                </SoftTypography>
+                <SoftInput
+                  type="number"
+                  inputProps={{ min: 1, step: 1 }}
+                  value={item.qty}
+                  onChange={(e) => updateItem(index, { qty: e.target.value })}
+                />
+                <IconButton
+                  disabled={items.length === 1}
+                  onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
+                >
+                  <Icon color="error">remove_circle</Icon>
+                </IconButton>
+              </SoftBox>
+            </SoftBox>
+          ))}
           <SoftButton
-            variant="gradient"
-            color="success"
-            fullWidth
-            disabled={submitting}
-            onClick={submit}
+            variant="text"
+            color="info"
+            startIcon={<Icon>add</Icon>}
+            onClick={() =>
+              setItems((current) => [...current, { product: null, qty: 1, search: "" }])
+            }
           >
-            {submitting ? "Đang tạo..." : "Tạo hóa đơn"}
+            Thêm sản phẩm
           </SoftButton>
+          {(giftPromotions.eligiblePromotions.length > 0 ||
+            giftPromotions.nearlyEligiblePromotions.length > 0) && (
+            <SoftBox mt={2} p={2} border="1px solid #D1E7DD" borderRadius={2}>
+              <SoftTypography variant="button" fontWeight="bold" color="success">
+                Chương trình quà tặng
+              </SoftTypography>
+              {giftPromotions.eligiblePromotions.map((promotion) => (
+                <SoftBox
+                  key={promotion.promotionId}
+                  mt={1}
+                  p={1.5}
+                  bgcolor={
+                    selectedGiftPromotion?.promotionId === promotion.promotionId
+                      ? "#E8F5E9"
+                      : "#F8F9FA"
+                  }
+                  borderRadius={2}
+                >
+                  <FormControlLabel
+                    control={
+                      <Radio
+                        checked={selectedGiftPromotion?.promotionId === promotion.promotionId}
+                        onChange={() => chooseGiftPromotion(promotion)}
+                      />
+                    }
+                    label={`${promotion.code} · ${promotion.name} · áp dụng ${promotion.applicationCount} lần`}
+                  />
+                  {selectedGiftPromotion?.promotionId === promotion.promotionId && (
+                    <SoftBox pl={1}>
+                      {promotion.giftGroups.map((group) => (
+                        <SoftBox key={group.groupCode} mt={1}>
+                          <SoftTypography variant="caption" fontWeight="bold" display="block">
+                            {group.name || group.groupCode} — cần {group.requiredQuantity} sản phẩm{" "}
+                            {group.selectionMode === "ALL" ? "(tự động nhận tất cả)" : ""}
+                          </SoftTypography>
+                          {group.selectionMode !== "ALL" && (
+                            <Grid container spacing={1} mt={0}>
+                              {group.options.map((option) => (
+                                <Grid item xs={12} sm={6} key={option.productId}>
+                                  <SoftBox
+                                    display="flex"
+                                    alignItems="center"
+                                    justifyContent="space-between"
+                                    gap={1}
+                                    p={1}
+                                    border="1px solid #E5E7EB"
+                                    borderRadius={1}
+                                  >
+                                    <SoftTypography variant="caption">
+                                      {option.code} · {option.name}
+                                      <br />
+                                      Còn {option.availableStock}
+                                    </SoftTypography>
+                                    <SoftBox sx={{ width: 80 }}>
+                                      <SoftInput
+                                        type="number"
+                                        inputProps={{ min: 0, max: group.requiredQuantity }}
+                                        value={
+                                          giftSelections[group.groupCode]?.[option.productId] || 0
+                                        }
+                                        onChange={(event) =>
+                                          changeGiftQty(
+                                            group.groupCode,
+                                            option.productId,
+                                            event.target.value
+                                          )
+                                        }
+                                      />
+                                    </SoftBox>
+                                  </SoftBox>
+                                </Grid>
+                              ))}
+                            </Grid>
+                          )}
+                        </SoftBox>
+                      ))}
+                      <SoftButton
+                        variant="outlined"
+                        color="success"
+                        size="small"
+                        sx={{ mt: 2 }}
+                        onClick={applyGift}
+                      >
+                        {appliedGiftPromotion ? "Đã xác nhận quà" : "Xác nhận quà tặng"}
+                      </SoftButton>
+                      {appliedGiftPromotion && (
+                        <SoftBox mt={1}>
+                          {(appliedGiftPromotion.gifts || []).map((gift, index) => (
+                            <SoftTypography
+                              key={`${gift.productId}-${index}`}
+                              variant="caption"
+                              display="block"
+                              color="success"
+                            >
+                              🎁 {gift.productName}: {gift.qty} {gift.unit}
+                            </SoftTypography>
+                          ))}
+                        </SoftBox>
+                      )}
+                    </SoftBox>
+                  )}
+                </SoftBox>
+              ))}
+              {giftPromotions.nearlyEligiblePromotions.slice(0, 3).map((promotion) => (
+                <SoftTypography
+                  key={promotion.promotionId}
+                  variant="caption"
+                  color="warning"
+                  display="block"
+                  mt={1}
+                >
+                  Gợi ý: {promotion.name} — {promotion.message}
+                </SoftTypography>
+              ))}
+            </SoftBox>
+          )}
+          <SectionTitle
+            step="4"
+            title="Thanh toán và ưu đãi"
+            subtitle="Chọn cách thanh toán, voucher và kiểm tra tổng tiền"
+          />
+          <SoftBox mt={2} p={2} sx={{ border: "1px solid #e5e7eb", borderRadius: 2 }}>
+            <SoftTypography variant="button" fontWeight="bold">
+              Hình thức ghi nhận hóa đơn
+            </SoftTypography>
+            <RadioGroup
+              row
+              value={form.paymentMode}
+              onChange={(event) => {
+                const value = event.target.value;
+                setForm((current) => ({
+                  ...current,
+                  paymentMode: value,
+                  ...(value === "DEBT" ? { cashAmount: 0, bankAmount: 0, referenceCode: "" } : {}),
+                }));
+              }}
+            >
+              <FormControlLabel
+                value="PAY_NOW"
+                control={<Radio />}
+                label="Thanh toán ngay / một phần"
+              />
+              <FormControlLabel value="DEBT" control={<Radio />} label="Ghi nợ toàn bộ" />
+            </RadioGroup>
+            {form.paymentMode === "DEBT" && (
+              <SoftTypography variant="caption" color="error">
+                Hóa đơn sẽ ở trạng thái Chưa thanh toán và toàn bộ thành tiền được cộng vào công nợ
+                khách hàng.
+              </SoftTypography>
+            )}
+          </SoftBox>
+          <Grid container spacing={2} mt={1}>
+            <Field label="Mã khuyến mãi" md={8}>
+              <SoftBox display="flex" gap={1}>
+                <SoftInput
+                  value={form.voucherCode}
+                  onChange={(e) => set("voucherCode", e.target.value.toUpperCase())}
+                  placeholder="Nhập mã voucher"
+                />
+                <SoftButton variant="outlined" color="info" onClick={applyVoucher}>
+                  {appliedVoucher ? "Kiểm tra lại" : "Áp dụng"}
+                </SoftButton>
+                {appliedVoucher && (
+                  <SoftButton
+                    variant="text"
+                    color="secondary"
+                    onClick={() => {
+                      setAppliedVoucher("");
+                      set("voucherCode", "");
+                    }}
+                  >
+                    Bỏ mã
+                  </SoftButton>
+                )}
+              </SoftBox>
+            </Field>
+            <Field label="Ghi chú" md={4}>
+              <SoftInput value={form.note} onChange={(e) => set("note", e.target.value)} />
+            </Field>
+          </Grid>
+          {previewError && (
+            <SoftTypography variant="caption" color="error" display="block" mt={1}>
+              {previewError}
+            </SoftTypography>
+          )}
+          <SoftBox mt={2} p={2} bgcolor="#F8F9FA" borderRadius={2}>
+            <SoftBox display="flex" justifyContent="space-between">
+              <SoftTypography variant="button">Tạm tính</SoftTypography>
+              <SoftTypography variant="button">{money(preview?.subtotal)}</SoftTypography>
+            </SoftBox>
+            <SoftBox display="flex" justifyContent="space-between">
+              <SoftTypography variant="button" color="success">
+                Khuyến mãi {preview?.promotion?.name ? `(${preview.promotion.name})` : ""}
+              </SoftTypography>
+              <SoftTypography variant="button" color="success">
+                -{money(preview?.discountAmount)}
+              </SoftTypography>
+            </SoftBox>
+            <SoftBox display="flex" justifyContent="space-between" mt={1}>
+              <SoftTypography variant="h6" fontWeight="bold">
+                Thành tiền
+              </SoftTypography>
+              <SoftTypography variant="h6" fontWeight="bold">
+                {money(grandTotal)}
+              </SoftTypography>
+            </SoftBox>
+          </SoftBox>
+          {form.paymentMode !== "DEBT" && (
+            <Grid container spacing={2} mt={1}>
+              <Field label="Tiền mặt">
+                <SoftInput
+                  value={numberText(form.cashAmount)}
+                  onChange={(e) => set("cashAmount", moneyValue(e.target.value))}
+                  inputProps={{ inputMode: "numeric" }}
+                />
+              </Field>
+              <Field label="Chuyển khoản">
+                <SoftInput
+                  value={numberText(form.bankAmount)}
+                  onChange={(e) => set("bankAmount", moneyValue(e.target.value))}
+                  inputProps={{ inputMode: "numeric" }}
+                />
+              </Field>
+              {Number(form.bankAmount) > 0 && (
+                <Field label="Mã giao dịch" md={12}>
+                  <SoftInput
+                    value={form.referenceCode}
+                    onChange={(e) => set("referenceCode", e.target.value)}
+                  />
+                </Field>
+              )}
+            </Grid>
+          )}
+          <SoftBox display="flex" justifyContent="space-between" mt={2}>
+            <SoftTypography variant="button">
+              Đã thanh toán: <b>{money(paidAmount)}</b>
+            </SoftTypography>
+            <SoftTypography variant="button" color={invoiceDebt > 0 ? "error" : "success"}>
+              Còn nợ: <b>{money(invoiceDebt)}</b>
+            </SoftTypography>
+          </SoftBox>
+          {overLimit && (
+            <SoftBox mt={2} p={2} bgcolor="#FFF3E0" borderRadius={2}>
+              <SoftTypography variant="button" color="error" fontWeight="bold">
+                Hóa đơn vượt hạn mức công nợ {money(projectedDebt - debtLimit)}
+              </SoftTypography>
+              {isAdmin && (
+                <>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={form.allowDebtLimitOverride}
+                        onChange={(e) => set("allowDebtLimitOverride", e.target.checked)}
+                      />
+                    }
+                    label="Admin cho phép vượt hạn mức"
+                  />
+                  {form.allowDebtLimitOverride && (
+                    <SoftInput
+                      value={form.debtOverrideReason}
+                      onChange={(e) => set("debtOverrideReason", e.target.value)}
+                      placeholder="Lý do phê duyệt bắt buộc"
+                    />
+                  )}
+                </>
+              )}
+            </SoftBox>
+          )}
+          <SoftBox
+            display="flex"
+            gap={1.5}
+            mt={3}
+            position={{ xs: "sticky", md: "static" }}
+            bottom={0}
+            zIndex={5}
+            bgcolor="background.paper"
+            mx={{ xs: -2, md: 0 }}
+            px={{ xs: 2, md: 0 }}
+            py={{ xs: 1.25, md: 0 }}
+            sx={{
+              borderTop: { xs: "1px solid #e5e7eb", md: "none" },
+              boxShadow: { xs: "0 -4px 16px rgba(0,0,0,.08)", md: "none" },
+            }}
+          >
+            <SoftButton
+              variant="outlined"
+              color="secondary"
+              fullWidth
+              onClick={onClose}
+              sx={{ display: { xs: "none", sm: "inline-flex" } }}
+            >
+              Hủy
+            </SoftButton>
+            <SoftBox sx={{ display: { xs: "block", sm: "none" }, minWidth: 112 }}>
+              <SoftTypography variant="caption" color="text" display="block">
+                Khách trả
+              </SoftTypography>
+              <SoftTypography
+                variant="button"
+                fontWeight="bold"
+                color={invoiceDebt > 0 ? "error" : "success"}
+              >
+                {money(grandTotal)}
+              </SoftTypography>
+            </SoftBox>
+            <SoftButton
+              variant="gradient"
+              color="success"
+              fullWidth
+              disabled={submitting}
+              onClick={submit}
+            >
+              {submitting ? "Đang tạo..." : isAdmin ? "Tạo hóa đơn" : "Xác nhận bán hàng"}
+            </SoftButton>
+          </SoftBox>
         </SoftBox>
       </SoftBox>
     </Modal>
   );
 }
 
-function InvoiceDetail({ id, onClose }) {
+function InvoiceDetail({ id, onClose, mobile = false }) {
   const [invoice, setInvoice] = useState(null);
   useEffect(() => {
     if (id)
@@ -977,16 +1116,17 @@ function InvoiceDetail({ id, onClose }) {
       <SoftBox
         sx={{
           position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: { xs: "94%", md: 650 },
-          maxHeight: "90vh",
+          top: { xs: mobile ? 0 : "50%", md: "50%" },
+          left: { xs: mobile ? 0 : "50%", md: "50%" },
+          transform: { xs: mobile ? "none" : "translate(-50%, -50%)", md: "translate(-50%, -50%)" },
+          width: { xs: mobile ? "100%" : "94%", md: 650 },
+          height: { xs: mobile ? "100%" : "auto", md: "auto" },
+          maxHeight: { xs: mobile ? "100%" : "90vh", md: "90vh" },
           overflowY: "auto",
           bgcolor: "background.paper",
-          borderRadius: 3,
+          borderRadius: { xs: mobile ? 0 : 3, md: 3 },
           boxShadow: 24,
-          p: 4,
+          p: { xs: mobile ? 2 : 4, md: 4 },
         }}
       >
         {!invoice ? (
@@ -1083,6 +1223,8 @@ function InvoiceDetail({ id, onClose }) {
 }
 
 export default function HoaDon() {
+  const currentUser = useSelector((state) => state.auth?.user);
+  const isStaff = String(currentUser?.role || "").toLowerCase() === "staff";
   const [invoices, setInvoices] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [summary, setSummary] = useState({});
@@ -1101,10 +1243,11 @@ export default function HoaDon() {
     return () => clearTimeout(timer);
   }, [search]);
   useEffect(() => {
+    if (isStaff) return;
     EmployeeService.getAll({ role: "staff", status: "ACTIVE", page: 1, limit: 100 })
       .then((response) => setEmployees(listOf(response)))
       .catch(() => setEmployees([]));
-  }, []);
+  }, [isStaff]);
   useEffect(() => setPage(1), [debouncedSearch, salespersonId, paymentStatus, month]);
   const filters = useMemo(() => {
     if (!month)
@@ -1130,19 +1273,26 @@ export default function HoaDon() {
       InvoiceService.getSummary(filters),
     ])
       .then(([listResponse, summaryResponse]) => {
-        setInvoices(listOf(listResponse));
+        const nextInvoices = listOf(listResponse);
+        setInvoices((current) => (isStaff && page > 1 ? [...current, ...nextInvoices] : nextInvoices));
         setMeta(listResponse.data?.meta || { totalPages: 1, total: 0 });
         setSummary(summaryResponse.data?.data || {});
       })
       .catch((error) => toast.error(errorMessage(error, "Không thể tải hóa đơn")))
       .finally(() => setLoading(false));
-  }, [filters, page]);
+  }, [filters, page, isStaff]);
   useEffect(load, [load]);
   return (
-    <DashboardLayout>
-      <DashboardNavbar />
-      <SoftBox py={3}>
-        <Grid container spacing={2} mb={3}>
+    <DashboardLayout compactMobile={isStaff}>
+      {!isStaff && <DashboardNavbar />}
+      {isStaff && <StaffMobileHeader title="Hóa đơn" subtitle="Lịch sử bán hàng của tôi" onRefresh={load} />}
+      <SoftBox py={{ xs: isStaff ? 1 : 3, md: 3 }} pb={{ xs: isStaff ? 10 : 3, md: 3 }} sx={{ bgcolor: { xs: isStaff ? "#f0f2f5" : "transparent", md: "transparent" }, minHeight: "100vh" }}>
+        <Grid
+          container
+          spacing={2}
+          mb={3}
+          sx={{ display: { xs: isStaff ? "none" : "flex", md: "flex" } }}
+        >
           {[
             ["Số hóa đơn", summary.invoiceCount || 0],
             ["Doanh thu", money(summary.netRevenue)],
@@ -1164,15 +1314,17 @@ export default function HoaDon() {
             </Grid>
           ))}
         </Grid>
-        <Card>
-          <SoftBox p={3}>
+        <Card sx={{ borderRadius: { xs: isStaff ? 0 : undefined, md: undefined }, boxShadow: { xs: isStaff ? "none" : undefined, md: undefined } }}>
+          <SoftBox p={{ xs: isStaff ? 2 : 3, md: 3 }}>
             <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-              <SoftBox>
+              <SoftBox sx={{ display: { xs: isStaff ? "none" : "block", md: "block" } }}>
                 <SoftTypography variant="h5" fontWeight="bold">
-                  Hóa đơn bán hàng
+                  {isStaff ? "Bán hàng thị trường" : "Hóa đơn bán hàng"}
                 </SoftTypography>
                 <SoftTypography variant="caption" color="text">
-                  Doanh thu, thanh toán, khuyến mãi và công nợ
+                  {isStaff
+                    ? "Tạo đơn nhanh và xem lịch sử bán trong tháng"
+                    : "Doanh thu, thanh toán, khuyến mãi và công nợ"}
                 </SoftTypography>
               </SoftBox>
               <SoftButton
@@ -1181,7 +1333,7 @@ export default function HoaDon() {
                 startIcon={<Icon>add</Icon>}
                 onClick={() => setCreateOpen(true)}
               >
-                Tạo hóa đơn
+                {isStaff ? "Bán hàng nhanh" : "Tạo hóa đơn"}
               </SoftButton>
             </SoftBox>
             <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
@@ -1197,23 +1349,25 @@ export default function HoaDon() {
                 type="month"
                 value={month}
                 onChange={(event) => setMonth(event.target.value)}
-                sx={{ width: 170 }}
+                sx={{ width: 170, display: { xs: isStaff ? "none" : "block", md: "block" } }}
               />
-              <FormControl size="small" sx={{ minWidth: 210 }}>
-                <Select
-                  displayEmpty
-                  value={salespersonId}
-                  onChange={(event) => setSalespersonId(event.target.value)}
-                >
-                  <MenuItem value="">Tất cả nhân viên</MenuItem>
-                  {employees.map((employee) => (
-                    <MenuItem key={getId(employee)} value={getId(employee)}>
-                      {employee.employeeCode} - {employee.fullName || employee.username}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 190 }}>
+              {!isStaff && (
+                <FormControl size="small" sx={{ minWidth: 210 }}>
+                  <Select
+                    displayEmpty
+                    value={salespersonId}
+                    onChange={(event) => setSalespersonId(event.target.value)}
+                  >
+                    <MenuItem value="">Tất cả nhân viên</MenuItem>
+                    {employees.map((employee) => (
+                      <MenuItem key={getId(employee)} value={getId(employee)}>
+                        {employee.employeeCode} - {employee.fullName || employee.username}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+              <FormControl size="small" sx={{ minWidth: 190, display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" } }}>
                 <Select
                   displayEmpty
                   value={paymentStatus}
@@ -1226,7 +1380,10 @@ export default function HoaDon() {
                 </Select>
               </FormControl>
             </SoftBox>
-            <SoftBox sx={{ overflowX: "auto" }}>
+            {isStaff && <SoftBox display={{ xs: "block", md: "none" }}>
+              {!loading && invoices.map((invoice) => <SoftBox key={getId(invoice)} py={1.5} display="flex" gap={1.25} alignItems="center" onClick={() => setDetailId(getId(invoice))} sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}><SoftBox width={44} height={44} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox><SoftBox flex={1} minWidth={0}><SoftTypography variant="button" fontWeight="bold" display="block">{invoice.code}</SoftTypography><SoftTypography variant="caption" color="text" display="block" noWrap>{invoice.customerId?.name || invoice.customer || "Khách lẻ"} · {new Date(invoice.date).toLocaleDateString("vi-VN")}</SoftTypography><SoftTypography variant="caption" sx={{ color: invoice.debtAmount > 0 ? "#c62828" : "#2e7d32" }}>{invoice.paymentStatus === "PAID" ? "Đã thanh toán" : `Công nợ ${money(invoice.debtAmount)}`}</SoftTypography></SoftBox><SoftTypography variant="button" fontWeight="bold">{money(invoice.grandTotal ?? invoice.totalAmount)}</SoftTypography></SoftBox>)}
+            </SoftBox>}
+            <SoftBox sx={{ overflowX: "auto", display: { xs: isStaff ? "none" : "block", md: "block" } }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#F8F9FA" }}>
@@ -1352,7 +1509,8 @@ export default function HoaDon() {
                 </tbody>
               </table>
             </SoftBox>
-            {meta.totalPages > 1 && (
+            {isStaff && <MobileLoadMore loading={loading} hasMore={page < (meta.totalPages || 1)} onLoadMore={() => setPage((value) => value + 1)} />}
+            {!isStaff && meta.totalPages > 1 && (
               <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center">
                 <SoftTypography variant="caption">Tổng {meta.total || 0} hóa đơn</SoftTypography>
                 <Pagination
@@ -1367,7 +1525,7 @@ export default function HoaDon() {
         </Card>
       </SoftBox>
       <CreateInvoiceModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={load} />
-      <InvoiceDetail id={detailId} onClose={() => setDetailId(null)} />
+      <InvoiceDetail id={detailId} onClose={() => setDetailId(null)} mobile={isStaff} />
     </DashboardLayout>
   );
 }
