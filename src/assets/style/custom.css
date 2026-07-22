@@ -132,3 +132,21 @@ input[name="tongThuong"]
   /* CSS rules */
   text-align: right;
 }
+
+/* Mobile sales app: prevent double-tap and input-focus zoom. */
+@media (max-width: 899.95px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    touch-action: manipulation;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
