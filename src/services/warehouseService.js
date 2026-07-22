@@ -393,73 +393,25 @@ export const ExportService = {
 // ─── TRUCKS ───────────────────────────────────────────────────────────────────
 
 export const TruckService = {
-  getAll: async () => {
-    await delay();
-    return { data: MOCK_TRUCKS };
-  },
-  getById: async (id) => {
-    await delay();
-    return { data: MOCK_TRUCKS.find((t) => t.id === id) };
-  },
-  create: async (payload) => {
-    await delay();
-    const newTruck = { ...payload, id: Date.now(), inventory: [] };
-    MOCK_TRUCKS.push(newTruck);
-    return { data: newTruck };
-  },
-  update: async (id, payload) => {
-    await delay();
-    MOCK_TRUCKS = MOCK_TRUCKS.map((t) => (t.id === id ? { ...t, ...payload } : t));
-    return { data: MOCK_TRUCKS.find((t) => t.id === id) };
-  },
-  // Xuất hàng từ kho lên xe
-  loadGoods: async (truckId, items) => {
-    await delay();
-    const truck = MOCK_TRUCKS.find((t) => t.id === truckId);
-    if (!truck) throw new Error("Xe không tồn tại");
-    items.forEach((item) => {
-      const product = MOCK_PRODUCTS.find((p) => p.id === item.productId);
-      if (product) product.stock -= item.qty;
-      const existing = truck.inventory.find((i) => i.productId === item.productId);
-      if (existing) existing.qty += item.qty;
-      else truck.inventory.push({ productId: item.productId, qty: item.qty });
-    });
-    // log export
-    MOCK_EXPORTS.push({
-      id: Date.now(),
-      code: `XK-${Date.now()}`,
-      date: new Date().toISOString().split("T")[0],
-      type: "load_truck",
-      source: "warehouse",
-      truckId,
-      note: `Xuất lên xe ${truck.code}`,
-      totalAmount: 0,
-      items,
-    });
-    return { data: truck };
-  },
-  // Hoàn hàng từ xe về kho
-  returnGoods: async (truckId, items, note = "") => {
-    await delay();
-    const truck = MOCK_TRUCKS.find((t) => t.id === truckId);
-    if (!truck) throw new Error("Xe không tồn tại");
-    items.forEach((item) => {
-      const product = MOCK_PRODUCTS.find((p) => p.id === item.productId);
-      if (product) product.stock += item.qty;
-      const existing = truck.inventory.find((i) => i.productId === item.productId);
-      if (existing) existing.qty = Math.max(0, existing.qty - item.qty);
-    });
-    const returnRecord = {
-      id: Date.now(),
-      code: `HK-${Date.now()}`,
-      date: new Date().toISOString().split("T")[0],
-      truckId,
-      note,
-      items,
-    };
-    MOCK_TRUCK_RETURNS.push(returnRecord);
-    return { data: returnRecord };
-  },
+  getAll: (params = {}) => AxiosInstance.get("/admin/trucks", { params }),
+  getSummary: () => AxiosInstance.get("/admin/trucks/summary"),
+  getAvailableProducts: (params = {}) =>
+    AxiosInstance.get("/admin/trucks/available-products", { params }),
+  getAvailableDrivers: (params = {}) =>
+    AxiosInstance.get("/admin/trucks/available-drivers", { params }),
+  getById: (id) => AxiosInstance.get(`/admin/trucks/${id}`),
+  create: (payload) => AxiosInstance.post("/admin/trucks", payload),
+  update: (id, payload) => AxiosInstance.patch(`/admin/trucks/${id}`, payload),
+  changeStatus: (id, status) => AxiosInstance.patch(`/admin/trucks/${id}/status`, { status }),
+  delete: (id) => AxiosInstance.delete(`/admin/trucks/${id}`),
+  loadGoods: (id, payload) => AxiosInstance.post(`/admin/trucks/${id}/load`, payload),
+  returnGoods: (id, payload) => AxiosInstance.post(`/admin/trucks/${id}/return`, payload),
+  getTransfers: (params = {}) => AxiosInstance.get("/admin/truck-transfers", { params }),
+  getTransferSummary: (params = {}) =>
+    AxiosInstance.get("/admin/truck-transfers/summary", { params }),
+  exportTransfers: (params = {}) =>
+    AxiosInstance.get("/admin/truck-transfers/export", { params, responseType: "blob" }),
+  getTransferById: (id) => AxiosInstance.get(`/admin/truck-transfers/${id}`),
 };
 
 // ─── INVOICES ─────────────────────────────────────────────────────────────────

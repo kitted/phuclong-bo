@@ -1,332 +1,1076 @@
-import { useState, useEffect } from "react";
-import Grid from "@mui/material/Grid";
+import { useEffect, useState } from "react";
 import Card from "@mui/material/Card";
-import Icon from "@mui/material/Icon";
-import Modal from "@mui/material/Modal";
-import MenuItem from "@mui/material/MenuItem";
-import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
+import Grid from "@mui/material/Grid";
+import Icon from "@mui/material/Icon";
+import IconButton from "@mui/material/IconButton";
+import MenuItem from "@mui/material/MenuItem";
+import Modal from "@mui/material/Modal";
+import Pagination from "@mui/material/Pagination";
+import Select from "@mui/material/Select";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
-import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
-import SoftTypography from "components/SoftTypography";
-import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
-import { TruckService, MOCK_PRODUCTS, MOCK_TRUCKS, MOCK_TRUCK_RETURNS } from "services/warehouseService";
+import SoftInput from "components/SoftInput";
+import SoftTypography from "components/SoftTypography";
+import { TruckService } from "services/warehouseService";
+import { downloadBlob } from "utils/excel";
 import { toast } from "react-toastify";
 
-const fmtCurrency = (n) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n);
+const EMPTY_TRUCK = { code: "", name: "", licensePlate: "", driverId: "", status: "active" };
+const EMPTY_META = { totalPages: 1, totalItems: 0 };
+const getId = (value) => value?.id || value?._id;
+const unwrap = (response) => response?.data?.data ?? response?.data;
+const listOf = (response) => {
+  const value = unwrap(response);
+  if (Array.isArray(value)) return value;
+  return value?.items || value?.docs || [];
+};
+const metaOf = (response) => response?.data?.meta || unwrap(response)?.meta || EMPTY_META;
+const productOf = (item) =>
+  item?.product ||
+  (typeof item?.productId === "object" ? item.productId : null) ||
+  (item?.name || item?.code ? item : null) ||
+  {};
+const productIdOf = (item) => getId(productOf(item)) || item?.productId;
+const quantityOf = (item) => Number(item?.qty ?? item?.quantity ?? 0);
+const apiError = (error, fallback) => {
+  const message = error?.response?.data?.message;
+  return Array.isArray(message) ? message.join(", ") : message || fallback;
+};
+const money = (value = 0) =>
+  new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+const date = (value) => (value ? new Date(value).toLocaleDateString("vi-VN") : "—");
+const todayValue = () => {
+  const value = new Date();
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
+    value.getDate()
+  ).padStart(2, "0")}`;
+};
 
-// ─── ADD/EDIT TRUCK MODAL ───────────────────────────────────────────────────────
+function Field({ label, children, xs = 12, md = 6 }) {
+  return (
+    <Grid item xs={xs} md={md}>
+      <SoftTypography variant="caption" fontWeight="medium">
+        {label}
+      </SoftTypography>
+      {children}
+    </Grid>
+  );
+}
+
 function TruckModal({ open, onClose, truck, onSaved }) {
-  const [form, setForm] = useState({ code: "", name: "", licensePlate: "", driver: "", phone: "", status: "active" });
-  const [loading, setLoading] = useState(false);
-
+  const [form, setForm] = useState(EMPTY_TRUCK);
+  const [drivers, setDrivers] = useState([]);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
-    if (truck) setForm({ code: truck.code, name: truck.name, licensePlate: truck.licensePlate, driver: truck.driver, phone: truck.phone, status: truck.status });
-    else setForm({ code: "", name: "", licensePlate: "", driver: "", phone: "", status: "active" });
-  }, [truck, open]);
-
-  const handleSubmit = async () => {
-    if (!form.name || !form.licensePlate) { toast.error("Điền đủ thông tin xe"); return; }
+    if (!open) return;
+    const currentDriverId = getId(truck?.driver) || truck?.driverId || "";
+    setForm(truck ? { ...EMPTY_TRUCK, ...truck, driverId: currentDriverId } : EMPTY_TRUCK);
+    setLoadingDrivers(true);
+    TruckService.getAvailableDrivers({ excludeTruckId: getId(truck) || undefined, limit: 100 })
+      .then((response) => setDrivers(listOf(response)))
+      .catch((error) => toast.error(apiError(error, "Không thể tải danh sách tài xế")))
+      .finally(() => setLoadingDrivers(false));
+  }, [open, truck]);
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const save = async () => {
+    if (!form.name?.trim() || !form.licensePlate?.trim())
+      return toast.error("Vui lòng nhập tên xe và biển số");
+    const payload = {
+      code: form.code?.trim() || undefined,
+      name: form.name.trim(),
+      licensePlate: form.licensePlate.trim(),
+      driverId: form.driverId || null,
+    };
     try {
-      setLoading(true);
-      if (truck?.id) await TruckService.update(truck.id, form);
-      else await TruckService.create(form);
-      toast.success(truck?.id ? "Cập nhật xe thành công" : "Thêm xe thành công");
-      onSaved(); onClose();
-    } catch { toast.error("Lỗi xảy ra"); } finally { setLoading(false); }
+      setSaving(true);
+      if (getId(truck)) await TruckService.update(getId(truck), payload);
+      else await TruckService.create({ ...payload, status: form.status });
+      toast.success(getId(truck) ? "Đã cập nhật xe" : "Đã thêm xe");
+      onSaved(!getId(truck));
+      onClose();
+    } catch (error) {
+      toast.error(apiError(error, "Không thể lưu xe"));
+    } finally {
+      setSaving(false);
+    }
   };
-
   return (
     <Modal open={open} onClose={onClose}>
-      <SoftBox sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: { xs: "90%", md: 480 }, bgcolor: "background.paper", borderRadius: 3, boxShadow: 24, p: 4 }}>
-        <SoftTypography variant="h5" fontWeight="bold" mb={3}>{truck?.id ? "Chỉnh sửa xe" : "Thêm xe tải mới"}</SoftTypography>
-        <Grid container spacing={2}>
-          <Grid item xs={6}><SoftTypography variant="caption" fontWeight="medium">Tên xe *</SoftTypography><SoftInput value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Xe tải 1" fullWidth /></Grid>
-          <Grid item xs={6}><SoftTypography variant="caption" fontWeight="medium">Mã xe</SoftTypography><SoftInput value={form.code} onChange={(e) => setForm(f => ({ ...f, code: e.target.value }))} placeholder="T01" fullWidth /></Grid>
-          <Grid item xs={6}><SoftTypography variant="caption" fontWeight="medium">Biển số *</SoftTypography><SoftInput value={form.licensePlate} onChange={(e) => setForm(f => ({ ...f, licensePlate: e.target.value }))} placeholder="51C-12345" fullWidth /></Grid>
-          <Grid item xs={6}><SoftTypography variant="caption" fontWeight="medium">Trạng thái</SoftTypography>
-            <FormControl fullWidth size="small"><Select value={form.status} onChange={(e) => setForm(f => ({ ...f, status: e.target.value }))} sx={{ height: 40 }}>
-              <MenuItem value="active">Hoạt động</MenuItem><MenuItem value="inactive">Ngừng hoạt động</MenuItem>
-            </Select></FormControl>
-          </Grid>
-          <Grid item xs={6}><SoftTypography variant="caption" fontWeight="medium">Tài xế</SoftTypography><SoftInput value={form.driver} onChange={(e) => setForm(f => ({ ...f, driver: e.target.value }))} placeholder="Nguyễn Văn A" fullWidth /></Grid>
-          <Grid item xs={6}><SoftTypography variant="caption" fontWeight="medium">Số điện thoại</SoftTypography><SoftInput value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="0901-..." fullWidth /></Grid>
-        </Grid>
-        <SoftBox display="flex" gap={2} mt={3}>
-          <SoftButton variant="outlined" color="secondary" onClick={onClose} fullWidth>Hủy</SoftButton>
-          <SoftButton variant="gradient" color="info" onClick={handleSubmit} disabled={loading} fullWidth>{loading ? "Đang lưu..." : "Lưu"}</SoftButton>
-        </SoftBox>
-      </SoftBox>
-    </Modal>
-  );
-}
-
-// ─── LOAD GOODS TO TRUCK MODAL ─────────────────────────────────────────────────
-function LoadGoodsModal({ open, onClose, truck, onSaved }) {
-  const [items, setItems] = useState([{ productId: "", qty: 1 }]);
-  const [loading, setLoading] = useState(false);
-
-  const handleItemChange = (idx, field, value) => setItems(prev => { const u = [...prev]; u[idx] = { ...u[idx], [field]: value }; return u; });
-  const handleSubmit = async () => {
-    if (items.some(i => !i.productId || !i.qty)) { toast.error("Điền đủ thông tin"); return; }
-    try {
-      setLoading(true);
-      await TruckService.loadGoods(truck.id, items.map(i => ({ productId: Number(i.productId), qty: Number(i.qty) })));
-      toast.success(`Xuất hàng lên ${truck.name} thành công!`);
-      onSaved(); onClose(); setItems([{ productId: "", qty: 1 }]);
-    } catch (e) { toast.error(e.message || "Lỗi"); } finally { setLoading(false); }
-  };
-
-  return (
-    <Modal open={open} onClose={onClose}>
-      <SoftBox sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: { xs: "90%", md: 580 }, maxHeight: "90vh", overflowY: "auto", bgcolor: "background.paper", borderRadius: 3, boxShadow: 24, p: 4 }}>
-        <SoftBox display="flex" alignItems="center" gap={1} mb={3}>
-          <Icon sx={{ color: "#1565C0" }}>local_shipping</Icon>
-          <SoftTypography variant="h5" fontWeight="bold">Xuất hàng lên {truck?.name}</SoftTypography>
-        </SoftBox>
-        <SoftTypography variant="caption" color="text" mb={2} display="block">Hàng sẽ được trừ khỏi kho và thêm vào xe</SoftTypography>
-        {items.map((item, idx) => {
-          const product = MOCK_PRODUCTS.find(p => p.id === Number(item.productId));
-          return (
-            <SoftBox key={idx} display="flex" gap={1} alignItems="center" mb={1.5}>
-              <FormControl size="small" sx={{ flex: 2 }}>
-                <Select value={item.productId} onChange={(e) => handleItemChange(idx, "productId", e.target.value)} displayEmpty sx={{ height: 40 }}>
-                  <MenuItem value=""><em>Chọn sản phẩm</em></MenuItem>
-                  {MOCK_PRODUCTS.filter(p => p.stock > 0).map(p => <MenuItem key={p.id} value={p.id}>{p.name} (kho: {p.stock} {p.unit})</MenuItem>)}
-                </Select>
-              </FormControl>
-              <SoftBox sx={{ flex: 1 }}><SoftInput type="number" value={item.qty} onChange={(e) => handleItemChange(idx, "qty", e.target.value)} placeholder="Số lượng" /></SoftBox>
-              <IconButton size="small" onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} disabled={items.length === 1}><Icon sx={{ color: "#EF4444" }}>remove_circle</Icon></IconButton>
-            </SoftBox>
-          );
-        })}
-        <SoftButton variant="text" color="info" startIcon={<Icon>add</Icon>} onClick={() => setItems(p => [...p, { productId: "", qty: 1 }])} sx={{ mb: 3 }}>Thêm dòng</SoftButton>
-        <SoftBox display="flex" gap={2}>
-          <SoftButton variant="outlined" color="secondary" onClick={onClose} fullWidth>Hủy</SoftButton>
-          <SoftButton variant="gradient" color="info" onClick={handleSubmit} disabled={loading} fullWidth>{loading ? "Đang xử lý..." : "Xuất hàng lên xe"}</SoftButton>
-        </SoftBox>
-      </SoftBox>
-    </Modal>
-  );
-}
-
-// ─── RETURN GOODS FROM TRUCK MODAL ─────────────────────────────────────────────
-function ReturnGoodsModal({ open, onClose, truck, onSaved }) {
-  const [items, setItems] = useState([{ productId: "", qty: 1 }]);
-  const [note, setNote] = useState("");
-  const [loading, setLoading] = useState(false);
-  const truckInventory = truck?.inventory || [];
-
-  const handleItemChange = (idx, field, value) => setItems(prev => { const u = [...prev]; u[idx] = { ...u[idx], [field]: value }; return u; });
-  const handleSubmit = async () => {
-    if (items.some(i => !i.productId || !i.qty)) { toast.error("Điền đủ thông tin"); return; }
-    try {
-      setLoading(true);
-      await TruckService.returnGoods(truck.id, items.map(i => ({ productId: Number(i.productId), qty: Number(i.qty) })), note);
-      toast.success(`Hoàn hàng từ ${truck.name} về kho thành công!`);
-      onSaved(); onClose(); setItems([{ productId: "", qty: 1 }]); setNote("");
-    } catch (e) { toast.error(e.message || "Lỗi"); } finally { setLoading(false); }
-  };
-
-  return (
-    <Modal open={open} onClose={onClose}>
-      <SoftBox sx={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: { xs: "90%", md: 580 }, maxHeight: "90vh", overflowY: "auto", bgcolor: "background.paper", borderRadius: 3, boxShadow: 24, p: 4 }}>
-        <SoftBox display="flex" alignItems="center" gap={1} mb={1}>
-          <Icon sx={{ color: "#E65100" }}>keyboard_return</Icon>
-          <SoftTypography variant="h5" fontWeight="bold">Hoàn hàng từ {truck?.name} về kho</SoftTypography>
-        </SoftBox>
-        <SoftTypography variant="caption" color="text" mb={2} display="block">Hàng sẽ được trừ khỏi xe và nhập lại vào kho</SoftTypography>
-        {items.map((item, idx) => (
-          <SoftBox key={idx} display="flex" gap={1} alignItems="center" mb={1.5}>
-            <FormControl size="small" sx={{ flex: 2 }}>
-              <Select value={item.productId} onChange={(e) => handleItemChange(idx, "productId", e.target.value)} displayEmpty sx={{ height: 40 }}>
-                <MenuItem value=""><em>Chọn hàng trên xe</em></MenuItem>
-                {truckInventory.map(inv => {
-                  const p = MOCK_PRODUCTS.find(pp => pp.id === inv.productId);
-                  return p ? <MenuItem key={p.id} value={p.id}>{p.name} (xe: {inv.qty} {p.unit})</MenuItem> : null;
-                })}
+      <SoftBox
+        sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "92%", md: 620 },
+          maxHeight: "90vh",
+          overflowY: "auto",
+          bgcolor: "background.paper",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: 4,
+        }}
+      >
+        <SoftTypography variant="h5" fontWeight="bold">
+          {truck ? "Cập nhật xe tải" : "Thêm xe tải"}
+        </SoftTypography>
+        <Grid container spacing={2} mt={1}>
+          <Field label="Tên xe *">
+            <SoftInput value={form.name || ""} onChange={(e) => set("name", e.target.value)} />
+          </Field>
+          <Field label="Mã xe">
+            <SoftInput
+              value={form.code || ""}
+              onChange={(e) => set("code", e.target.value.toUpperCase())}
+              placeholder="Để trống để tự sinh"
+            />
+          </Field>
+          <Field label="Biển số *">
+            <SoftInput
+              value={form.licensePlate || ""}
+              onChange={(e) => set("licensePlate", e.target.value.toUpperCase())}
+            />
+          </Field>
+          <Field label="Trạng thái">
+            <FormControl fullWidth size="small">
+              <Select
+                value={form.status || "active"}
+                disabled={Boolean(truck)}
+                onChange={(e) => set("status", e.target.value)}
+              >
+                <MenuItem value="active">Hoạt động</MenuItem>
+                <MenuItem value="inactive">Ngừng hoạt động</MenuItem>
               </Select>
             </FormControl>
-            <SoftBox sx={{ flex: 1 }}><SoftInput type="number" value={item.qty} onChange={(e) => handleItemChange(idx, "qty", e.target.value)} placeholder="Số lượng" /></SoftBox>
-            <IconButton size="small" onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} disabled={items.length === 1}><Icon sx={{ color: "#EF4444" }}>remove_circle</Icon></IconButton>
-          </SoftBox>
-        ))}
-        <SoftButton variant="text" color="warning" startIcon={<Icon>add</Icon>} onClick={() => setItems(p => [...p, { productId: "", qty: 1 }])} sx={{ mb: 2 }}>Thêm dòng</SoftButton>
-        <SoftTypography variant="caption" fontWeight="medium">Ghi chú</SoftTypography>
-        <SoftInput value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lý do hoàn hàng..." fullWidth sx={{ mb: 3 }} />
-        <SoftBox display="flex" gap={2}>
-          <SoftButton variant="outlined" color="secondary" onClick={onClose} fullWidth>Hủy</SoftButton>
-          <SoftButton variant="gradient" color="warning" onClick={handleSubmit} disabled={loading} fullWidth>{loading ? "Đang xử lý..." : "Hoàn hàng về kho"}</SoftButton>
+          </Field>
+          <Field label="Tài xế" md={12}>
+            <FormControl fullWidth size="small">
+              <Select
+                displayEmpty
+                value={form.driverId || ""}
+                disabled={loadingDrivers}
+                onChange={(e) => set("driverId", e.target.value)}
+              >
+                <MenuItem value="">
+                  <em>{loadingDrivers ? "Đang tải tài xế..." : "Chưa phân công"}</em>
+                </MenuItem>
+                {drivers.map((driver) => (
+                  <MenuItem key={getId(driver)} value={getId(driver)}>
+                    {driver.employeeCode ? `${driver.employeeCode} - ` : ""}
+                    {driver.fullName || "Chưa cập nhật tên"}
+                    {driver.phone ? ` · ${driver.phone}` : ""}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <SoftTypography variant="caption" color="text">
+              Chỉ hiển thị nhân viên Staff đang hoạt động và chưa phụ trách xe khác.
+            </SoftTypography>
+          </Field>
+        </Grid>
+        <SoftBox display="flex" gap={2} mt={3}>
+          <SoftButton variant="outlined" color="secondary" fullWidth onClick={onClose}>
+            Hủy
+          </SoftButton>
+          <SoftButton
+            variant="gradient"
+            color="info"
+            fullWidth
+            disabled={saving || loadingDrivers}
+            onClick={save}
+          >
+            {saving ? "Đang lưu..." : "Lưu xe"}
+          </SoftButton>
         </SoftBox>
       </SoftBox>
     </Modal>
   );
 }
 
-// ─── MAIN COMPONENT ─────────────────────────────────────────────────────────────
-function QuanLyXe() {
-  const [trucks, setTrucks] = useState([]);
+function TransferModal({ open, onClose, truck, type, onSaved }) {
+  const [items, setItems] = useState([{ productId: "", qty: 1 }]);
+  const [products, setProducts] = useState([]);
+  const [code, setCode] = useState("");
+  const [transferDate, setTransferDate] = useState(todayValue());
+  const [note, setNote] = useState("");
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const isLoad = type === "LOAD";
+  useEffect(() => {
+    if (!open || !truck) return;
+    setItems([{ productId: "", qty: 1 }]);
+    setProducts([]);
+    setCode("");
+    setTransferDate(todayValue());
+    setNote("");
+    setLoadingProducts(true);
+    if (isLoad)
+      TruckService.getAvailableProducts({ limit: 1000 })
+        .then((response) => setProducts(listOf(response)))
+        .catch((error) => toast.error(apiError(error, "Không thể tải sản phẩm trong kho")))
+        .finally(() => setLoadingProducts(false));
+    else
+      TruckService.getById(getId(truck))
+        .then((response) =>
+          setProducts(
+            (unwrap(response)?.inventory || []).map((item) => ({
+              ...productOf(item),
+              id: productIdOf(item),
+              stock: quantityOf(item),
+            }))
+          )
+        )
+        .catch((error) => toast.error(apiError(error, "Không thể tải tồn xe")))
+        .finally(() => setLoadingProducts(false));
+  }, [open, truck, isLoad]);
+  const change = (index, key, value) =>
+    setItems((current) =>
+      current.map((item, i) => (i === index ? { ...item, [key]: value } : item))
+    );
+  const save = async () => {
+    const normalized = items.map((item) => ({ productId: item.productId, qty: Number(item.qty) }));
+    if (normalized.some((item) => !item.productId || !Number.isInteger(item.qty) || item.qty <= 0))
+      return toast.error("Sản phẩm và số lượng nguyên dương là bắt buộc");
+    try {
+      setSaving(true);
+      const payload = {
+        code: code.trim() || undefined,
+        date: `${transferDate}T00:00:00+07:00`,
+        note: note.trim() || undefined,
+        items: normalized,
+      };
+      if (isLoad) await TruckService.loadGoods(getId(truck), payload);
+      else await TruckService.returnGoods(getId(truck), payload);
+      toast.success(isLoad ? "Đã xuất hàng lên xe" : "Đã hoàn hàng về kho");
+      onSaved();
+      onClose();
+    } catch (error) {
+      toast.error(apiError(error, isLoad ? "Không thể xuất hàng" : "Không thể hoàn hàng"));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Modal open={open} onClose={onClose}>
+      <SoftBox
+        sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "94%", md: 650 },
+          maxHeight: "90vh",
+          overflowY: "auto",
+          bgcolor: "background.paper",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: 4,
+        }}
+      >
+        <SoftTypography variant="h5" fontWeight="bold">
+          {isLoad ? "Xuất hàng lên" : "Hoàn hàng từ"} {truck?.name}
+        </SoftTypography>
+        <SoftTypography variant="caption" color="text">
+          {isLoad
+            ? "Kho chính sẽ được trừ sau khi phiếu thành công"
+            : "Hàng trên xe sẽ được nhập lại kho chính"}
+        </SoftTypography>
+        <Grid container spacing={2} mt={0.5}>
+          <Field label="Mã phiếu">
+            <SoftInput
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="Để trống để tự sinh"
+            />
+          </Field>
+          <Field label="Ngày chứng từ *">
+            <SoftInput
+              type="date"
+              value={transferDate}
+              onChange={(e) => setTransferDate(e.target.value)}
+            />
+          </Field>
+        </Grid>
+        <SoftBox mt={2}>
+          {loadingProducts && (
+            <SoftTypography variant="caption" color="text" display="block" mb={1}>
+              Đang tải danh sách sản phẩm...
+            </SoftTypography>
+          )}
+          {items.map((item, index) => (
+            <SoftBox key={index} display="flex" gap={1} mb={1.5}>
+              <FormControl size="small" sx={{ flex: 2 }}>
+                <Select
+                  displayEmpty
+                  value={item.productId}
+                  onChange={(e) => change(index, "productId", e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>Chọn sản phẩm</em>
+                  </MenuItem>
+                  {!loadingProducts && products.length === 0 && (
+                    <MenuItem disabled>Không có sản phẩm khả dụng</MenuItem>
+                  )}
+                  {products.map((product) => (
+                    <MenuItem key={getId(product)} value={getId(product)}>
+                      {product.code ? `${product.code} - ` : ""}
+                      {product.name} (còn {product.stock ?? product.quantity ?? 0}{" "}
+                      {product.unit || ""})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <SoftBox sx={{ flex: 1 }}>
+                <SoftInput
+                  type="number"
+                  inputProps={{ min: 1, step: 1 }}
+                  value={item.qty}
+                  onChange={(e) => change(index, "qty", e.target.value)}
+                />
+              </SoftBox>
+              <IconButton
+                disabled={items.length === 1}
+                onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
+              >
+                <Icon color="error">remove_circle</Icon>
+              </IconButton>
+            </SoftBox>
+          ))}
+        </SoftBox>
+        <SoftButton
+          variant="text"
+          color={isLoad ? "info" : "warning"}
+          startIcon={<Icon>add</Icon>}
+          onClick={() => setItems((current) => [...current, { productId: "", qty: 1 }])}
+        >
+          Thêm dòng
+        </SoftButton>
+        <SoftBox mt={2}>
+          <SoftTypography variant="caption" fontWeight="medium">
+            Ghi chú
+          </SoftTypography>
+          <SoftInput value={note} onChange={(e) => setNote(e.target.value)} />
+        </SoftBox>
+        <SoftBox display="flex" gap={2} mt={3}>
+          <SoftButton variant="outlined" color="secondary" fullWidth onClick={onClose}>
+            Hủy
+          </SoftButton>
+          <SoftButton
+            variant="gradient"
+            color={isLoad ? "info" : "warning"}
+            fullWidth
+            disabled={saving || loadingProducts || !transferDate || products.length === 0}
+            onClick={save}
+          >
+            {saving ? "Đang xử lý..." : isLoad ? "Xuất lên xe" : "Hoàn về kho"}
+          </SoftButton>
+        </SoftBox>
+      </SoftBox>
+    </Modal>
+  );
+}
+
+export default function QuanLyXe() {
   const [tab, setTab] = useState(0);
-  const [truckModal, setTruckModal] = useState(false);
+  const [trucks, setTrucks] = useState([]);
+  const [summary, setSummary] = useState({});
+  const [transfers, setTransfers] = useState([]);
+  const [meta, setMeta] = useState(EMPTY_META);
+  const [transferMeta, setTransferMeta] = useState(EMPTY_META);
+  const [page, setPage] = useState(1);
+  const [transferPage, setTransferPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [transferType, setTransferType] = useState("");
+  const [transferTruckId, setTransferTruckId] = useState("");
+  const [transferFrom, setTransferFrom] = useState("");
+  const [transferTo, setTransferTo] = useState("");
+  const [transferSummary, setTransferSummary] = useState({});
+  const [truckOptions, setTruckOptions] = useState([]);
+  const [exporting, setExporting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [editTruck, setEditTruck] = useState(null);
-  const [loadModal, setLoadModal] = useState(null);
-  const [returnModal, setReturnModal] = useState(null);
-
-  const load = () => TruckService.getAll().then(({ data }) => setTrucks(data));
-  useEffect(() => { load(); }, []);
-
+  const [truckModal, setTruckModal] = useState(false);
+  const [transferModal, setTransferModal] = useState(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
+    setPage(1);
+    setTransferPage(1);
+  }, [debouncedSearch, status, transferType, transferTruckId, transferFrom, transferTo]);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    const request =
+      tab === 0
+        ? Promise.all([
+            TruckService.getAll({
+              search: debouncedSearch || undefined,
+              status: status || undefined,
+              page,
+              limit: 12,
+              sortBy: "createdAt",
+              sortOrder: "desc",
+            }),
+            TruckService.getSummary(),
+          ])
+        : Promise.all([
+            TruckService.getTransfers({
+              search: debouncedSearch || undefined,
+              type: transferType || undefined,
+              truckId: transferTruckId || undefined,
+              from: transferFrom || undefined,
+              to: transferTo || undefined,
+              page: transferPage,
+              limit: 20,
+            }),
+            TruckService.getTransferSummary({
+              search: debouncedSearch || undefined,
+              type: transferType || undefined,
+              truckId: transferTruckId || undefined,
+              from: transferFrom || undefined,
+              to: transferTo || undefined,
+            }),
+          ]);
+    request
+      .then(([listResponse, summaryResponse]) => {
+        if (!active) return;
+        if (tab === 0) {
+          setTrucks(listOf(listResponse));
+          setMeta(metaOf(listResponse));
+        } else {
+          setTransfers(listOf(listResponse));
+          setTransferMeta(metaOf(listResponse));
+          setTransferSummary(unwrap(summaryResponse) || {});
+        }
+        if (tab === 0) setSummary(unwrap(summaryResponse) || {});
+      })
+      .catch((error) => active && toast.error(apiError(error, "Không thể tải dữ liệu xe tải")))
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [
+    tab,
+    page,
+    transferPage,
+    debouncedSearch,
+    status,
+    transferType,
+    transferTruckId,
+    transferFrom,
+    transferTo,
+    refreshKey,
+  ]);
+  useEffect(() => {
+    if (tab !== 1 || truckOptions.length) return;
+    TruckService.getAll({ page: 1, limit: 100, sortBy: "code", sortOrder: "asc" })
+      .then(async (firstResponse) => {
+        const firstPage = listOf(firstResponse);
+        const totalPages = metaOf(firstResponse).totalPages || 1;
+        if (totalPages <= 1) return firstPage;
+        const remaining = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, index) =>
+            TruckService.getAll({ page: index + 2, limit: 100, sortBy: "code", sortOrder: "asc" })
+          )
+        );
+        return firstPage.concat(...remaining.map(listOf));
+      })
+      .then((options) => setTruckOptions(options))
+      .catch((error) => toast.error(apiError(error, "Không thể tải danh sách xe để lọc")));
+  }, [tab, truckOptions.length]);
+  const refresh = (firstPage = false) => {
+    if (firstPage) setPage(1);
+    setRefreshKey((value) => value + 1);
+  };
+  const changeStatus = async (truck) => {
+    const next = truck.status === "active" ? "inactive" : "active";
+    try {
+      await TruckService.changeStatus(getId(truck), next);
+      toast.success("Đã đổi trạng thái xe");
+      refresh();
+    } catch (error) {
+      toast.error(apiError(error, "Không thể đổi trạng thái"));
+    }
+  };
+  const remove = async (truck) => {
+    if (!window.confirm(`Xóa xe ${truck.name}? Xe còn hàng sẽ không thể xóa.`)) return;
+    try {
+      await TruckService.delete(getId(truck));
+      toast.success("Đã xóa xe");
+      if (trucks.length === 1 && page > 1) setPage((value) => value - 1);
+      else refresh();
+    } catch (error) {
+      toast.error(apiError(error, "Không thể xóa xe"));
+    }
+  };
+  const transferFilters = {
+    search: debouncedSearch || undefined,
+    type: transferType || undefined,
+    truckId: transferTruckId || undefined,
+    from: transferFrom || undefined,
+    to: transferTo || undefined,
+  };
+  const exportTransfers = async () => {
+    if (transferFrom && transferTo && transferFrom > transferTo)
+      return toast.error("Ngày bắt đầu không được lớn hơn ngày kết thúc");
+    try {
+      setExporting(true);
+      const response = await TruckService.exportTransfers(transferFilters);
+      downloadBlob(
+        response.data,
+        `phieu-dieu-chuyen-${transferFrom || "tat-ca"}-${
+          transferTo || new Date().toISOString().slice(0, 10)
+        }.xlsx`
+      );
+      toast.success("Đã tải file phiếu điều chuyển");
+    } catch (error) {
+      toast.error(apiError(error, "Không thể xuất file Excel"));
+    } finally {
+      setExporting(false);
+    }
+  };
+  const kpis = [
+    ["Tổng xe", summary.totalTrucks, "local_shipping", "#1565C0"],
+    ["Đang hoạt động", summary.activeTrucks, "check_circle", "#2E7D32"],
+    ["Chưa có tài xế", summary.trucksWithoutDriver, "person_off", "#C62828"],
+    ["Xe đang có hàng", summary.trucksWithInventory, "inventory_2", "#E65100"],
+    ["Giá trị tồn trên xe", money(summary.totalTruckInventoryValue), "payments", "#7B1FA2"],
+  ];
   return (
     <DashboardLayout>
       <DashboardNavbar />
       <SoftBox py={3}>
-        <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
-          <SoftTypography variant="h5" fontWeight="bold">Quản lý Xe tải</SoftTypography>
-          <SoftButton variant="gradient" color="info" startIcon={<Icon>add</Icon>} onClick={() => { setEditTruck(null); setTruckModal(true); }}>
-            Thêm xe
-          </SoftButton>
-        </SoftBox>
-
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3 }}>
-          <Tab label="Danh sách xe" />
-          <Tab label="Lịch sử hoàn hàng" />
-        </Tabs>
-
-        {tab === 0 && (
-          <Grid container spacing={3}>
-            {trucks.map((truck) => {
-              const totalItems = truck.inventory.reduce((s, i) => s + i.qty, 0);
-              const totalValue = truck.inventory.reduce((s, i) => {
-                const p = MOCK_PRODUCTS.find(pp => pp.id === i.productId);
-                return s + (p ? p.costPrice * i.qty : 0);
-              }, 0);
-              return (
-                <Grid item xs={12} md={6} lg={4} key={truck.id}>
-                  <Card>
-                    <SoftBox p={3}>
-                      {/* Header */}
-                      <SoftBox display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                        <SoftBox display="flex" alignItems="center" gap={1.5}>
-                          <SoftBox sx={{ width: 48, height: 48, borderRadius: 2, background: truck.status === "active" ? "#E3F2FD" : "#F5F5F5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <Icon sx={{ color: truck.status === "active" ? "#1565C0" : "#9E9E9E", fontSize: 28 }}>local_shipping</Icon>
-                          </SoftBox>
-                          <SoftBox>
-                            <SoftTypography variant="h6" fontWeight="bold">{truck.name}</SoftTypography>
-                            <SoftTypography variant="caption" color="text">{truck.licensePlate}</SoftTypography>
-                          </SoftBox>
-                        </SoftBox>
-                        <SoftBox>
-                          <span style={{ padding: "3px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: truck.status === "active" ? "#E8F5E9" : "#F5F5F5", color: truck.status === "active" ? "#388E3C" : "#9E9E9E" }}>
-                            {truck.status === "active" ? "Hoạt động" : "Ngừng"}
-                          </span>
-                        </SoftBox>
-                      </SoftBox>
-
-                      {/* Info */}
-                      <SoftBox sx={{ background: "#F8F9FA", borderRadius: 2, p: 1.5, mb: 2 }}>
-                        <SoftTypography variant="caption" color="text" display="block">👤 {truck.driver} · 📞 {truck.phone}</SoftTypography>
-                        <SoftBox display="flex" justifyContent="space-between" mt={1}>
-                          <SoftTypography variant="caption" fontWeight="bold">{totalItems} sp trên xe</SoftTypography>
-                          <SoftTypography variant="caption" fontWeight="bold" color="info">{fmtCurrency(totalValue)}</SoftTypography>
-                        </SoftBox>
-                      </SoftBox>
-
-                      {/* Inventory preview */}
-                      {truck.inventory.length > 0 && (
-                        <SoftBox mb={2}>
-                          {truck.inventory.slice(0, 3).map((inv) => {
-                            const p = MOCK_PRODUCTS.find(pp => pp.id === inv.productId);
-                            return p ? (
-                              <SoftBox key={inv.productId} display="flex" justifyContent="space-between" py={0.5} sx={{ borderBottom: "1px solid #F0F0F0" }}>
-                                <SoftTypography variant="caption">{p.name}</SoftTypography>
-                                <SoftTypography variant="caption" fontWeight="bold">{inv.qty} {p.unit}</SoftTypography>
-                              </SoftBox>
-                            ) : null;
-                          })}
-                          {truck.inventory.length > 3 && <SoftTypography variant="caption" color="text">+{truck.inventory.length - 3} loại khác...</SoftTypography>}
-                        </SoftBox>
-                      )}
-
-                      {/* Actions */}
-                      <SoftBox display="flex" gap={1} flexWrap="wrap">
-                        <Tooltip title="Xuất hàng lên xe">
-                          <span>
-                            <SoftButton size="small" variant="outlined" color="info" disabled={truck.status !== "active"} onClick={() => setLoadModal(truck)} startIcon={<Icon>upload</Icon>}>
-                              Xuất lên xe
-                            </SoftButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title="Hoàn hàng về kho">
-                          <span>
-                            <SoftButton size="small" variant="outlined" color="warning" disabled={truck.inventory.length === 0} onClick={() => setReturnModal(truck)} startIcon={<Icon>keyboard_return</Icon>}>
-                              Hoàn về kho
-                            </SoftButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title="Chỉnh sửa">
-                          <IconButton size="small" onClick={() => { setEditTruck(truck); setTruckModal(true); }}>
-                            <Icon sx={{ fontSize: 18, color: "#6B7280" }}>edit</Icon>
-                          </IconButton>
-                        </Tooltip>
+        <Grid container spacing={2} mb={3}>
+          {kpis.map(([label, value, icon, color]) => (
+            <Grid item xs={12} sm={6} lg={3} key={label}>
+              <Card>
+                <SoftBox p={2.5} display="flex" alignItems="center" gap={2}>
+                  <Icon sx={{ color }}>{icon}</Icon>
+                  <SoftBox>
+                    <SoftTypography variant="caption" color="text">
+                      {label}
+                    </SoftTypography>
+                    <SoftTypography variant="h5" fontWeight="bold" sx={{ color }}>
+                      {value ?? 0}
+                    </SoftTypography>
+                  </SoftBox>
+                </SoftBox>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+        <Card>
+          <SoftBox p={3}>
+            <SoftBox
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={2}
+              flexWrap="wrap"
+            >
+              <SoftBox>
+                <SoftTypography variant="h5" fontWeight="bold">
+                  Quản lý xe tải
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text">
+                  Tồn xe và lịch sử điều chuyển kho
+                </SoftTypography>
+              </SoftBox>
+              {tab === 0 ? (
+                <SoftButton
+                  variant="gradient"
+                  color="info"
+                  startIcon={<Icon>add</Icon>}
+                  onClick={() => {
+                    setEditTruck(null);
+                    setTruckModal(true);
+                  }}
+                >
+                  Thêm xe
+                </SoftButton>
+              ) : (
+                <SoftButton
+                  variant="gradient"
+                  color="success"
+                  startIcon={<Icon>download</Icon>}
+                  disabled={exporting}
+                  onClick={exportTransfers}
+                >
+                  {exporting ? "Đang xuất..." : "Xuất Excel"}
+                </SoftButton>
+              )}
+            </SoftBox>
+            <Tabs
+              value={tab}
+              onChange={(_, value) => {
+                setTab(value);
+                setSearch("");
+              }}
+              sx={{ mt: 2, mb: 2 }}
+            >
+              <Tab label="Danh sách xe" />
+              <Tab label="Lịch sử điều chuyển" />
+            </Tabs>
+            <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
+              <SoftBox sx={{ flex: 1, minWidth: 240 }}>
+                <SoftInput
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={
+                    tab === 0 ? "Tìm mã, tên xe, biển số, tài xế..." : "Tìm mã phiếu hoặc xe..."
+                  }
+                  icon={{ component: "search", direction: "left" }}
+                />
+              </SoftBox>
+              {tab === 0 ? (
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <Select displayEmpty value={status} onChange={(e) => setStatus(e.target.value)}>
+                    <MenuItem value="">Mọi trạng thái</MenuItem>
+                    <MenuItem value="active">Hoạt động</MenuItem>
+                    <MenuItem value="inactive">Ngừng hoạt động</MenuItem>
+                  </Select>
+                </FormControl>
+              ) : (
+                <>
+                  <FormControl size="small" sx={{ minWidth: 165 }}>
+                    <Select
+                      displayEmpty
+                      value={transferType}
+                      onChange={(e) => setTransferType(e.target.value)}
+                    >
+                      <MenuItem value="">Mọi loại phiếu</MenuItem>
+                      <MenuItem value="LOAD">Phiếu xuất lên xe</MenuItem>
+                      <MenuItem value="RETURN">Phiếu hoàn về kho</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" sx={{ minWidth: 190 }}>
+                    <Select
+                      displayEmpty
+                      value={transferTruckId}
+                      onChange={(e) => setTransferTruckId(e.target.value)}
+                    >
+                      <MenuItem value="">Tất cả xe</MenuItem>
+                      {truckOptions.map((truck) => (
+                        <MenuItem key={getId(truck)} value={getId(truck)}>
+                          {truck.code} - {truck.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <SoftBox sx={{ width: 160 }}>
+                    <SoftInput
+                      type="date"
+                      value={transferFrom}
+                      onChange={(e) => setTransferFrom(e.target.value)}
+                      inputProps={{ max: transferTo || undefined }}
+                    />
+                  </SoftBox>
+                  <SoftBox sx={{ width: 160 }}>
+                    <SoftInput
+                      type="date"
+                      value={transferTo}
+                      onChange={(e) => setTransferTo(e.target.value)}
+                      inputProps={{ min: transferFrom || undefined }}
+                    />
+                  </SoftBox>
+                  {(transferType || transferTruckId || transferFrom || transferTo) && (
+                    <SoftButton
+                      variant="text"
+                      color="secondary"
+                      onClick={() => {
+                        setTransferType("");
+                        setTransferTruckId("");
+                        setTransferFrom("");
+                        setTransferTo("");
+                      }}
+                    >
+                      Xóa bộ lọc
+                    </SoftButton>
+                  )}
+                </>
+              )}
+            </SoftBox>
+            {tab === 1 && (
+              <Grid container spacing={2} mb={3}>
+                {[
+                  ["Số phiếu", transferSummary.totalTransfers, "receipt_long", "#1565C0"],
+                  ["Tổng số lượng", transferSummary.totalQuantity, "inventory", "#2E7D32"],
+                  ["Số xe", transferSummary.truckCount, "local_shipping", "#E65100"],
+                  ["Số sản phẩm", transferSummary.productCount, "category", "#7B1FA2"],
+                  ["Tổng giá trị", money(transferSummary.totalValue), "payments", "#C62828"],
+                ].map(([label, value, icon, color]) => (
+                  <Grid item xs={12} sm={6} lg key={label}>
+                    <SoftBox
+                      bgcolor="#F8F9FA"
+                      borderRadius={2}
+                      p={2}
+                      display="flex"
+                      gap={1.5}
+                      alignItems="center"
+                    >
+                      <Icon sx={{ color }}>{icon}</Icon>
+                      <SoftBox>
+                        <SoftTypography variant="caption" color="text">
+                          {label}
+                        </SoftTypography>
+                        <SoftTypography variant="h6" fontWeight="bold" sx={{ color }}>
+                          {value ?? 0}
+                        </SoftTypography>
                       </SoftBox>
                     </SoftBox>
-                  </Card>
-                </Grid>
-              );
-            })}
-          </Grid>
-        )}
-
-        {tab === 1 && (
-          <Card>
-            <SoftBox p={3}>
-              <SoftTypography variant="h6" fontWeight="medium" mb={2}>Lịch sử hoàn hàng từ xe về kho</SoftTypography>
-              <SoftBox sx={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ background: "#F8F9FA" }}>
-                      {["Mã phiếu", "Ngày", "Xe", "Hàng hóa", "Ghi chú"].map(h => (
-                        <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "#6B7280" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {MOCK_TRUCK_RETURNS.map((r, idx) => {
-                      const truck = trucks.find(t => t.id === r.truckId);
-                      return (
-                        <tr key={r.id} style={{ borderBottom: "1px solid #F0F0F0", background: idx % 2 === 0 ? "#fff" : "#FAFAFA" }}>
-                          <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "#E65100" }}>{r.code}</td>
-                          <td style={{ padding: "10px 12px", fontSize: 13 }}>{r.date}</td>
-                          <td style={{ padding: "10px 12px", fontSize: 13 }}>{truck?.name || "—"}</td>
-                          <td style={{ padding: "10px 12px", fontSize: 13 }}>
-                            {r.items.map(item => {
-                              const p = MOCK_PRODUCTS.find(pp => pp.id === item.productId);
-                              return p ? `${p.name}: ${item.qty} ${p.unit}` : "—";
-                            }).join(", ")}
-                          </td>
-                          <td style={{ padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>{r.note || "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </SoftBox>
-            </SoftBox>
-          </Card>
-        )}
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+            {loading && (
+              <SoftTypography variant="button" display="block" textAlign="center" py={5}>
+                Đang tải...
+              </SoftTypography>
+            )}
+            {!loading && tab === 0 && (
+              <TruckGrid
+                trucks={trucks}
+                onLoad={(truck) => setTransferModal({ truck, type: "LOAD" })}
+                onReturn={(truck) => setTransferModal({ truck, type: "RETURN" })}
+                onEdit={(truck) => {
+                  setEditTruck(truck);
+                  setTruckModal(true);
+                }}
+                onStatus={changeStatus}
+                onDelete={remove}
+              />
+            )}
+            {!loading && tab === 1 && <TransferTable transfers={transfers} />}
+            {tab === 0 && meta.totalPages > 1 && (
+              <Pager meta={meta} page={page} setPage={setPage} label="xe" />
+            )}
+            {tab === 1 && transferMeta.totalPages > 1 && (
+              <Pager
+                meta={transferMeta}
+                page={transferPage}
+                setPage={setTransferPage}
+                label="phiếu"
+              />
+            )}
+          </SoftBox>
+        </Card>
       </SoftBox>
-
-      <TruckModal open={truckModal} onClose={() => setTruckModal(false)} truck={editTruck} onSaved={load} />
-      {loadModal && <LoadGoodsModal open={!!loadModal} onClose={() => setLoadModal(null)} truck={loadModal} onSaved={load} />}
-      {returnModal && <ReturnGoodsModal open={!!returnModal} onClose={() => setReturnModal(null)} truck={returnModal} onSaved={load} />}
+      <TruckModal
+        open={truckModal}
+        truck={editTruck}
+        onClose={() => setTruckModal(false)}
+        onSaved={refresh}
+      />
+      {transferModal && (
+        <TransferModal
+          open
+          truck={transferModal.truck}
+          type={transferModal.type}
+          onClose={() => setTransferModal(null)}
+          onSaved={refresh}
+        />
+      )}
     </DashboardLayout>
   );
 }
 
-export default QuanLyXe;
+function TruckGrid({ trucks, onLoad, onReturn, onEdit, onStatus, onDelete }) {
+  if (!trucks.length)
+    return (
+      <SoftTypography variant="button" color="text" display="block" textAlign="center" py={5}>
+        Không tìm thấy xe tải
+      </SoftTypography>
+    );
+  return (
+    <Grid container spacing={2}>
+      {trucks.map((truck) => {
+        const inventory = truck.inventoryPreview || truck.inventory || [];
+        const quantity =
+          truck.inventorySummary?.totalQuantity ??
+          truck.totalQuantity ??
+          inventory.reduce((sum, item) => sum + quantityOf(item), 0);
+        const driverName =
+          truck.driver?.fullName ||
+          truck.driverName ||
+          (typeof truck.driver === "string" ? truck.driver : "") ||
+          "Chưa phân công";
+        const driverPhone = truck.driver?.phone || truck.driverPhone || truck.phone || "—";
+        return (
+          <Grid item xs={12} md={6} lg={4} key={getId(truck)}>
+            <Card variant="outlined">
+              <SoftBox p={2.5}>
+                <SoftBox display="flex" justifyContent="space-between" mb={2}>
+                  <SoftBox>
+                    <SoftTypography variant="h6" fontWeight="bold">
+                      {truck.name}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="text">
+                      {truck.code} · {truck.licensePlate}
+                    </SoftTypography>
+                  </SoftBox>
+                  <span
+                    style={{
+                      height: 24,
+                      padding: "4px 10px",
+                      borderRadius: 12,
+                      fontSize: 11,
+                      color: truck.status === "active" ? "#2E7D32" : "#C62828",
+                      background: truck.status === "active" ? "#E8F5E9" : "#FFEBEE",
+                    }}
+                  >
+                    {truck.status === "active" ? "Hoạt động" : "Ngừng"}
+                  </span>
+                </SoftBox>
+                <SoftBox bgcolor="#F8F9FA" borderRadius={2} p={1.5} mb={2}>
+                  <SoftTypography variant="caption" display="block">
+                    Tài xế: {driverName}
+                  </SoftTypography>
+                  <SoftTypography variant="caption" display="block">
+                    Điện thoại: {driverPhone}
+                  </SoftTypography>
+                  <SoftBox display="flex" justifyContent="space-between" mt={1}>
+                    <SoftTypography variant="caption" fontWeight="bold">
+                      {truck.inventorySummary?.productTypes ??
+                        truck.productTypes ??
+                        inventory.length}{" "}
+                      loại · {quantity} sản phẩm
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="info" fontWeight="bold">
+                      {money(truck.inventorySummary?.totalValue ?? truck.totalValue)}
+                    </SoftTypography>
+                  </SoftBox>
+                </SoftBox>
+                {inventory.map((item, index) => {
+                  const product = productOf(item);
+                  return (
+                    <SoftBox
+                      key={`${productIdOf(item)}-${index}`}
+                      display="flex"
+                      justifyContent="space-between"
+                      py={0.5}
+                      borderBottom="1px solid #eee"
+                    >
+                      <SoftTypography variant="caption">
+                        {product.name ||
+                          item.productName ||
+                          item.name ||
+                          "Sản phẩm không còn tồn tại"}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" fontWeight="bold">
+                        {quantityOf(item)} {product.unit || item.unit || ""}
+                      </SoftTypography>
+                    </SoftBox>
+                  );
+                })}
+                <SoftBox display="flex" gap={0.5} mt={2} flexWrap="wrap">
+                  <SoftButton
+                    size="small"
+                    variant="outlined"
+                    color="info"
+                    disabled={
+                      truck.status !== "active" || (!getId(truck.driver) && !truck.driverId)
+                    }
+                    onClick={() => onLoad(truck)}
+                  >
+                    Xuất hàng
+                  </SoftButton>
+                  <SoftButton
+                    size="small"
+                    variant="outlined"
+                    color="warning"
+                    disabled={!quantity}
+                    onClick={() => onReturn(truck)}
+                  >
+                    Hoàn hàng
+                  </SoftButton>
+                  <Tooltip title="Sửa">
+                    <IconButton size="small" onClick={() => onEdit(truck)}>
+                      <Icon color="info">edit</Icon>
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={truck.status === "active" ? "Ngừng hoạt động" : "Kích hoạt"}>
+                    <IconButton size="small" onClick={() => onStatus(truck)}>
+                      <Icon sx={{ color: truck.status === "active" ? "#E65100" : "#2E7D32" }}>
+                        {truck.status === "active" ? "pause_circle" : "play_circle"}
+                      </Icon>
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Xóa">
+                    <IconButton size="small" onClick={() => onDelete(truck)}>
+                      <Icon color="error">delete</Icon>
+                    </IconButton>
+                  </Tooltip>
+                </SoftBox>
+              </SoftBox>
+            </Card>
+          </Grid>
+        );
+      })}
+    </Grid>
+  );
+}
+
+function TransferTable({ transfers }) {
+  return (
+    <SoftBox sx={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ background: "#F8F9FA" }}>
+            {[
+              "Mã phiếu",
+              "Ngày",
+              "Loại",
+              "Xe",
+              "Tài xế",
+              "Hàng hóa",
+              "Tổng SL",
+              "Giá trị",
+              "Người tạo",
+              "Ghi chú",
+            ].map((heading) => (
+              <th
+                key={heading}
+                style={{
+                  padding: 12,
+                  textAlign: "left",
+                  fontSize: 12,
+                  color: "#6B7280",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {heading}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {!transfers.length && (
+            <tr>
+              <td colSpan={10} style={{ textAlign: "center", padding: 40, color: "#9E9E9E" }}>
+                Chưa có phiếu điều chuyển
+              </td>
+            </tr>
+          )}
+          {transfers.map((transfer) => (
+            <tr key={getId(transfer)} style={{ borderBottom: "1px solid #eee" }}>
+              <td style={{ padding: 12, fontSize: 13, fontWeight: 600 }}>{transfer.code}</td>
+              <td style={{ padding: 12, fontSize: 13, whiteSpace: "nowrap" }}>
+                {date(transfer.date || transfer.createdAt)}
+              </td>
+              <td style={{ padding: 12 }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    padding: "4px 8px",
+                    borderRadius: 10,
+                    color: transfer.type === "LOAD" ? "#1565C0" : "#E65100",
+                    background: transfer.type === "LOAD" ? "#E3F2FD" : "#FFF3E0",
+                  }}
+                >
+                  {transfer.type === "LOAD" ? "Xuất lên xe" : "Hoàn về kho"}
+                </span>
+              </td>
+              <td style={{ padding: 12, fontSize: 13 }}>
+                {transfer.truckName || transfer.truck?.name || "—"}
+                <br />
+                <span style={{ color: "#6B7280" }}>
+                  {transfer.truck?.code || transfer.truckCode || ""}
+                  {transfer.truck?.licensePlate || transfer.truckLicensePlate
+                    ? ` · ${transfer.truck?.licensePlate || transfer.truckLicensePlate}`
+                    : ""}
+                </span>
+              </td>
+              <td style={{ padding: 12, fontSize: 13 }}>
+                {transfer.driver?.fullName || transfer.driverName || "—"}
+                <br />
+                <span style={{ color: "#6B7280" }}>
+                  {transfer.driver?.employeeCode || transfer.driverCode || ""}
+                </span>
+              </td>
+              <td style={{ padding: 12, minWidth: 280 }}>
+                {(transfer.items || []).length === 0
+                  ? "—"
+                  : (transfer.items || []).map((item, index) => (
+                      <SoftBox
+                        key={`${item.productId || item.productCode || index}-${index}`}
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        gap={2}
+                        py={0.75}
+                        sx={{
+                          borderBottom:
+                            index < transfer.items.length - 1 ? "1px dashed #E5E7EB" : "none",
+                        }}
+                      >
+                        <SoftBox>
+                          <SoftTypography variant="caption" fontWeight="bold" display="block">
+                            {item.productName || item.name || "Sản phẩm"}
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text">
+                            {item.productCode || item.code || "Không có mã"}
+                          </SoftTypography>
+                        </SoftBox>
+                        <span
+                          style={{
+                            whiteSpace: "nowrap",
+                            padding: "3px 8px",
+                            borderRadius: 10,
+                            background: "#F3F4F6",
+                            color: "#374151",
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {quantityOf(item)} {item.unit || ""}
+                        </span>
+                      </SoftBox>
+                    ))}
+              </td>
+              <td style={{ padding: 12, fontSize: 13 }}>{transfer.totalQuantity || 0}</td>
+              <td style={{ padding: 12, fontSize: 13, whiteSpace: "nowrap" }}>
+                {money(transfer.totalValue)}
+              </td>
+              <td style={{ padding: 12, fontSize: 13 }}>
+                {transfer.createdBy?.fullName || transfer.createdBy?.username || "—"}
+              </td>
+              <td style={{ padding: 12, fontSize: 13 }}>{transfer.note || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </SoftBox>
+  );
+}
+
+function Pager({ meta, page, setPage, label }) {
+  return (
+    <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center">
+      <SoftTypography variant="caption" color="text">
+        Tổng {meta.totalItems || 0} {label}
+      </SoftTypography>
+      <Pagination
+        page={page}
+        count={meta.totalPages || 1}
+        color="primary"
+        onChange={(_, value) => setPage(value)}
+      />
+    </SoftBox>
+  );
+}
