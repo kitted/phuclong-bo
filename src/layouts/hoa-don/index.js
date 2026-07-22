@@ -1,325 +1,918 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Autocomplete from "@mui/material/Autocomplete";
 import Card from "@mui/material/Card";
-import Icon from "@mui/material/Icon";
-import Modal from "@mui/material/Modal";
-import MenuItem from "@mui/material/MenuItem";
-import Select from "@mui/material/Select";
-import FormControl from "@mui/material/FormControl";
-import Grid from "@mui/material/Grid";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
-import RadioGroup from "@mui/material/RadioGroup";
+import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Grid from "@mui/material/Grid";
+import Icon from "@mui/material/Icon";
+import IconButton from "@mui/material/IconButton";
+import Modal from "@mui/material/Modal";
 import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
+import Tooltip from "@mui/material/Tooltip";
+import TextField from "@mui/material/TextField";
+import { useSelector } from "react-redux";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
-import SoftTypography from "components/SoftTypography";
-import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
-import { InvoiceService, ProductService } from "services/warehouseService";
+import SoftInput from "components/SoftInput";
+import SoftTypography from "components/SoftTypography";
+import { InvoiceService, ProductService, TruckService } from "services/warehouseService";
 import { CustomerService } from "services/crmService";
-import AxiosInstance from "services/api";
+import EmployeeService from "services/employeeService";
 import { toast } from "react-toastify";
 
-const fmtCurrency = (n) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n);
+const money = (value = 0) =>
+  new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(Number(value) || 0);
+const getId = (value) => value?.id || value?._id;
+const unwrap = (response) => response?.data?.data ?? response?.data;
+const listOf = (response) => {
+  const value = unwrap(response);
+  return Array.isArray(value) ? value : value?.items || value?.docs || [];
+};
+const errorMessage = (error, fallback) => {
+  const value = error?.response?.data?.message;
+  return typeof value === "object"
+    ? value.message || fallback
+    : Array.isArray(value)
+    ? value.join(", ")
+    : value || fallback;
+};
+const today = () => {
+  const value = new Date();
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
+    value.getDate()
+  ).padStart(2, "0")}`;
+};
+const numberText = (value) => new Intl.NumberFormat("vi-VN").format(Number(value) || 0);
+const moneyValue = (value) => Number(String(value || "").replace(/[^0-9]/g, "")) || 0;
 
-function HoaDon() {
-  const [invoices, setInvoices] = useState([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [detailModal, setDetailModal] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [products, setProducts] = useState([]);
-  const [trucks, setTrucks] = useState([]);
-  const [customers, setCustomers] = useState([]);
+function Field({ label, children, xs = 12, md = 6 }) {
+  return (
+    <Grid item xs={xs} md={md}>
+      <SoftTypography variant="caption" fontWeight="medium">
+        {label}
+      </SoftTypography>
+      {children}
+    </Grid>
+  );
+}
 
-  // Form
+function SearchSelect({
+  value,
+  onChange,
+  options,
+  loading,
+  inputValue,
+  onInputChange,
+  placeholder,
+  label,
+}) {
+  return (
+    <Autocomplete
+      value={value}
+      onChange={(_, selected) => onChange(selected)}
+      options={options}
+      openOnFocus
+      autoHighlight
+      loading={loading}
+      inputValue={inputValue}
+      onInputChange={(_, next, reason) => {
+        onInputChange(next);
+      }}
+      getOptionLabel={label}
+      isOptionEqualToValue={(option, selected) => getId(option) === getId(selected)}
+      noOptionsText="Không tìm thấy dữ liệu"
+      loadingText="Đang tìm kiếm..."
+      renderInput={(params) => <TextField {...params} size="small" placeholder={placeholder} />}
+    />
+  );
+}
+
+function CreateInvoiceModal({ open, onClose, onCreated }) {
+  const role = useSelector((state) => state.auth?.user?.role);
+  const isAdmin = String(role || "").toLowerCase() === "admin";
   const [form, setForm] = useState({
     code: "",
-    customer: "Khách lẻ",
-    customerId: "",
-    paidAmount: 0,
-    sourceType: "warehouse", // "warehouse" | "truck"
-    truckId: "",
+    date: today(),
+    sourceType: "warehouse",
     note: "",
-    date: new Date().toISOString().split("T")[0],
+    voucherCode: "",
+    cashAmount: 0,
+    bankAmount: 0,
+    referenceCode: "",
+    allowDebtLimitOverride: false,
+    debtOverrideReason: "",
   });
-  const [items, setItems] = useState([{ productId: "", qty: 1, price: 0 }]);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const [invoiceResponse, productResponse, truckResponse, customerResponse] = await Promise.all([
-        InvoiceService.getAll(), ProductService.getAll(), AxiosInstance.get("/admin/trucks"), CustomerService.getAll({ page: 1, limit: 100 }),
-      ]);
-      setInvoices([...(invoiceResponse.data || [])].reverse());
-      setProducts(productResponse.data?.data || productResponse.data || []);
-      setTrucks(truckResponse.data?.data || truckResponse.data || []);
-      setCustomers(customerResponse.data?.data || []);
-    } catch (error) { toast.error(error.response?.data?.message || "Không thể tải dữ liệu hóa đơn"); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const activeTrucks = trucks.filter((t) => t.status === "active");
-
-  const getAvailableProducts = () => {
-    if (form.sourceType === "warehouse") return products;
-    if (form.sourceType === "truck" && form.truckId) {
-      const truck = trucks.find((t) => String(t.id || t._id) === String(form.truckId));
-      if (!truck) return [];
-      return truck.inventory.map((inv) => {
-        const product = products.find((p) => String(p.id || p._id) === String(inv.productId?.id || inv.productId?._id || inv.productId));
-        return product ? { ...product, stock: inv.qty } : null;
-      }).filter(Boolean);
-    }
-    return [];
-  };
-
-  const handleAddItem = () => setItems((prev) => [...prev, { productId: "", qty: 1, price: 0 }]);
-  const handleRemoveItem = (idx) => setItems((prev) => prev.filter((_, i) => i !== idx));
-  const handleItemChange = (idx, field, value) => {
-    setItems((prev) => {
-      const updated = [...prev];
-      updated[idx] = { ...updated[idx], [field]: value };
-      if (field === "productId") {
-        const product = products.find((p) => String(p.id || p._id) === String(value));
-        if (product) updated[idx].price = product.sellPrice;
-      }
-      return updated;
+  const [customer, setCustomer] = useState(null);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customers, setCustomers] = useState([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [salesperson, setSalesperson] = useState(null);
+  const [staffSearch, setStaffSearch] = useState("");
+  const [staff, setStaff] = useState([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [truck, setTruck] = useState(null);
+  const [truckSearch, setTruckSearch] = useState("");
+  const [trucks, setTrucks] = useState([]);
+  const [trucksLoading, setTrucksLoading] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [productOptions, setProductOptions] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [items, setItems] = useState([{ product: null, qty: 1, search: "" }]);
+  const [preview, setPreview] = useState(null);
+  const [previewError, setPreviewError] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      code: "",
+      date: today(),
+      sourceType: "warehouse",
+      note: "",
+      voucherCode: "",
+      cashAmount: 0,
+      bankAmount: 0,
+      referenceCode: "",
+      allowDebtLimitOverride: false,
+      debtOverrideReason: "",
     });
+    setCustomer(null);
+    setSalesperson(null);
+    setTruck(null);
+    setItems([{ product: null, qty: 1, search: "" }]);
+    setPreview(null);
+    setAppliedVoucher("");
+  }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const timer = setTimeout(() => {
+      setCustomersLoading(true);
+      CustomerService.getAll({ search: customerSearch || undefined, page: 1, limit: 20 })
+        .then((response) => setCustomers(listOf(response)))
+        .catch(() => setCustomers([]))
+        .finally(() => setCustomersLoading(false));
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [open, customerSearch]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const timer = setTimeout(() => {
+      setStaffLoading(true);
+      EmployeeService.getAll({
+        role: "staff",
+        status: "ACTIVE",
+        search: staffSearch || undefined,
+        page: 1,
+        limit: 20,
+      })
+        .then((response) => setStaff(listOf(response)))
+        .catch(() => setStaff([]))
+        .finally(() => setStaffLoading(false));
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [open, staffSearch]);
+  useEffect(() => {
+    if (!open || form.sourceType !== "truck") return undefined;
+    const timer = setTimeout(() => {
+      setTrucksLoading(true);
+      TruckService.getAll({
+        status: "active",
+        hasInventory: "true",
+        search: truckSearch || undefined,
+        page: 1,
+        limit: 20,
+      })
+        .then((response) => setTrucks(listOf(response)))
+        .catch(() => setTrucks([]))
+        .finally(() => setTrucksLoading(false));
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [open, form.sourceType, truckSearch]);
+  useEffect(() => {
+    if (!open || (form.sourceType === "truck" && !truck)) {
+      setProductOptions([]);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setProductsLoading(true);
+      const request =
+        form.sourceType === "truck"
+          ? TruckService.getTruckAvailableProducts(getId(truck), {
+              search: productSearch || undefined,
+              page: 1,
+              limit: 20,
+            })
+          : ProductService.getAll({ search: productSearch || undefined, page: 1, limit: 20 });
+      request
+        .then((response) => setProductOptions(listOf(response)))
+        .catch(() => setProductOptions([]))
+        .finally(() => setProductsLoading(false));
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [open, form.sourceType, truck, productSearch]);
+  const previewItems = useMemo(
+    () =>
+      items
+        .filter((item) => item.product && Number(item.qty) > 0)
+        .map((item) => ({
+          productId: getId(item.product) || item.product.productId,
+          qty: Number(item.qty),
+        })),
+    [items]
+  );
+  const loadPreview = useCallback(
+    async (voucher = appliedVoucher, silent = true) => {
+      if (!previewItems.length) {
+        setPreview(null);
+        return null;
+      }
+      try {
+        const response = await InvoiceService.preview({
+          customerId: getId(customer) || undefined,
+          voucherCode: voucher || undefined,
+          items: previewItems,
+        });
+        const data = unwrap(response);
+        setPreview(data);
+        setPreviewError("");
+        return data;
+      } catch (error) {
+        const message = errorMessage(error, "Không thể tính hóa đơn");
+        setPreview(null);
+        setPreviewError(message);
+        if (!silent) toast.error(message);
+        return null;
+      }
+    },
+    [appliedVoucher, customer, previewItems]
+  );
+  useEffect(() => {
+    if (!open || !previewItems.length) {
+      setPreview(null);
+      return undefined;
+    }
+    const timer = setTimeout(() => loadPreview(appliedVoucher, true), 350);
+    return () => clearTimeout(timer);
+  }, [open, loadPreview, previewItems.length, appliedVoucher]);
+  const applyVoucher = async () => {
+    const code = form.voucherCode.trim().toUpperCase();
+    if (!code) {
+      setAppliedVoucher("");
+      return;
+    }
+    const result = await loadPreview(code, false);
+    if (result) {
+      setAppliedVoucher(code);
+      toast.success(`Đã áp dụng ${result.promotion?.name || code}`);
+    }
   };
-
-  const totalAmount = items.reduce((sum, i) => sum + Number(i.qty) * Number(i.price), 0);
-
-  const handleSubmit = async () => {
-    if (!form.code.trim()) { toast.error("Vui lòng nhập mã hóa đơn"); return; }
-    if (!form.customer) { toast.error("Vui lòng chọn hoặc nhập khách hàng"); return; }
-    if (Number(form.paidAmount) < 0 || Number(form.paidAmount) > totalAmount) { toast.error("Số tiền thanh toán phải từ 0 đến tổng hóa đơn"); return; }
-    if (form.sourceType === "truck" && !form.truckId) { toast.error("Vui lòng chọn xe"); return; }
-    if (items.some((i) => !i.productId || !i.qty)) { toast.error("Vui lòng điền đầy đủ thông tin"); return; }
+  const paidAmount = Number(form.cashAmount || 0) + Number(form.bankAmount || 0);
+  const grandTotal = preview?.grandTotal || 0;
+  const invoiceDebt = Math.max(0, grandTotal - paidAmount);
+  const currentDebt = Number(customer?.debt || 0);
+  const debtLimit = Number(customer?.debtLimit || 0);
+  const projectedDebt = currentDebt + invoiceDebt;
+  const overLimit = Boolean(customer && debtLimit > 0 && projectedDebt > debtLimit);
+  const updateItem = (index, patch) =>
+    setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const submit = async () => {
+    if (!salesperson) return toast.error("Vui lòng chọn nhân viên xuất hóa đơn");
+    if (!previewItems.length || previewItems.length !== items.length)
+      return toast.error("Vui lòng chọn đầy đủ sản phẩm và số lượng");
+    if (form.sourceType === "truck" && !truck) return toast.error("Vui lòng chọn xe xuất hàng");
+    if (!preview) return toast.error(previewError || "Chưa tính được giá trị hóa đơn");
+    if (paidAmount > grandTotal)
+      return toast.error("Tổng tiền thanh toán không được vượt giá trị hóa đơn");
+    if (!customer && paidAmount !== grandTotal) return toast.error("Khách lẻ phải thanh toán đủ");
+    if (overLimit && !form.allowDebtLimitOverride)
+      return toast.error("Hóa đơn vượt hạn mức công nợ của khách hàng");
+    if (form.allowDebtLimitOverride && !form.debtOverrideReason.trim())
+      return toast.error("Vui lòng nhập lý do vượt hạn mức");
     try {
       setSubmitting(true);
-      await InvoiceService.create({
-        ...form,
-        customerId: form.customerId || undefined,
-        paidAmount: Number(form.paidAmount) || 0,
-        truckId: form.truckId || undefined,
-        totalAmount,
-        items: items.map((i) => ({ productId: i.productId, qty: Number(i.qty), price: Number(i.price) })),
+      const payments = [];
+      if (Number(form.cashAmount) > 0)
+        payments.push({ method: "CASH", amount: Number(form.cashAmount) });
+      if (Number(form.bankAmount) > 0)
+        payments.push({
+          method: "BANK_TRANSFER",
+          amount: Number(form.bankAmount),
+          referenceCode: form.referenceCode.trim() || undefined,
+        });
+      const response = await InvoiceService.create({
+        code: form.code.trim() || undefined,
+        date: `${form.date}T00:00:00+07:00`,
+        customerId: getId(customer) || undefined,
+        sourceType: form.sourceType,
+        truckId: getId(truck) || undefined,
+        salespersonId: getId(salesperson),
+        voucherCode: appliedVoucher || undefined,
+        payments,
+        items: previewItems,
+        note: form.note.trim() || undefined,
+        allowDebtLimitOverride: Boolean(form.allowDebtLimitOverride),
+        debtOverrideReason: form.allowDebtLimitOverride
+          ? form.debtOverrideReason.trim()
+          : undefined,
       });
-      toast.success("Tạo hóa đơn thành công!");
-      setModalOpen(false);
-      setForm({ code: "", customer: "Khách lẻ", customerId: "", paidAmount: 0, sourceType: "warehouse", truckId: "", note: "", date: new Date().toISOString().split("T")[0] });
-      setItems([{ productId: "", qty: 1, price: 0 }]);
-      load();
-    } catch (e) {
-      toast.error(e.response?.data?.message || "Có lỗi xảy ra");
+      toast.success(`Đã tạo hóa đơn ${unwrap(response)?.code || ""}`);
+      onCreated();
+      onClose();
+    } catch (error) {
+      toast.error(errorMessage(error, "Không thể tạo hóa đơn"));
     } finally {
       setSubmitting(false);
     }
   };
+  return (
+    <Modal open={open} onClose={onClose}>
+      <SoftBox
+        sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "96%", md: 900 },
+          maxHeight: "94vh",
+          overflowY: "auto",
+          bgcolor: "background.paper",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: { xs: 2, md: 4 },
+        }}
+      >
+        <SoftTypography variant="h5" fontWeight="bold">
+          Tạo hóa đơn bán hàng
+        </SoftTypography>
+        <Grid container spacing={2} mt={0.5}>
+          <Field label="Mã hóa đơn">
+            <SoftInput
+              value={form.code}
+              onChange={(e) => set("code", e.target.value.toUpperCase())}
+              placeholder="Để trống để tự sinh"
+            />
+          </Field>
+          <Field label="Ngày hóa đơn *">
+            <SoftInput
+              type="date"
+              value={form.date}
+              onChange={(e) => set("date", e.target.value)}
+            />
+          </Field>
+          <Field label="Khách hàng" md={7}>
+            <SearchSelect
+              value={customer}
+              onChange={setCustomer}
+              options={customers}
+              loading={customersLoading}
+              inputValue={customerSearch}
+              onInputChange={setCustomerSearch}
+              placeholder="Tìm mã, tên hoặc số điện thoại..."
+              label={(item) => `${item.code || ""} · ${item.name || ""} · ${item.phone || ""}`}
+            />
+          </Field>
+          <Field label="Nhân viên xuất hóa đơn *" md={5}>
+            <SearchSelect
+              value={salesperson}
+              onChange={setSalesperson}
+              options={staff}
+              loading={staffLoading}
+              inputValue={staffSearch}
+              onInputChange={setStaffSearch}
+              placeholder="Tìm mã, tên hoặc số điện thoại..."
+              label={(item) =>
+                `${item.employeeCode || ""} · ${item.fullName || item.username || ""} · ${
+                  item.phone || ""
+                }`
+              }
+            />
+          </Field>
+        </Grid>
+        {customer && (
+          <SoftBox mt={2} p={2} borderRadius={2} bgcolor={overLimit ? "#FFF3E0" : "#F3F8FF"}>
+            <Grid container spacing={1}>
+              {[
+                ["Công nợ cũ", currentDebt],
+                ["Hạn mức", debtLimit],
+                [
+                  "Hạn mức còn lại",
+                  customer.availableDebtLimit ?? Math.max(0, debtLimit - currentDebt),
+                ],
+                ["Công nợ sau hóa đơn", projectedDebt],
+              ].map(([label, value]) => (
+                <Grid item xs={6} md={3} key={label}>
+                  <SoftTypography variant="caption" color="text">
+                    {label}
+                  </SoftTypography>
+                  <SoftTypography
+                    variant="button"
+                    fontWeight="bold"
+                    display="block"
+                    color={label === "Công nợ sau hóa đơn" && overLimit ? "error" : "dark"}
+                  >
+                    {money(value)}
+                  </SoftTypography>
+                </Grid>
+              ))}
+            </Grid>
+          </SoftBox>
+        )}
+        <SoftBox mt={2} p={2} border="1px solid #E5E7EB" borderRadius={2}>
+          <SoftTypography variant="button" fontWeight="bold">
+            Nguồn xuất hàng
+          </SoftTypography>
+          <RadioGroup
+            row
+            value={form.sourceType}
+            onChange={(e) => {
+              set("sourceType", e.target.value);
+              setTruck(null);
+              setItems([{ product: null, qty: 1, search: "" }]);
+            }}
+          >
+            <FormControlLabel
+              value="warehouse"
+              control={<Radio size="small" />}
+              label="Kho chính"
+            />
+            <FormControlLabel value="truck" control={<Radio size="small" />} label="Xe tải" />
+          </RadioGroup>
+          {form.sourceType === "truck" && (
+            <SearchSelect
+              value={truck}
+              onChange={(selected) => {
+                setTruck(selected);
+                setItems([{ product: null, qty: 1, search: "" }]);
+              }}
+              options={trucks}
+              loading={trucksLoading}
+              inputValue={truckSearch}
+              onInputChange={setTruckSearch}
+              placeholder="Tìm mã xe, tên xe, biển số hoặc tài xế..."
+              label={(item) =>
+                `${item.code || ""} · ${item.name || ""} · ${item.licensePlate || ""}`
+              }
+            />
+          )}
+        </SoftBox>
+        <SoftTypography variant="button" fontWeight="bold" display="block" mt={3} mb={1}>
+          Hàng hóa
+        </SoftTypography>
+        {items.map((item, index) => (
+          <SoftBox key={index} display="flex" gap={1} alignItems="center" mb={1.5}>
+            <SoftBox sx={{ flex: 3 }}>
+              <SearchSelect
+                value={item.product}
+                onChange={(product) => updateItem(index, { product })}
+                options={productOptions}
+                loading={productsLoading}
+                inputValue={item.search || ""}
+                onInputChange={(search) => {
+                  updateItem(index, { search });
+                  setProductSearch(search);
+                }}
+                placeholder="Tìm mã, tên hoặc barcode..."
+                label={(product) =>
+                  `${product.code || ""} · ${product.name || ""} · còn ${
+                    product.stock ?? product.quantity ?? product.warehouseQuantity ?? 0
+                  } ${product.unit || ""}`
+                }
+              />
+            </SoftBox>
+            <SoftBox sx={{ width: 110 }}>
+              <SoftInput
+                type="number"
+                inputProps={{ min: 1, step: 1 }}
+                value={item.qty}
+                onChange={(e) => updateItem(index, { qty: e.target.value })}
+              />
+            </SoftBox>
+            <IconButton
+              disabled={items.length === 1}
+              onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
+            >
+              <Icon color="error">remove_circle</Icon>
+            </IconButton>
+          </SoftBox>
+        ))}
+        <SoftButton
+          variant="text"
+          color="info"
+          startIcon={<Icon>add</Icon>}
+          onClick={() => setItems((current) => [...current, { product: null, qty: 1, search: "" }])}
+        >
+          Thêm sản phẩm
+        </SoftButton>
+        <Grid container spacing={2} mt={1}>
+          <Field label="Mã khuyến mãi" md={8}>
+            <SoftBox display="flex" gap={1}>
+              <SoftInput
+                value={form.voucherCode}
+                onChange={(e) => set("voucherCode", e.target.value.toUpperCase())}
+                placeholder="Nhập mã voucher"
+              />
+              <SoftButton variant="outlined" color="info" onClick={applyVoucher}>
+                {appliedVoucher ? "Kiểm tra lại" : "Áp dụng"}
+              </SoftButton>
+              {appliedVoucher && (
+                <SoftButton
+                  variant="text"
+                  color="secondary"
+                  onClick={() => {
+                    setAppliedVoucher("");
+                    set("voucherCode", "");
+                  }}
+                >
+                  Bỏ mã
+                </SoftButton>
+              )}
+            </SoftBox>
+          </Field>
+          <Field label="Ghi chú" md={4}>
+            <SoftInput value={form.note} onChange={(e) => set("note", e.target.value)} />
+          </Field>
+        </Grid>
+        {previewError && (
+          <SoftTypography variant="caption" color="error" display="block" mt={1}>
+            {previewError}
+          </SoftTypography>
+        )}
+        <SoftBox mt={2} p={2} bgcolor="#F8F9FA" borderRadius={2}>
+          <SoftBox display="flex" justifyContent="space-between">
+            <SoftTypography variant="button">Tạm tính</SoftTypography>
+            <SoftTypography variant="button">{money(preview?.subtotal)}</SoftTypography>
+          </SoftBox>
+          <SoftBox display="flex" justifyContent="space-between">
+            <SoftTypography variant="button" color="success">
+              Khuyến mãi {preview?.promotion?.name ? `(${preview.promotion.name})` : ""}
+            </SoftTypography>
+            <SoftTypography variant="button" color="success">
+              -{money(preview?.discountAmount)}
+            </SoftTypography>
+          </SoftBox>
+          <SoftBox display="flex" justifyContent="space-between" mt={1}>
+            <SoftTypography variant="h6" fontWeight="bold">
+              Thành tiền
+            </SoftTypography>
+            <SoftTypography variant="h6" fontWeight="bold">
+              {money(grandTotal)}
+            </SoftTypography>
+          </SoftBox>
+        </SoftBox>
+        <Grid container spacing={2} mt={1}>
+          <Field label="Tiền mặt">
+            <SoftInput
+              value={numberText(form.cashAmount)}
+              onChange={(e) => set("cashAmount", moneyValue(e.target.value))}
+              inputProps={{ inputMode: "numeric" }}
+            />
+          </Field>
+          <Field label="Chuyển khoản">
+            <SoftInput
+              value={numberText(form.bankAmount)}
+              onChange={(e) => set("bankAmount", moneyValue(e.target.value))}
+              inputProps={{ inputMode: "numeric" }}
+            />
+          </Field>
+          {Number(form.bankAmount) > 0 && (
+            <Field label="Mã giao dịch" md={12}>
+              <SoftInput
+                value={form.referenceCode}
+                onChange={(e) => set("referenceCode", e.target.value)}
+              />
+            </Field>
+          )}
+        </Grid>
+        <SoftBox display="flex" justifyContent="space-between" mt={2}>
+          <SoftTypography variant="button">
+            Đã thanh toán: <b>{money(paidAmount)}</b>
+          </SoftTypography>
+          <SoftTypography variant="button" color={invoiceDebt > 0 ? "error" : "success"}>
+            Còn nợ: <b>{money(invoiceDebt)}</b>
+          </SoftTypography>
+        </SoftBox>
+        {overLimit && (
+          <SoftBox mt={2} p={2} bgcolor="#FFF3E0" borderRadius={2}>
+            <SoftTypography variant="button" color="error" fontWeight="bold">
+              Hóa đơn vượt hạn mức công nợ {money(projectedDebt - debtLimit)}
+            </SoftTypography>
+            {isAdmin && (
+              <>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={form.allowDebtLimitOverride}
+                      onChange={(e) => set("allowDebtLimitOverride", e.target.checked)}
+                    />
+                  }
+                  label="Admin cho phép vượt hạn mức"
+                />
+                {form.allowDebtLimitOverride && (
+                  <SoftInput
+                    value={form.debtOverrideReason}
+                    onChange={(e) => set("debtOverrideReason", e.target.value)}
+                    placeholder="Lý do phê duyệt bắt buộc"
+                  />
+                )}
+              </>
+            )}
+          </SoftBox>
+        )}
+        <SoftBox display="flex" gap={2} mt={3}>
+          <SoftButton variant="outlined" color="secondary" fullWidth onClick={onClose}>
+            Hủy
+          </SoftButton>
+          <SoftButton
+            variant="gradient"
+            color="success"
+            fullWidth
+            disabled={submitting}
+            onClick={submit}
+          >
+            {submitting ? "Đang tạo..." : "Tạo hóa đơn"}
+          </SoftButton>
+        </SoftBox>
+      </SoftBox>
+    </Modal>
+  );
+}
 
+function InvoiceDetail({ id, onClose }) {
+  const [invoice, setInvoice] = useState(null);
+  useEffect(() => {
+    if (id)
+      InvoiceService.getById(id)
+        .then((response) => setInvoice(unwrap(response)))
+        .catch((error) => toast.error(errorMessage(error, "Không thể tải hóa đơn")));
+  }, [id]);
+  return (
+    <Modal open={Boolean(id)} onClose={onClose}>
+      <SoftBox
+        sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "94%", md: 650 },
+          maxHeight: "90vh",
+          overflowY: "auto",
+          bgcolor: "background.paper",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: 4,
+        }}
+      >
+        {!invoice ? (
+          <SoftTypography>Đang tải...</SoftTypography>
+        ) : (
+          <>
+            <SoftTypography variant="h5" fontWeight="bold">
+              {invoice.code}
+            </SoftTypography>
+            <SoftTypography variant="caption" color="text">
+              {new Date(invoice.date).toLocaleString("vi-VN")} · {invoice.customer}
+            </SoftTypography>
+            <SoftBox mt={2}>
+              {(invoice.items || []).map((item) => (
+                <SoftBox
+                  key={item.productId?._id || item.productId}
+                  display="flex"
+                  justifyContent="space-between"
+                  py={1}
+                  borderBottom="1px solid #eee"
+                >
+                  <SoftBox>
+                    <SoftTypography variant="button" fontWeight="bold">
+                      {item.productName || item.productId?.name}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" display="block" color="text">
+                      {item.productCode}
+                    </SoftTypography>
+                  </SoftBox>
+                  <SoftTypography variant="button">
+                    {item.qty} × {money(item.price)} = {money(item.lineTotal)}
+                  </SoftTypography>
+                </SoftBox>
+              ))}
+            </SoftBox>
+            <SoftBox mt={2}>
+              <SoftTypography variant="button" display="block">
+                Tạm tính: {money(invoice.subtotal)}
+              </SoftTypography>
+              <SoftTypography variant="button" color="success" display="block">
+                Khuyến mãi {invoice.voucherCode ? `(${invoice.voucherCode})` : ""}: -
+                {money(invoice.discountAmount)}
+              </SoftTypography>
+              <SoftTypography variant="h6" fontWeight="bold">
+                Thành tiền: {money(invoice.grandTotal ?? invoice.totalAmount)}
+              </SoftTypography>
+              <SoftTypography variant="button" display="block">
+                Nhân viên: {invoice.salespersonName || invoice.salespersonId?.fullName || "—"}
+              </SoftTypography>
+              <SoftTypography variant="button" display="block">
+                Thanh toán:{" "}
+                {(invoice.payments || [])
+                  .map(
+                    (p) => `${p.method === "CASH" ? "Tiền mặt" : "Chuyển khoản"} ${money(p.amount)}`
+                  )
+                  .join(" · ") || "Chưa thanh toán"}
+              </SoftTypography>
+              <SoftTypography variant="button" color={invoice.debtAmount > 0 ? "error" : "success"}>
+                Công nợ: {money(invoice.debtAmount)}
+              </SoftTypography>
+            </SoftBox>
+            <SoftButton
+              variant="outlined"
+              color="secondary"
+              fullWidth
+              sx={{ mt: 3 }}
+              onClick={onClose}
+            >
+              Đóng
+            </SoftButton>
+          </>
+        )}
+      </SoftBox>
+    </Modal>
+  );
+}
+
+export default function HoaDon() {
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailId, setDetailId] = useState(null);
+  const load = () => {
+    setLoading(true);
+    InvoiceService.getAll()
+      .then((response) => setInvoices(listOf(response)))
+      .catch((error) => toast.error(errorMessage(error, "Không thể tải hóa đơn")))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, []);
   return (
     <DashboardLayout>
       <DashboardNavbar />
       <SoftBox py={3}>
         <Card>
           <SoftBox p={3}>
-            <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
-              <SoftTypography variant="h5" fontWeight="bold">Hóa đơn bán hàng</SoftTypography>
-              <SoftButton variant="gradient" color="success" startIcon={<Icon>add</Icon>} onClick={() => setModalOpen(true)}>
+            <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+              <SoftBox>
+                <SoftTypography variant="h5" fontWeight="bold">
+                  Hóa đơn bán hàng
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text">
+                  Doanh thu, thanh toán, khuyến mãi và công nợ
+                </SoftTypography>
+              </SoftBox>
+              <SoftButton
+                variant="gradient"
+                color="success"
+                startIcon={<Icon>add</Icon>}
+                onClick={() => setCreateOpen(true)}
+              >
                 Tạo hóa đơn
               </SoftButton>
             </SoftBox>
-
             <SoftBox sx={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#F8F9FA" }}>
-                    {["Mã HĐ", "Ngày", "Khách hàng", "Xuất từ", "Tổng tiền", "Ghi chú", "Chi tiết"].map((h) => (
-                      <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "#6B7280", whiteSpace: "nowrap" }}>{h}</th>
+                    {[
+                      "Mã HĐ",
+                      "Ngày",
+                      "Khách hàng",
+                      "Nhân viên",
+                      "Tổng tiền",
+                      "Đã trả",
+                      "Công nợ",
+                      "Trạng thái",
+                      "",
+                    ].map((heading) => (
+                      <th
+                        key={heading}
+                        style={{
+                          padding: 12,
+                          textAlign: "left",
+                          fontSize: 12,
+                          color: "#6B7280",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {heading}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {loading && <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}>Đang tải...</td></tr>}
-                  {!loading && invoices.map((inv, idx) => {
-                    const invoiceTruck = typeof inv.truckId === "object" ? inv.truckId : trucks.find((t) => String(t.id || t._id) === String(inv.truckId));
-                    return (
-                      <tr key={inv.id || inv._id} style={{ borderBottom: "1px solid #F0F0F0", background: idx % 2 === 0 ? "#fff" : "#FAFAFA" }}>
-                        <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "#3B82F6" }}>{inv.code}</td>
-                        <td style={{ padding: "10px 12px", fontSize: 13 }}>{inv.date}</td>
-                        <td style={{ padding: "10px 12px", fontSize: 13 }}>{inv.customer}</td>
-                        <td style={{ padding: "10px 12px" }}>
-                          <span style={{
-                            padding: "3px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600,
-                            background: inv.sourceType === "truck" ? "#E3F2FD" : "#E8F5E9",
-                            color: inv.sourceType === "truck" ? "#1565C0" : "#2E7D32"
-                          }}>
-                            {inv.sourceType === "truck" ? `🚛 ${invoiceTruck?.code || "Xe"}` : "🏭 Kho"}
-                          </span>
-                        </td>
-                        <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "#388E3C" }}>{fmtCurrency(inv.totalAmount)}</td>
-                        <td style={{ padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>{inv.note || "—"}</td>
-                        <td style={{ padding: "10px 12px" }}>
-                          <Tooltip title="Xem chi tiết">
-                            <IconButton size="small" onClick={() => setDetailModal(inv)}>
-                              <Icon sx={{ fontSize: 18, color: "#3B82F6" }}>visibility</Icon>
-                            </IconButton>
-                          </Tooltip>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {loading && (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: "center", padding: 40 }}>
+                        Đang tải...
+                      </td>
+                    </tr>
+                  )}
+                  {!loading && !invoices.length && (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        style={{ textAlign: "center", padding: 40, color: "#9E9E9E" }}
+                      >
+                        Chưa có hóa đơn
+                      </td>
+                    </tr>
+                  )}
+                  {invoices.map((invoice) => (
+                    <tr key={getId(invoice)} style={{ borderBottom: "1px solid #eee" }}>
+                      <td style={{ padding: 12, fontSize: 13, fontWeight: 600, color: "#1565C0" }}>
+                        {invoice.code}
+                        {invoice.voucherCode && (
+                          <>
+                            <br />
+                            <span style={{ color: "#7B1FA2", fontSize: 11 }}>
+                              🎟 {invoice.voucherCode}
+                            </span>
+                          </>
+                        )}
+                      </td>
+                      <td style={{ padding: 12, fontSize: 13 }}>
+                        {new Date(invoice.date).toLocaleDateString("vi-VN")}
+                      </td>
+                      <td style={{ padding: 12, fontSize: 13 }}>
+                        {invoice.customerId?.name || invoice.customer || "Khách lẻ"}
+                        <br />
+                        <span style={{ color: "#6B7280" }}>{invoice.customerId?.phone || ""}</span>
+                      </td>
+                      <td style={{ padding: 12, fontSize: 13 }}>
+                        {invoice.salespersonName || invoice.salespersonId?.fullName || "—"}
+                      </td>
+                      <td style={{ padding: 12, fontSize: 13, fontWeight: 600 }}>
+                        {money(invoice.grandTotal ?? invoice.totalAmount)}
+                      </td>
+                      <td style={{ padding: 12, fontSize: 13, color: "#2E7D32" }}>
+                        {money(invoice.paidAmount)}
+                      </td>
+                      <td
+                        style={{
+                          padding: 12,
+                          fontSize: 13,
+                          color: invoice.debtAmount > 0 ? "#C62828" : "#6B7280",
+                        }}
+                      >
+                        {money(invoice.debtAmount)}
+                      </td>
+                      <td style={{ padding: 12 }}>
+                        <span
+                          style={{
+                            padding: "4px 9px",
+                            borderRadius: 10,
+                            fontSize: 11,
+                            background:
+                              invoice.paymentStatus === "PAID"
+                                ? "#E8F5E9"
+                                : invoice.paymentStatus === "PARTIAL"
+                                ? "#FFF3E0"
+                                : "#FFEBEE",
+                            color:
+                              invoice.paymentStatus === "PAID"
+                                ? "#2E7D32"
+                                : invoice.paymentStatus === "PARTIAL"
+                                ? "#E65100"
+                                : "#C62828",
+                          }}
+                        >
+                          {invoice.paymentStatus === "PAID"
+                            ? "Đã thanh toán"
+                            : invoice.paymentStatus === "PARTIAL"
+                            ? "Thanh toán một phần"
+                            : "Chưa thanh toán"}
+                        </span>
+                      </td>
+                      <td style={{ padding: 12 }}>
+                        <Tooltip title="Xem chi tiết">
+                          <IconButton size="small" onClick={() => setDetailId(getId(invoice))}>
+                            <Icon color="info">visibility</Icon>
+                          </IconButton>
+                        </Tooltip>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </SoftBox>
           </SoftBox>
         </Card>
       </SoftBox>
-
-      {/* Create Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
-        <SoftBox sx={{
-          position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-          width: { xs: "95%", md: 700 }, maxHeight: "90vh", overflowY: "auto",
-          bgcolor: "background.paper", borderRadius: 3, boxShadow: 24, p: 4,
-        }}>
-          <SoftTypography variant="h5" fontWeight="bold" mb={3}>Tạo hóa đơn bán hàng</SoftTypography>
-
-          <Grid container spacing={2} mb={2}>
-            <Grid item xs={12} md={6}>
-              <SoftTypography variant="caption" fontWeight="medium">Mã hóa đơn *</SoftTypography>
-              <SoftInput value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="VD: HD-2607-001" fullWidth />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <SoftTypography variant="caption" fontWeight="medium">Ngày</SoftTypography>
-              <SoftInput type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} fullWidth />
-            </Grid>
-            <Grid item xs={12} md={8}>
-              <SoftTypography variant="caption" fontWeight="medium">Khách hàng *</SoftTypography>
-              <FormControl fullWidth size="small"><Select displayEmpty value={form.customerId} onChange={(e) => { const customer = customers.find((item) => item.id === e.target.value); setForm((f) => ({ ...f, customerId: e.target.value, customer: customer?.name || "Khách lẻ" })); }}><MenuItem value="">Khách lẻ (không ghi nhận CRM)</MenuItem>{customers.map((customer) => <MenuItem key={customer.id} value={customer.id}>{customer.code} · {customer.name} · {customer.phone}</MenuItem>)}</Select></FormControl>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <SoftTypography variant="caption" fontWeight="medium">Đã thanh toán</SoftTypography>
-              <SoftInput type="number" value={form.paidAmount} onChange={(e) => setForm((f) => ({ ...f, paidAmount: e.target.value }))} fullWidth />
-            </Grid>
-
-            {/* Source Type Selector */}
-            <Grid item xs={12}>
-              <SoftBox p={2} sx={{ background: "#F8F9FA", borderRadius: 2, border: "1px solid #E5E7EB" }}>
-                <SoftTypography variant="caption" fontWeight="bold" display="block" mb={1}>
-                  Xuất hàng từ *
-                </SoftTypography>
-                <RadioGroup row value={form.sourceType} onChange={(e) => setForm((f) => ({ ...f, sourceType: e.target.value, truckId: "" }))}>
-                  <FormControlLabel value="warehouse" control={<Radio size="small" />} label={<SoftTypography variant="button">🏭 Kho hàng</SoftTypography>} />
-                  <FormControlLabel value="truck" control={<Radio size="small" />} label={<SoftTypography variant="button">🚛 Xe tải</SoftTypography>} />
-                </RadioGroup>
-                {form.sourceType === "truck" && (
-                  <FormControl fullWidth size="small" sx={{ mt: 1 }}>
-                    <Select value={form.truckId} onChange={(e) => setForm((f) => ({ ...f, truckId: e.target.value }))} displayEmpty sx={{ height: 40 }}>
-                      <MenuItem value=""><em>Chọn xe tải</em></MenuItem>
-                      {activeTrucks.map((t) => (
-                        <MenuItem key={t.id || t._id} value={t.id || t._id}>
-                          {t.name} – {t.licensePlate} ({t.driver})
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                )}
-              </SoftBox>
-            </Grid>
-
-            <Grid item xs={12}>
-              <SoftTypography variant="caption" fontWeight="medium">Ghi chú</SoftTypography>
-              <SoftInput value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="Ghi chú..." fullWidth />
-            </Grid>
-          </Grid>
-
-          {/* Items */}
-          <SoftTypography variant="button" fontWeight="bold" mb={1} display="block">Danh sách hàng hóa</SoftTypography>
-          {(form.sourceType === "truck" && !form.truckId) && (
-            <SoftTypography variant="caption" color="warning" mb={1} display="block">
-              ⚠️ Vui lòng chọn xe để xem hàng có trên xe
-            </SoftTypography>
-          )}
-          {items.map((item, idx) => {
-            const availableProducts = getAvailableProducts();
-            return (
-              <SoftBox key={idx} display="flex" gap={1} alignItems="center" mb={1.5}>
-                <FormControl size="small" sx={{ flex: 2 }}>
-                  <Select value={item.productId} onChange={(e) => handleItemChange(idx, "productId", e.target.value)} displayEmpty sx={{ height: 40 }}>
-                    <MenuItem value=""><em>Chọn sản phẩm</em></MenuItem>
-                    {availableProducts.map((p) => (
-                      <MenuItem key={p.id || p._id} value={p.id || p._id}>{p.name} (còn: {p.stock} {p.unit})</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <SoftBox sx={{ flex: 1 }}>
-                  <SoftInput type="number" value={item.qty} onChange={(e) => handleItemChange(idx, "qty", e.target.value)} placeholder="SL" />
-                </SoftBox>
-                <SoftBox sx={{ flex: 1 }}>
-                  <SoftInput type="number" value={item.price} onChange={(e) => handleItemChange(idx, "price", e.target.value)} placeholder="Giá bán" />
-                </SoftBox>
-                <SoftBox sx={{ width: 90, textAlign: "right" }}>
-                  <SoftTypography variant="caption" fontWeight="bold">{fmtCurrency(item.qty * item.price)}</SoftTypography>
-                </SoftBox>
-                <IconButton size="small" onClick={() => handleRemoveItem(idx)} disabled={items.length === 1}>
-                  <Icon sx={{ color: "#EF4444" }}>remove_circle</Icon>
-                </IconButton>
-              </SoftBox>
-            );
-          })}
-          <SoftButton variant="text" color="info" startIcon={<Icon>add</Icon>} onClick={handleAddItem} sx={{ mb: 2 }}>
-            Thêm dòng
-          </SoftButton>
-
-          <SoftBox display="flex" justifyContent="flex-end" mb={3}>
-            <SoftTypography variant="h6" fontWeight="bold">Tổng: {fmtCurrency(totalAmount)}</SoftTypography>
-          </SoftBox>
-
-          <SoftBox display="flex" gap={2}>
-            <SoftButton variant="outlined" color="secondary" onClick={() => setModalOpen(false)} fullWidth>Hủy</SoftButton>
-            <SoftButton variant="gradient" color="success" onClick={handleSubmit} disabled={submitting} fullWidth>
-              {submitting ? "Đang lưu..." : "Xác nhận bán hàng"}
-            </SoftButton>
-          </SoftBox>
-        </SoftBox>
-      </Modal>
-
-      {/* Detail Modal */}
-      {detailModal && (
-        <Modal open={!!detailModal} onClose={() => setDetailModal(null)}>
-          <SoftBox sx={{
-            position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-            width: { xs: "90%", md: 520 }, bgcolor: "background.paper", borderRadius: 3, boxShadow: 24, p: 4,
-          }}>
-            <SoftTypography variant="h5" fontWeight="bold" mb={1}>{detailModal.code}</SoftTypography>
-            <SoftTypography variant="body2" color="text" mb={2}>
-              {detailModal.date} · {detailModal.customer} · {detailModal.sourceType === "truck" ? `Xe ${detailModal.truckId?.code || "—"}` : "Kho hàng"}
-            </SoftTypography>
-            {detailModal.items.map((item, i) => {
-              const p = typeof item.productId === "object" ? item.productId : products.find((product) => String(product.id || product._id) === String(item.productId));
-              return (
-                <SoftBox key={i} display="flex" justifyContent="space-between" py={1} sx={{ borderBottom: "1px solid #f0f0f0" }}>
-                  <SoftTypography variant="button">{p?.name || "—"}</SoftTypography>
-                  <SoftTypography variant="caption">{item.qty} × {fmtCurrency(item.price)} = {fmtCurrency(item.qty * item.price)}</SoftTypography>
-                </SoftBox>
-              );
-            })}
-            <SoftBox display="flex" justifyContent="flex-end" mt={2} mb={3}>
-              <SoftTypography variant="h6" fontWeight="bold">Tổng: {fmtCurrency(detailModal.totalAmount)}</SoftTypography>
-            </SoftBox>
-            <SoftButton variant="outlined" color="secondary" fullWidth onClick={() => setDetailModal(null)}>Đóng</SoftButton>
-          </SoftBox>
-        </Modal>
-      )}
+      <CreateInvoiceModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={load} />
+      <InvoiceDetail id={detailId} onClose={() => setDetailId(null)} />
     </DashboardLayout>
   );
 }
-
-export default HoaDon;

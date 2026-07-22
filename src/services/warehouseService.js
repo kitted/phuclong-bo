@@ -287,9 +287,7 @@ export let MOCK_TRUCK_RETURNS = [
 // ─── PRODUCTS ─────────────────────────────────────────────────────────────────
 
 export const ProductService = {
-  getAll: async () => {
-    return await AxiosInstance.get(`/admin/products`);
-  },
+  getAll: (params = {}) => AxiosInstance.get(`/admin/products`, { params }),
   getById: async (id) => {
     return await AxiosInstance.get(`/admin/products/${id}`);
   },
@@ -397,6 +395,8 @@ export const TruckService = {
   getSummary: () => AxiosInstance.get("/admin/trucks/summary"),
   getAvailableProducts: (params = {}) =>
     AxiosInstance.get("/admin/trucks/available-products", { params }),
+  getTruckAvailableProducts: (id, params = {}) =>
+    AxiosInstance.get(`/admin/trucks/${id}/available-products`, { params }),
   getAvailableDrivers: (params = {}) =>
     AxiosInstance.get("/admin/trucks/available-drivers", { params }),
   getById: (id) => AxiosInstance.get(`/admin/trucks/${id}`),
@@ -426,6 +426,7 @@ export const InvoiceService = {
   create: async (payload) => {
     return await AxiosInstance.post(`/admin/invoices`, payload);
   },
+  preview: (payload) => AxiosInstance.post(`/admin/invoices/preview`, payload),
 };
 
 // ─── DASHBOARD KPIs ───────────────────────────────────────────────────────────

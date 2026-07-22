@@ -21,10 +21,12 @@ export const PromotionService = {
   getById: (id) => AxiosInstance.get(`/admin/promotions/${id}`),
   create: (payload) => AxiosInstance.post("/admin/promotions", payload),
   update: (id, payload) => AxiosInstance.patch(`/admin/promotions/${id}`, payload),
-  changeStatus: (id, status) =>
-    AxiosInstance.patch(`/admin/promotions/${id}/status`, { status }),
+  changeStatus: (id, status) => AxiosInstance.patch(`/admin/promotions/${id}/status`, { status }),
   assignVoucher: (id, customerId) =>
     AxiosInstance.post(`/admin/promotions/${id}/vouchers`, { customerId }),
   useVoucher: (code, payload) =>
     AxiosInstance.post(`/admin/promotions/vouchers/${encodeURIComponent(code)}/use`, payload),
+  getPerformance: (id) => AxiosInstance.get(`/admin/promotions/${id}/performance`),
+  getInvoices: (id, params = {}) =>
+    AxiosInstance.get(`/admin/promotions/${id}/invoices`, { params }),
 };
