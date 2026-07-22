@@ -20,6 +20,7 @@ import SoftButton from "components/SoftButton";
 import { CustomerService, CUSTOMER_SEGMENTS } from "services/crmService";
 import { toast } from "react-toastify";
 import { downloadBlob, exportExcel, readExcelFile } from "utils/excel";
+import { DebtPaymentHistory, DebtPaymentModal } from "./debt-payment";
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
@@ -200,6 +201,8 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
   const [interaction, setInteraction] = useState({ channel: "Zalo", action: "", result: "" });
   const [savingInteraction, setSavingInteraction] = useState(false);
   const [activations, setActivations] = useState([]);
+  const [debtPaymentOpen, setDebtPaymentOpen] = useState(false);
+  const [debtRefreshKey, setDebtRefreshKey] = useState(0);
   const loadDetail = () =>
     CustomerService.getById(customerId).then((response) =>
       setCustomer(normalizeCustomerDetail(response))
@@ -237,7 +240,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
       setInteractionOpen(false);
       setInteraction({ channel: "Zalo", action: "", result: "" });
       await loadDetail();
-      setTab(4);
+      setTab(5);
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể ghi nhận tương tác");
     } finally {
@@ -282,6 +285,17 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
                 </SoftTypography>
               </SoftBox>
               <SoftBox display="flex" gap={1}>
+                {Number(customer.debt || 0) > 0 && (
+                  <SoftButton
+                    size="small"
+                    color="success"
+                    variant="gradient"
+                    startIcon={<Icon>payments</Icon>}
+                    onClick={() => setDebtPaymentOpen(true)}
+                  >
+                    Thu công nợ
+                  </SoftButton>
+                )}
                 <SoftButton
                   size="small"
                   color="success"
@@ -382,6 +396,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
                 <Tab label={`Hóa đơn (${customer.invoices.length})`} />
                 <Tab label={`Voucher (${customer.vouchers.length})`} />
                 <Tab label={`Mã kích hoạt (${activations.length})`} />
+                <Tab label="Phiếu thu công nợ" />
                 <Tab label={`Lịch sử tương tác (${customer.interactions.length})`} />
               </Tabs>
               <SoftBox p={3}>
@@ -482,6 +497,16 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
                   />
                 )}
                 {tab === 4 && (
+                  <DebtPaymentHistory
+                    customerId={customerId}
+                    refreshKey={debtRefreshKey}
+                    onChanged={async () => {
+                      await loadDetail();
+                      setDebtRefreshKey((value) => value + 1);
+                    }}
+                  />
+                )}
+                {tab === 5 && (
                   <DataTable
                     headers={["Thời gian", "Kênh", "Tương tác", "Kết quả"]}
                     rows={customer.interactions.map((item) => [
@@ -567,6 +592,16 @@ function CustomerDetail({ customerId, open, onClose, onEdit }) {
                 </SoftBox>
               </SoftBox>
             </Modal>
+            <DebtPaymentModal
+              open={debtPaymentOpen}
+              customer={customer}
+              onClose={() => setDebtPaymentOpen(false)}
+              onCreated={async () => {
+                await loadDetail();
+                setDebtRefreshKey((value) => value + 1);
+                setTab(4);
+              }}
+            />
           </>
         )}
       </SoftBox>

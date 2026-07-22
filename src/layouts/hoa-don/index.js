@@ -107,6 +107,7 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
     sourceType: "warehouse",
     note: "",
     voucherCode: "",
+    paymentMode: "PAY_NOW",
     cashAmount: 0,
     bankAmount: 0,
     referenceCode: "",
@@ -151,6 +152,7 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
       sourceType: "warehouse",
       note: "",
       voucherCode: "",
+      paymentMode: "PAY_NOW",
       cashAmount: 0,
       bankAmount: 0,
       referenceCode: "",
@@ -360,7 +362,8 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
       toast.error(errorMessage(error, "Lựa chọn quà không hợp lệ"));
     }
   };
-  const paidAmount = Number(form.cashAmount || 0) + Number(form.bankAmount || 0);
+  const paidAmount =
+    form.paymentMode === "DEBT" ? 0 : Number(form.cashAmount || 0) + Number(form.bankAmount || 0);
   const grandTotal = preview?.grandTotal || 0;
   const invoiceDebt = Math.max(0, grandTotal - paidAmount);
   const currentDebt = Number(customer?.debt || 0);
@@ -377,6 +380,8 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
     if (!preview) return toast.error(previewError || "Chưa tính được giá trị hóa đơn");
     if (selectedGiftPromotion && !appliedGiftPromotion)
       return toast.error("Vui lòng xác nhận lựa chọn quà tặng");
+    if (form.paymentMode === "DEBT" && !customer)
+      return toast.error("Hóa đơn ghi nợ bắt buộc chọn khách hàng CRM");
     if (paidAmount > grandTotal)
       return toast.error("Tổng tiền thanh toán không được vượt giá trị hóa đơn");
     if (!customer && paidAmount !== grandTotal) return toast.error("Khách lẻ phải thanh toán đủ");
@@ -387,9 +392,9 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
     try {
       setSubmitting(true);
       const payments = [];
-      if (Number(form.cashAmount) > 0)
+      if (form.paymentMode !== "DEBT" && Number(form.cashAmount) > 0)
         payments.push({ method: "CASH", amount: Number(form.cashAmount) });
-      if (Number(form.bankAmount) > 0)
+      if (form.paymentMode !== "DEBT" && Number(form.bankAmount) > 0)
         payments.push({
           method: "BANK_TRANSFER",
           amount: Number(form.bankAmount),
@@ -793,6 +798,36 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
             ))}
           </SoftBox>
         )}
+        <SoftBox mt={2} p={2} sx={{ border: "1px solid #e5e7eb", borderRadius: 2 }}>
+          <SoftTypography variant="button" fontWeight="bold">
+            Hình thức ghi nhận hóa đơn
+          </SoftTypography>
+          <RadioGroup
+            row
+            value={form.paymentMode}
+            onChange={(event) => {
+              const value = event.target.value;
+              setForm((current) => ({
+                ...current,
+                paymentMode: value,
+                ...(value === "DEBT" ? { cashAmount: 0, bankAmount: 0, referenceCode: "" } : {}),
+              }));
+            }}
+          >
+            <FormControlLabel
+              value="PAY_NOW"
+              control={<Radio />}
+              label="Thanh toán ngay / một phần"
+            />
+            <FormControlLabel value="DEBT" control={<Radio />} label="Ghi nợ toàn bộ" />
+          </RadioGroup>
+          {form.paymentMode === "DEBT" && (
+            <SoftTypography variant="caption" color="error">
+              Hóa đơn sẽ ở trạng thái Chưa thanh toán và toàn bộ thành tiền được cộng vào công nợ
+              khách hàng.
+            </SoftTypography>
+          )}
+        </SoftBox>
         <Grid container spacing={2} mt={1}>
           <Field label="Mã khuyến mãi" md={8}>
             <SoftBox display="flex" gap={1}>
@@ -849,30 +884,32 @@ function CreateInvoiceModal({ open, onClose, onCreated }) {
             </SoftTypography>
           </SoftBox>
         </SoftBox>
-        <Grid container spacing={2} mt={1}>
-          <Field label="Tiền mặt">
-            <SoftInput
-              value={numberText(form.cashAmount)}
-              onChange={(e) => set("cashAmount", moneyValue(e.target.value))}
-              inputProps={{ inputMode: "numeric" }}
-            />
-          </Field>
-          <Field label="Chuyển khoản">
-            <SoftInput
-              value={numberText(form.bankAmount)}
-              onChange={(e) => set("bankAmount", moneyValue(e.target.value))}
-              inputProps={{ inputMode: "numeric" }}
-            />
-          </Field>
-          {Number(form.bankAmount) > 0 && (
-            <Field label="Mã giao dịch" md={12}>
+        {form.paymentMode !== "DEBT" && (
+          <Grid container spacing={2} mt={1}>
+            <Field label="Tiền mặt">
               <SoftInput
-                value={form.referenceCode}
-                onChange={(e) => set("referenceCode", e.target.value)}
+                value={numberText(form.cashAmount)}
+                onChange={(e) => set("cashAmount", moneyValue(e.target.value))}
+                inputProps={{ inputMode: "numeric" }}
               />
             </Field>
-          )}
-        </Grid>
+            <Field label="Chuyển khoản">
+              <SoftInput
+                value={numberText(form.bankAmount)}
+                onChange={(e) => set("bankAmount", moneyValue(e.target.value))}
+                inputProps={{ inputMode: "numeric" }}
+              />
+            </Field>
+            {Number(form.bankAmount) > 0 && (
+              <Field label="Mã giao dịch" md={12}>
+                <SoftInput
+                  value={form.referenceCode}
+                  onChange={(e) => set("referenceCode", e.target.value)}
+                />
+              </Field>
+            )}
+          </Grid>
+        )}
         <SoftBox display="flex" justifyContent="space-between" mt={2}>
           <SoftTypography variant="button">
             Đã thanh toán: <b>{money(paidAmount)}</b>

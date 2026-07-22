@@ -26,6 +26,16 @@ export const PromotionActivationService = {
     AxiosInstance.patch(`/admin/promotion-activations/${id}/status`, { status, reason }),
 };
 
+export const DebtPaymentService = {
+  getAll: (params = {}) => AxiosInstance.get("/admin/debt-payments", { params }),
+  getById: (id) => AxiosInstance.get(`/admin/debt-payments/${id}`),
+  getForCustomer: (customerId, params = {}) =>
+    AxiosInstance.get(`/admin/customers/${customerId}/debt-payments`, { params }),
+  create: (customerId, payload) =>
+    AxiosInstance.post(`/admin/customers/${customerId}/debt-payments`, payload),
+  cancel: (id, reason) => AxiosInstance.patch(`/admin/debt-payments/${id}/cancel`, { reason }),
+};
+
 export const PromotionService = {
   getAll: (params = {}) => AxiosInstance.get("/admin/promotions", { params }),
   getOptions: (params = {}) => AxiosInstance.get("/admin/promotions/options", { params }),
