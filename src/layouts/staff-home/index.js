@@ -18,6 +18,7 @@ import EmployeeKpiService from "services/employeeKpiService";
 import { InvoiceService } from "services/warehouseService";
 import { CreateInvoiceModal } from "layouts/hoa-don";
 import { toast } from "react-toastify";
+import StaffAccountMenu from "components/StaffAccountMenu";
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", {
@@ -42,6 +43,7 @@ const initials = (name = "NV") =>
     .join("")
     .toUpperCase();
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString("vi-VN") : "—");
+const formatDateTime = (value) => value ? new Date(value).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
 
 const KPI_META = {
   PROMOTION_ACTIVATION_COUNT: { label: "Mã kích hoạt", icon: "confirmation_number", money: false },
@@ -185,6 +187,7 @@ export default function StaffHome() {
             </SoftBox>
             <IconButton onClick={() => setRefreshKey((value) => value + 1)} sx={{ bgcolor: "#f0f2f5" }}><Icon>refresh</Icon></IconButton>
             <IconButton onClick={() => setSaleOpen(true)} sx={{ bgcolor: "#f0f2f5" }}><Icon>add</Icon></IconButton>
+            <StaffAccountMenu />
           </SoftBox>
         </SoftBox>
 
@@ -242,7 +245,7 @@ export default function StaffHome() {
                 <SoftBox width={42} height={42} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox>
                 <SoftBox flex={1} minWidth={0}>
                   <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>{invoice.code || "Hóa đơn"} · {invoice.customerName || invoice.customer?.name || "Khách lẻ"}</SoftTypography>
-                  <SoftTypography variant="caption" color="text">{formatDate(invoice.date || invoice.createdAt)} · {invoice.paymentStatus === "PAID" ? "Đã thanh toán" : invoice.paymentStatus === "PARTIAL" ? "Thanh toán một phần" : "Cộng công nợ"}</SoftTypography>
+                  <SoftTypography variant="caption" color="text">{formatDateTime(invoice.createdAt || invoice.date)} · {invoice.paymentStatus === "PAID" ? "Đã thanh toán" : invoice.paymentStatus === "PARTIAL" ? "Thanh toán một phần" : "Cộng công nợ"}</SoftTypography>
                 </SoftBox>
                 <SoftTypography variant="button" fontWeight="bold">{money(invoice.grandTotal ?? invoice.totalAmount)}</SoftTypography>
               </SoftBox>

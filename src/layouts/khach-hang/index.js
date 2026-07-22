@@ -27,6 +27,10 @@ import MobileLoadMore from "components/MobileLoadMore";
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
+const dateTime = (value) =>
+  value
+    ? new Date(value).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+    : "—";
 const EMPTY_FORM = {
   name: "",
   phone: "",
@@ -497,7 +501,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
                     headers={["Mã hóa đơn", "Ngày", "Tổng tiền", "Đã thanh toán", "Trạng thái"]}
                     rows={customer.invoices.map((item) => [
                       item.code,
-                      item.date,
+                      dateTime(item.createdAt || item.date),
                       money(item.total),
                       money(item.paid),
                       item.status === "PAID"
@@ -537,7 +541,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
                       </SoftTypography>,
                       item.promotionName,
                       item.invoiceCode,
-                      new Date(item.activatedAt).toLocaleString("vi-VN"),
+                      dateTime(item.activatedAt),
                       item.status === "ACTIVE"
                         ? badge("Đang hoạt động", "#388E3C", "#E8F5E9")
                         : badge(
@@ -562,7 +566,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
                   <DataTable
                     headers={["Thời gian", "Kênh", "Tương tác", "Kết quả"]}
                     rows={customer.interactions.map((item) => [
-                      item.at,
+                      dateTime(item.at),
                       item.channel,
                       item.action,
                       item.result,

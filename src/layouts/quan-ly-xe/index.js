@@ -53,7 +53,12 @@ const money = (value = 0) =>
     currency: "VND",
     maximumFractionDigits: 0,
   }).format(value || 0);
-const date = (value) => (value ? new Date(value).toLocaleDateString("vi-VN") : "—");
+const date = (value) =>
+  value
+    ? new Date(value).toLocaleString("vi-VN", {
+        day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
+      })
+    : "—";
 const todayValue = () => {
   const value = new Date();
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(

@@ -57,6 +57,17 @@ const today = () => {
 };
 const numberText = (value) => new Intl.NumberFormat("vi-VN").format(Number(value) || 0);
 const moneyValue = (value) => Number(String(value || "").replace(/[^0-9]/g, "")) || 0;
+const dateTime = (value) =>
+  value
+    ? new Date(value).toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+    : "—";
 
 function Field({ label, children, xs = 12, md = 6 }) {
   return (
@@ -1137,7 +1148,7 @@ function InvoiceDetail({ id, onClose, mobile = false }) {
               {invoice.code}
             </SoftTypography>
             <SoftTypography variant="caption" color="text">
-              {new Date(invoice.date).toLocaleString("vi-VN")} · {invoice.customer}
+              {dateTime(invoice.createdAt || invoice.date)} · {invoice.customer}
             </SoftTypography>
             <SoftBox mt={2}>
               {(invoice.items || []).map((item) => (
@@ -1381,7 +1392,7 @@ export default function HoaDon() {
               </FormControl>
             </SoftBox>
             {isStaff && <SoftBox display={{ xs: "block", md: "none" }}>
-              {!loading && invoices.map((invoice) => <SoftBox key={getId(invoice)} py={1.5} display="flex" gap={1.25} alignItems="center" onClick={() => setDetailId(getId(invoice))} sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}><SoftBox width={44} height={44} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox><SoftBox flex={1} minWidth={0}><SoftTypography variant="button" fontWeight="bold" display="block">{invoice.code}</SoftTypography><SoftTypography variant="caption" color="text" display="block" noWrap>{invoice.customerId?.name || invoice.customer || "Khách lẻ"} · {new Date(invoice.date).toLocaleDateString("vi-VN")}</SoftTypography><SoftTypography variant="caption" sx={{ color: invoice.debtAmount > 0 ? "#c62828" : "#2e7d32" }}>{invoice.paymentStatus === "PAID" ? "Đã thanh toán" : `Công nợ ${money(invoice.debtAmount)}`}</SoftTypography></SoftBox><SoftTypography variant="button" fontWeight="bold">{money(invoice.grandTotal ?? invoice.totalAmount)}</SoftTypography></SoftBox>)}
+              {!loading && invoices.map((invoice) => <SoftBox key={getId(invoice)} py={1.5} display="flex" gap={1.25} alignItems="center" onClick={() => setDetailId(getId(invoice))} sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}><SoftBox width={44} height={44} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox><SoftBox flex={1} minWidth={0}><SoftTypography variant="button" fontWeight="bold" display="block">{invoice.code}</SoftTypography><SoftTypography variant="caption" color="text" display="block" noWrap>{invoice.customerId?.name || invoice.customer || "Khách lẻ"} · {dateTime(invoice.createdAt || invoice.date)}</SoftTypography><SoftTypography variant="caption" sx={{ color: invoice.debtAmount > 0 ? "#c62828" : "#2e7d32" }}>{invoice.paymentStatus === "PAID" ? "Đã thanh toán" : `Công nợ ${money(invoice.debtAmount)}`}</SoftTypography></SoftBox><SoftTypography variant="button" fontWeight="bold">{money(invoice.grandTotal ?? invoice.totalAmount)}</SoftTypography></SoftBox>)}
             </SoftBox>}
             <SoftBox sx={{ overflowX: "auto", display: { xs: isStaff ? "none" : "block", md: "block" } }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1445,7 +1456,7 @@ export default function HoaDon() {
                         )}
                       </td>
                       <td style={{ padding: 12, fontSize: 13 }}>
-                        {new Date(invoice.date).toLocaleDateString("vi-VN")}
+                        {dateTime(invoice.createdAt || invoice.date)}
                       </td>
                       <td style={{ padding: 12, fontSize: 13 }}>
                         {invoice.customerId?.name || invoice.customer || "Khách lẻ"}

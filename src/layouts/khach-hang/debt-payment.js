@@ -13,6 +13,7 @@ import { toast } from "react-toastify";
 const money = (value) => `${Number(value || 0).toLocaleString("vi-VN")} ₫`;
 const numberValue = (value) => Number(String(value || "").replace(/\D/g, "")) || 0;
 const idOf = (value) => value?.id || value?._id;
+const dateTime = (value) => value ? new Date(value).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
 
 export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = false }) {
   const [form, setForm] = useState({
@@ -171,7 +172,7 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
                       />
                     }
                     label={`${invoice.code} · ${
-                      invoice.date ? new Date(invoice.date).toLocaleDateString("vi-VN") : ""
+                      dateTime(invoice.createdAt || invoice.date)
                     }`}
                   />
                   <SoftTypography variant="button" color="error">
@@ -271,7 +272,7 @@ export function DebtPaymentHistory({ customerId, refreshKey, onChanged }) {
             <tr key={idOf(payment)} style={{ borderBottom: "1px solid #eee" }}>
               <td style={{ padding: 10, fontWeight: 600 }}>{payment.code}</td>
               <td style={{ padding: 10 }}>
-                {payment.date ? new Date(payment.date).toLocaleString("vi-VN") : "—"}
+                {dateTime(payment.createdAt || payment.date)}
               </td>
               <td style={{ padding: 10 }}>{money(payment.amount)}</td>
               <td style={{ padding: 10 }}>
