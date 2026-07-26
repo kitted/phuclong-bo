@@ -577,6 +577,28 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   };
   const remainingStockFor = (product) =>
     Math.max(0, stockOf(product) - selectedQuantityFor(product));
+  const unitPriceFor = (product) => {
+    const productId = String(getId(product) || product?.productId || "");
+    const rawPreviewLines = preview?.items || preview?.lines || preview?.saleItems;
+    const previewLines = Array.isArray(rawPreviewLines) ? rawPreviewLines : [];
+    const previewLine = previewLines.find((line) => {
+      const lineProductId =
+        getId(line.productId) ||
+        line.productId ||
+        getId(line.product) ||
+        line.product?.productId;
+      return lineProductId && String(lineProductId) === productId;
+    });
+    return Number(
+      previewLine?.price ??
+        previewLine?.unitPrice ??
+        previewLine?.sellPrice ??
+        product?.sellPrice ??
+        product?.price ??
+        product?.salePrice ??
+        0
+    );
+  };
   const sourceCardOptions = [
     {
       id: "warehouse",
@@ -773,14 +795,15 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
           top: { xs: 0, md: "50%" },
           left: { xs: 0, md: "50%" },
           transform: { xs: "none", md: "translate(-50%, -50%)" },
-          width: { xs: "100%", md: 900 },
+          width: { xs: "100%", md: isAdmin ? "96vw" : 900 },
+          maxWidth: { md: isAdmin ? 1320 : 900 },
           height: { xs: "100dvh", md: "auto" },
           maxHeight: { xs: "100dvh", md: "94vh" },
           overflowY: "auto",
           bgcolor: "background.paper",
           borderRadius: { xs: 0, md: 3 },
           boxShadow: 24,
-          p: { xs: 0, md: 4 },
+          p: { xs: 0, md: isAdmin ? 3 : 4 },
         }}
       >
         <SoftBox
@@ -799,13 +822,17 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
             <SoftTypography variant="h5" fontWeight="bold">
               {isAdmin ? "Tạo hóa đơn bán hàng" : "Bán hàng nhanh"}
             </SoftTypography>
-            {!isAdmin && (
+            {isAdmin ? (
+              <SoftTypography variant="caption" color="text">
+                Nhập thông tin đơn hàng bên trái và kiểm tra thanh toán bên phải
+              </SoftTypography>
+            ) : (
               <SoftTypography variant="caption" color="text">
                 {authUser?.employeeCode || "NV"} · {authUser?.fullName || authUser?.username}
               </SoftTypography>
             )}
           </SoftBox>
-          <IconButton onClick={onClose} sx={{ display: { xs: "inline-flex", md: "none" } }}>
+          <IconButton onClick={onClose}>
             <Icon>close</Icon>
           </IconButton>
         </SoftBox>
@@ -879,6 +906,22 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
               : undefined
           }
         >
+          <SoftBox
+            sx={
+              isAdmin
+                ? {
+                    display: { xs: "block", md: "grid" },
+                    gridTemplateColumns: {
+                      md: "minmax(0, 1.65fr) minmax(360px, 0.78fr)",
+                      xl: "minmax(0, 1.8fr) minmax(390px, 0.72fr)",
+                    },
+                    gap: 3,
+                    alignItems: "start",
+                  }
+                : undefined
+            }
+          >
+            <SoftBox minWidth={0}>
           <SectionTitle
             step="1"
             title="Khách hàng"
@@ -1357,56 +1400,73 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                 )}
               </SoftBox>
               <SoftBox
-                display="flex"
-                alignItems="center"
-                gap={1}
-                sx={{ width: { xs: "100%", sm: 150 } }}
+                sx={{ width: { xs: "100%", sm: isAdmin ? 190 : 150 }, flexShrink: 0 }}
               >
-                <SoftTypography
-                  variant="caption"
-                  sx={{ display: { xs: "block", sm: "none" }, minWidth: 65 }}
-                >
-                  Số lượng
-                </SoftTypography>
-                {!isAdmin && (
-                  <IconButton
-                    onClick={() =>
-                      updateItem(index, { qty: Math.max(1, Number(item.qty || 1) - 1) })
-                    }
-                    sx={{ border: "1px solid #dbe1e8", flexShrink: 0 }}
+                <SoftBox display="flex" alignItems="center" gap={1}>
+                  <SoftTypography
+                    variant="caption"
+                    sx={{ display: { xs: "block", sm: "none" }, minWidth: 65 }}
                   >
-                    <Icon>remove</Icon>
+                    Số lượng
+                  </SoftTypography>
+                  {!isAdmin && (
+                    <IconButton
+                      onClick={() =>
+                        updateItem(index, { qty: Math.max(1, Number(item.qty || 1) - 1) })
+                      }
+                      sx={{ border: "1px solid #dbe1e8", flexShrink: 0 }}
+                    >
+                      <Icon>remove</Icon>
+                    </IconButton>
+                  )}
+                  <SoftBox sx={{ width: { xs: isAdmin ? "100%" : 74, sm: 72 } }}>
+                    <SoftInput
+                      type="number"
+                      inputProps={{
+                        min: 1,
+                        step: 1,
+                        style: { textAlign: "center", fontWeight: 700 },
+                      }}
+                      value={item.qty}
+                      onChange={(e) => updateItem(index, { qty: e.target.value })}
+                    />
+                  </SoftBox>
+                  {!isAdmin && (
+                    <IconButton
+                      disabled={
+                        !item.product || remainingStockFor(item.product) <= 0
+                      }
+                      onClick={() => updateItem(index, { qty: Number(item.qty || 0) + 1 })}
+                      sx={{ border: "1px solid #dbe1e8", flexShrink: 0 }}
+                    >
+                      <Icon>add</Icon>
+                    </IconButton>
+                  )}
+                  <IconButton
+                    disabled={items.length === 1}
+                    onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
+                  >
+                    <Icon color="error">remove_circle</Icon>
                   </IconButton>
-                )}
-                <SoftBox sx={{ width: { xs: isAdmin ? "100%" : 74, sm: 72 } }}>
-                  <SoftInput
-                    type="number"
-                    inputProps={{
-                      min: 1,
-                      step: 1,
-                      style: { textAlign: "center", fontWeight: 700 },
-                    }}
-                    value={item.qty}
-                    onChange={(e) => updateItem(index, { qty: e.target.value })}
-                  />
                 </SoftBox>
-                {!isAdmin && (
-                  <IconButton
-                    disabled={
-                      !item.product || remainingStockFor(item.product) <= 0
-                    }
-                    onClick={() => updateItem(index, { qty: Number(item.qty || 0) + 1 })}
-                    sx={{ border: "1px solid #dbe1e8", flexShrink: 0 }}
+                {item.product && (
+                  <SoftBox
+                    mt={0.75}
+                    pt={0.75}
+                    textAlign={{ xs: "right", sm: "center" }}
+                    sx={{ borderTop: "1px dashed #cbd5e1" }}
                   >
-                    <Icon>add</Icon>
-                  </IconButton>
+                    <SoftTypography
+                      variant="caption"
+                      fontWeight="bold"
+                      color="info"
+                      sx={{ whiteSpace: "nowrap" }}
+                    >
+                      {money(unitPriceFor(item.product))} × {numberText(item.qty)} ={" "}
+                      {money(unitPriceFor(item.product) * Number(item.qty || 0))}
+                    </SoftTypography>
+                  </SoftBox>
                 )}
-                <IconButton
-                  disabled={items.length === 1}
-                  onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
-                >
-                  <Icon color="error">remove_circle</Icon>
-                </IconButton>
               </SoftBox>
             </SoftBox>
           ))}
@@ -1463,7 +1523,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                   boxShadow: gift.product ? "0 5px 16px rgba(33,150,243,.12)" : "none",
                 }}
               >
-                <SoftBox flex={1}>
+                <SoftBox flex={1} minWidth={0}>
                   <SoftBox display="flex" alignItems="center" gap={1} mb={1}>
                     <SoftBox
                       width={36}
@@ -1549,11 +1609,20 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                   display="flex"
                   gap={1}
                   alignItems="center"
-                  sx={{ width: { xs: "100%", sm: 190 } }}
+                  justifyContent={{ xs: "flex-start", sm: "flex-end" }}
+                  sx={{
+                    width: { xs: "100%", sm: isAdmin ? 300 : 230 },
+                    minWidth: { sm: isAdmin ? 300 : 230 },
+                    flexShrink: 0,
+                  }}
                 >
                   <SoftTypography
                     variant="caption"
-                    sx={{ display: { xs: "block", sm: "none" }, minWidth: 65 }}
+                    fontWeight={isAdmin ? "bold" : "regular"}
+                    sx={{
+                      display: { xs: "block", sm: isAdmin ? "block" : "none" },
+                      minWidth: isAdmin ? 52 : 65,
+                    }}
                   >
                     Số lượng
                   </SoftTypography>
@@ -1571,7 +1640,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                   >
                     <Icon>remove</Icon>
                   </IconButton>
-                  <SoftBox width={72}>
+                  <SoftBox width={72} minWidth={72} flexShrink={0}>
                     <SoftInput
                       type="number"
                       value={gift.qty}
@@ -1733,6 +1802,23 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
               ))}
             </SoftBox>
           )}
+            </SoftBox>
+            <SoftBox
+              minWidth={0}
+              sx={
+                isAdmin
+                  ? {
+                      position: { md: "sticky" },
+                      top: { md: 0 },
+                      p: { md: 2 },
+                      bgcolor: { md: "#f8fafc" },
+                      border: { md: "1px solid #e2e8f0" },
+                      borderRadius: { md: 2.5 },
+                      boxShadow: { md: "0 8px 24px rgba(15, 23, 42, 0.06)" },
+                    }
+                  : undefined
+              }
+            >
           <SectionTitle
             step="4"
             title="Thanh toán và ưu đãi"
@@ -1753,7 +1839,11 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                   ...(value === "DEBT" ? { cashAmount: 0, bankAmount: 0, referenceCode: "" } : {}),
                 }));
               }}
-              sx={{ gap: 1, mt: 1 }}
+              sx={{
+                gap: 1,
+                mt: 1,
+                flexDirection: isAdmin ? { md: "column" } : undefined,
+              }}
             >
               <FormControlLabel
                 value="PAY_NOW"
@@ -1796,13 +1886,19 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
             )}
           </SoftBox>
           <Grid container spacing={2} mt={1}>
-            <Field label="Mã khuyến mãi" md={8}>
-              <SoftBox display="flex" gap={1}>
-                <SoftInput
-                  value={form.voucherCode}
-                  onChange={(e) => set("voucherCode", e.target.value.toUpperCase())}
-                  placeholder="Nhập mã voucher"
-                />
+            <Field label="Mã khuyến mãi" md={isAdmin ? 12 : 8}>
+              <SoftBox display="flex" gap={1} flexWrap={isAdmin ? "wrap" : "nowrap"}>
+                <SoftBox
+                  flex={isAdmin ? 1 : undefined}
+                  width={isAdmin ? undefined : "100%"}
+                  minWidth={isAdmin ? 170 : 0}
+                >
+                  <SoftInput
+                    value={form.voucherCode}
+                    onChange={(e) => set("voucherCode", e.target.value.toUpperCase())}
+                    placeholder="Nhập mã voucher"
+                  />
+                </SoftBox>
                 <SoftButton variant="outlined" color="info" onClick={applyVoucher}>
                   {appliedVoucher ? "Kiểm tra lại" : "Áp dụng"}
                 </SoftButton>
@@ -1885,16 +1981,93 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                   </Grid>
                 ))}
               </Grid>
-              <FormControlLabel
-                sx={{ alignItems: "flex-start", mt: 1, mb: 0 }}
-                control={
-                  <Checkbox
-                    checked={form.allowDebtLimitOverride}
-                    onChange={(e) => setDebtLimitOverride(e.target.checked)}
-                  />
-                }
-                label="Vẫn cho mua và cộng toàn bộ hóa đơn vào công nợ"
-              />
+              <SoftBox
+                component="label"
+                role="alert"
+                mt={1.5}
+                p={1.5}
+                display="flex"
+                alignItems="flex-start"
+                gap={1}
+                sx={{
+                  cursor: "pointer",
+                  border: `2px solid ${
+                    form.allowDebtLimitOverride ? "#2e7d32" : "#d32f2f"
+                  }`,
+                  borderRadius: 2,
+                  bgcolor: form.allowDebtLimitOverride ? "#e8f5e9" : "#fff1f2",
+                  boxShadow: form.allowDebtLimitOverride
+                    ? "0 5px 18px rgba(46,125,50,.2)"
+                    : "0 5px 16px rgba(211,47,47,.16)",
+                  transition: "all .2s ease",
+                  "&:hover": {
+                    bgcolor: form.allowDebtLimitOverride ? "#dcfce7" : "#ffe4e6",
+                    transform: "translateY(-1px)",
+                  },
+                }}
+              >
+                <Checkbox
+                  checked={form.allowDebtLimitOverride}
+                  onChange={(e) => setDebtLimitOverride(e.target.checked)}
+                  color="success"
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    p: 0,
+                    mt: -0.5,
+                    flexShrink: 0,
+                    color: "#c62828",
+                    bgcolor: "#fff",
+                    border: `2px solid ${
+                      form.allowDebtLimitOverride ? "#2e7d32" : "#ef9a9a"
+                    }`,
+                    borderRadius: 1.25,
+                    "&:hover": {
+                      bgcolor: form.allowDebtLimitOverride ? "#c8e6c9" : "#ffebee",
+                    },
+                    "&.Mui-checked": {
+                      color: "#2e7d32",
+                      bgcolor: "#c8e6c9",
+                    },
+                    "& .MuiSvgIcon-root": { fontSize: 34 },
+                  }}
+                />
+                <SoftBox flex={1} minWidth={0}>
+                  <SoftBox display="flex" alignItems="center" gap={0.75}>
+                    <Icon
+                      sx={{
+                        color: form.allowDebtLimitOverride ? "#2e7d32" : "#d32f2f",
+                        fontSize: 26,
+                      }}
+                    >
+                      {form.allowDebtLimitOverride ? "check_circle" : "warning_amber"}
+                    </Icon>
+                    <SoftTypography
+                      variant="button"
+                      fontWeight="bold"
+                      sx={{
+                        color: form.allowDebtLimitOverride ? "#1b5e20" : "#b71c1c",
+                        fontSize: { xs: 14, md: 15 },
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      Vẫn cho khách mua và cộng toàn bộ hóa đơn vào công nợ
+                    </SoftTypography>
+                  </SoftBox>
+                  <SoftTypography
+                    variant="caption"
+                    display="block"
+                    mt={0.5}
+                    sx={{
+                      color: form.allowDebtLimitOverride ? "#2e5d34" : "#7f1d1d",
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    Hóa đơn vẫn được tạo dù vượt hạn mức. Bắt buộc nhập lý do để lưu lịch sử
+                    truy xuất.
+                  </SoftTypography>
+                </SoftBox>
+              </SoftBox>
               {form.allowDebtLimitOverride && (
                 <SoftBox mt={1}>
                   <SoftInput
@@ -1934,7 +2107,14 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                   key={label}
                   display="grid"
                   sx={{
-                    gridTemplateColumns: { xs: "1fr 62px 132px", sm: "1fr 100px 190px" },
+                    gridTemplateColumns: {
+                      xs: isAdmin
+                        ? "minmax(0, 1fr) 56px 116px"
+                        : "minmax(0, 1fr) 62px 132px",
+                      sm: isAdmin
+                        ? "minmax(0, 1fr) 60px 132px"
+                        : "minmax(0, 1fr) 100px 190px",
+                    },
                     borderBottom: index < 6 ? "1px solid #c7cdd4" : 0,
                     bgcolor: finalDebt ? "#fff7ed" : "#fff",
                   }}
@@ -2031,6 +2211,8 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
             >
               {submitting ? "Đang tạo..." : isAdmin ? "Tạo hóa đơn" : "Xác nhận bán hàng"}
             </SoftButton>
+          </SoftBox>
+            </SoftBox>
           </SoftBox>
         </SoftBox>
       </SoftBox>
