@@ -28,7 +28,7 @@ import EmployeeService from "services/employeeService";
 import { toast } from "react-toastify";
 import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
-import { printInvoice } from "utils/invoicePrint";
+import { moneyInWords, printInvoice } from "utils/invoicePrint";
 
 const money = (value = 0) =>
   new Intl.NumberFormat("vi-VN", {
@@ -2038,28 +2038,322 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   );
 }
 
-function InvoiceDetail({ id, onClose, mobile = false }) {
-  const [invoice, setInvoice] = useState(null);
-  useEffect(() => {
-    if (id)
-      InvoiceService.getById(id)
-        .then((response) => setInvoice(unwrap(response)))
-        .catch((error) => toast.error(errorMessage(error, "Không thể tải hóa đơn")));
-  }, [id]);
-  const detailGrandTotal = Number(invoice?.grandTotal ?? invoice?.totalAmount ?? 0);
-  const detailPaidAmount = Number(invoice?.paidAmount || 0);
-  const detailOldDebt = Number(
-    invoice?.customerDebtBefore ?? invoice?.previousDebt ?? invoice?.oldDebt ?? 0
+function InvoiceColgroup() {
+  return (
+    <colgroup>
+      <col style={{ width: "6.2%" }} />
+      <col style={{ width: "28.2%" }} />
+      <col style={{ width: "9.2%" }} />
+      <col style={{ width: "10.6%" }} />
+      <col style={{ width: "13.2%" }} />
+      <col style={{ width: "14.3%" }} />
+      <col style={{ width: "18.3%" }} />
+    </colgroup>
   );
-  const detailDebtAfter = Number(
-    invoice?.customerDebtAfter ??
-      invoice?.totalCustomerDebtAfter ??
-      detailOldDebt + detailGrandTotal - detailPaidAmount
+}
+
+function InvoicePaperView({ invoice }) {
+  const customer = invoice.customerId || invoice.customerSnapshot || {};
+  const customerName = customer.name || invoice.customerName || invoice.customer || "Khách lẻ";
+  const customerPhones = Array.from(
+    new Set(
+      [
+        ...(Array.isArray(customer.phones) ? customer.phones : []),
+        ...(Array.isArray(invoice.customerPhones) ? invoice.customerPhones : []),
+        customer.phone,
+        invoice.customerPhone,
+      ].filter(Boolean)
+    )
+  ).join(", ");
+  const customerAddress = customer.address || invoice.customerAddress || "";
+  const occurredAt = new Date(invoice.createdAt || invoice.date || Date.now());
+  const subtotal = Number(invoice.subtotal ?? invoice.totalAmount ?? 0);
+  const discount = Number(invoice.discountAmount || 0);
+  const grandTotal = Number(invoice.grandTotal ?? invoice.totalAmount ?? 0);
+  const paidAmount = Number(invoice.paidAmount || 0);
+  const oldDebt = Number(
+    invoice.customerDebtBefore ?? invoice.previousDebt ?? invoice.oldDebt ?? 0
   );
-  const detailQuantity = (invoice?.items || []).reduce(
+  const debtAfter = Number(
+    invoice.customerDebtAfter ??
+      invoice.totalCustomerDebtAfter ??
+      oldDebt + grandTotal - paidAmount
+  );
+  const totalQuantity = (invoice.items || []).reduce(
     (sum, item) => sum + Number(item.qty || 0),
     0
   );
+  return (
+    <SoftBox
+      maxWidth={1080}
+      mx="auto"
+      bgcolor="#fff"
+      p={{ xs: 1.5, sm: 3, md: 4 }}
+      sx={{
+        color: "#000",
+        fontFamily: '"Times New Roman", Times, serif',
+        boxShadow: "0 2px 12px rgba(0,0,0,.12)",
+      }}
+    >
+      <SoftBox
+        display="grid"
+        sx={{
+          gridTemplateColumns: { xs: "88px 1fr", sm: "130px 1fr" },
+          gap: { xs: 1.5, sm: 3 },
+          alignItems: "start",
+        }}
+      >
+        <SoftBox
+          component="img"
+          src={`${process.env.PUBLIC_URL || ""}/og-1200x1200.png`}
+          alt="Phúc Long"
+          width={{ xs: 84, sm: 120 }}
+          height={{ xs: 84, sm: 120 }}
+          sx={{ objectFit: "contain" }}
+        />
+        <SoftBox pt={0.5} sx={{ "& p": { fontFamily: "inherit", color: "#000" } }}>
+          <SoftTypography
+            component="h3"
+            fontWeight="bold"
+            fontSize={{ xs: 16, sm: 20 }}
+            mb={{ xs: 1, sm: 2 }}
+          >
+            NPP PHÚC LONG
+          </SoftTypography>
+          <SoftTypography component="p" fontSize={{ xs: 10, sm: 12 }} mb={0.5}>
+            Địa chỉ: B1/19 LÊ HỒNG PHONG, P. BÌNH THỦY, TP CẦN THƠ - SĐT: 0939890861
+          </SoftTypography>
+          <SoftTypography component="p" fontSize={{ xs: 10, sm: 12 }}>
+            Tài khoản: Số TK: 101100002653, Ngân hàng: Vietcombank, Chủ TK: Nguyễn Tuấn Vũ
+          </SoftTypography>
+        </SoftBox>
+      </SoftBox>
+
+      <SoftBox textAlign="center" mt={{ xs: 1, sm: 0 }} mb={2.5}>
+        <SoftTypography
+          component="h1"
+          fontFamily="inherit"
+          fontSize={{ xs: 19, sm: 28 }}
+          fontWeight="bold"
+          color="dark"
+          lineHeight={1.1}
+        >
+          PHIẾU BÁN HÀNG - KIÊM XUẤT KHO
+        </SoftTypography>
+        <SoftTypography
+          component="p"
+          fontFamily="inherit"
+          fontSize={{ xs: 12, sm: 15 }}
+          fontStyle="italic"
+          color="dark"
+          mt={0.5}
+        >
+          Số phiếu: {invoice.code || "—"} &nbsp; - &nbsp; Ngày{" "}
+          {occurredAt.toLocaleString("vi-VN", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </SoftTypography>
+      </SoftBox>
+
+      <SoftBox
+        display="grid"
+        mb={2}
+        px={0.5}
+        sx={{
+          gridTemplateColumns: { xs: "1fr", sm: "1.4fr 1fr" },
+          gap: { xs: 0.5, sm: 2 },
+          "& p": {
+            fontFamily: "inherit",
+            fontSize: { xs: 13, sm: 16 },
+            color: "#000",
+            margin: 0,
+            marginBottom: "4px",
+          },
+        }}
+      >
+        <SoftBox>
+          <SoftTypography component="p">
+            Khách hàng: <b>{customerName}</b>
+          </SoftTypography>
+          <SoftTypography component="p">Địa chỉ: {customerAddress}</SoftTypography>
+        </SoftBox>
+        <SoftBox>
+          <SoftTypography component="p">SĐT: {customerPhones}</SoftTypography>
+          <SoftTypography component="p">
+            Nhân viên: {invoice.salespersonName || invoice.salespersonId?.fullName || "—"}
+          </SoftTypography>
+        </SoftBox>
+      </SoftBox>
+
+      <SoftBox overflow="auto">
+        <SoftBox
+          minWidth={760}
+          sx={{
+            "& table": {
+              width: "100%",
+              tableLayout: "fixed",
+              borderCollapse: "collapse",
+              fontFamily: '"Times New Roman", Times, serif',
+              color: "#000",
+            },
+            "& th, & td": {
+              border: "1px solid #000",
+              px: 0.75,
+              py: 0.65,
+              fontSize: 14,
+              lineHeight: 1.2,
+              verticalAlign: "middle",
+              overflowWrap: "anywhere",
+            },
+            "& th": {
+              height: 62,
+              bgcolor: "#f1f1f1",
+              textAlign: "center",
+              fontWeight: 700,
+            },
+            "& .number": { textAlign: "right", whiteSpace: "nowrap" },
+            "& .center": { textAlign: "center" },
+            "& .left": { textAlign: "left" },
+            "& .summary-label": { pl: 6, textAlign: "left", fontWeight: 700 },
+            "& .summary-value": {
+              textAlign: "right",
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+            },
+          }}
+        >
+          <table>
+            <InvoiceColgroup />
+            <thead>
+              <tr>
+                <th>STT</th>
+                <th>Tên hàng</th>
+                <th>ĐVT</th>
+                <th>Số lượng</th>
+                <th>Đơn giá</th>
+                <th>Thành tiền</th>
+                <th>Ghi chú</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(invoice.items || []).length ? (
+                invoice.items.map((item, index) => {
+                  const gift = item.lineType === "GIFT";
+                  return (
+                    <tr key={`${getId(item.productId) || item.productId}-${index}`}>
+                      <td className="center">{index + 1}</td>
+                      <td className="left">
+                        {item.productName || item.productId?.name || "Sản phẩm"}
+                        {gift && (
+                          <b style={{ color: "#1565c0", fontSize: 11 }}> (QUÀ TẶNG)</b>
+                        )}
+                      </td>
+                      <td className="center">{item.unit || item.productId?.unit || ""}</td>
+                      <td className="number">{numberText(item.qty)}</td>
+                      <td className="number">{numberText(gift ? 0 : item.price)}</td>
+                      <td className="number">{numberText(gift ? 0 : item.lineTotal)}</td>
+                      <td className="left">
+                        {gift
+                          ? item.giftCode || invoice.giftCode || "Quà tặng"
+                          : item.note || ""}
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={7} className="center">Không có hàng hóa</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <table style={{ marginTop: -1 }}>
+            <InvoiceColgroup />
+            <tbody>
+              <tr><td className="summary-label" colSpan={5}>T thành tiền</td><td className="summary-value">{numberText(subtotal)}</td><td /></tr>
+              <tr><td className="summary-label" colSpan={5}>VAT</td><td className="summary-value">{numberText(invoice.vatAmount || 0)}</td><td /></tr>
+              <tr><td className="summary-label" colSpan={5}>Chiết khấu</td><td className="summary-value">{numberText(discount)}</td><td /></tr>
+              <tr><td className="summary-label" colSpan={3}>Tổng cộng (1)</td><td className="summary-value">{numberText(totalQuantity)}</td><td /><td className="summary-value">{numberText(grandTotal)}</td><td /></tr>
+              <tr><td className="summary-label" colSpan={5}>Nợ cũ (2)</td><td className="summary-value">{numberText(oldDebt)}</td><td /></tr>
+              <tr><td className="summary-label" colSpan={5}>Số tiền thanh toán (3)</td><td className="summary-value">{numberText(paidAmount)}</td><td /></tr>
+              <tr><td className="summary-label" colSpan={5}>Còn nợ (1 + 2 - 3)</td><td className="summary-value">{numberText(debtAfter)}</td><td /></tr>
+            </tbody>
+          </table>
+        </SoftBox>
+      </SoftBox>
+
+      {invoice.giftCode && (
+        <SoftTypography component="p" fontFamily="inherit" color="dark" fontSize={14} mt={2}>
+          <b>Mã quà tặng:</b> {invoice.giftCode}
+        </SoftTypography>
+      )}
+      <SoftTypography
+        component="p"
+        fontFamily="inherit"
+        color="dark"
+        fontSize={{ xs: 13, sm: 16 }}
+        mt={2.5}
+      >
+        Số tiền bằng chữ: <i>{moneyInWords(grandTotal)}.</i>
+      </SoftTypography>
+
+      <SoftBox
+        display="grid"
+        mt={4}
+        textAlign="center"
+        sx={{
+          gridTemplateColumns: "1fr 1fr",
+          "& p": {
+            fontFamily: "inherit",
+            color: "#000",
+            margin: 0,
+            fontSize: { xs: 12, sm: 15 },
+          },
+        }}
+      >
+        <SoftBox>
+          <SoftTypography component="p">&nbsp;</SoftTypography>
+          <SoftTypography component="p" fontWeight="bold">THỦ KHO</SoftTypography>
+          <SoftTypography component="p">(ký, họ tên)</SoftTypography>
+          <SoftBox height={70} />
+        </SoftBox>
+        <SoftBox>
+          <SoftTypography component="p" fontStyle="italic">
+            Ngày {occurredAt.getDate()} tháng {occurredAt.getMonth() + 1} năm{" "}
+            {occurredAt.getFullYear()}
+          </SoftTypography>
+          <SoftTypography component="p" fontWeight="bold">NGƯỜI NHẬN HÀNG</SoftTypography>
+          <SoftTypography component="p">(ký, họ tên)</SoftTypography>
+          <SoftBox height={70} />
+        </SoftBox>
+      </SoftBox>
+      <SoftTypography
+        component="p"
+        fontFamily="inherit"
+        color="dark"
+        fontSize={{ xs: 12, sm: 15 }}
+        mt={4}
+      >
+        Số TK: ............, Ngân hàng: ............, Chủ TK: ............
+      </SoftTypography>
+    </SoftBox>
+  );
+}
+
+function InvoiceDetail({ id, onClose, mobile = false }) {
+  const [invoice, setInvoice] = useState(null);
+  useEffect(() => {
+    if (id) {
+      setInvoice(null);
+      InvoiceService.getById(id)
+        .then((response) => setInvoice(unwrap(response)))
+        .catch((error) => toast.error(errorMessage(error, "Không thể tải hóa đơn")));
+    }
+  }, [id]);
   return (
     <Modal open={Boolean(id)} onClose={onClose}>
       <SoftBox
@@ -2068,165 +2362,76 @@ function InvoiceDetail({ id, onClose, mobile = false }) {
           top: { xs: mobile ? 0 : "50%", md: "50%" },
           left: { xs: mobile ? 0 : "50%", md: "50%" },
           transform: { xs: mobile ? "none" : "translate(-50%, -50%)", md: "translate(-50%, -50%)" },
-          width: { xs: mobile ? "100%" : "94%", md: 650 },
-          height: { xs: mobile ? "100%" : "auto", md: "auto" },
-          maxHeight: { xs: mobile ? "100%" : "90vh", md: "90vh" },
-          overflowY: "auto",
-          bgcolor: "background.paper",
-          borderRadius: { xs: mobile ? 0 : 3, md: 3 },
+          width: { xs: mobile ? "100%" : "96%", md: "96vw" },
+          maxWidth: 1180,
+          height: { xs: mobile ? "100dvh" : "94vh", md: "94vh" },
+          overflow: "hidden",
+          bgcolor: "#e8eaed",
+          borderRadius: { xs: mobile ? 0 : 2, md: 2 },
           boxShadow: 24,
-          p: { xs: mobile ? 2 : 4, md: 4 },
         }}
       >
-        {!invoice ? (
-          <SoftTypography>Đang tải...</SoftTypography>
-        ) : (
-          <>
-            <SoftTypography variant="h5" fontWeight="bold">
-              {invoice.code}
+        <SoftBox
+          height={64}
+          px={{ xs: 1.5, md: 2.5 }}
+          display="flex"
+          alignItems="center"
+          justifyContent="space-between"
+          bgcolor="#fff"
+          sx={{ borderBottom: "1px solid #d7dce1" }}
+        >
+          <SoftBox minWidth={0}>
+            <SoftTypography variant="button" fontWeight="bold" display="block">
+              Chi tiết hóa đơn {invoice?.code || ""}
             </SoftTypography>
-            <SoftTypography variant="caption" color="text">
-              {dateTime(invoice.createdAt || invoice.date)} · {invoice.customer}
-            </SoftTypography>
-            <SoftBox mt={2}>
-              {(invoice.items || []).map((item) => (
-                <SoftBox
-                  key={item.productId?._id || item.productId}
-                  display="flex"
-                  justifyContent="space-between"
-                  py={1}
-                  borderBottom="1px solid #eee"
-                >
-                  <SoftBox>
-                    <SoftTypography variant="button" fontWeight="bold">
-                      {item.productName || item.productId?.name}
-                    </SoftTypography>
-                    <SoftTypography variant="caption" display="block" color="text">
-                      {item.productCode}
-                    </SoftTypography>
-                  </SoftBox>
-                  <SoftTypography variant="button">
-                    {item.qty} × {money(item.price)} = {money(item.lineTotal)}
-                  </SoftTypography>
-                </SoftBox>
-              ))}
-            </SoftBox>
-            <SoftBox
-              mt={2}
-              sx={{
-                border: "1px solid #c7cdd4",
-                borderRadius: 1.5,
-                overflow: "hidden",
-              }}
-            >
-              {[
-                ["Tạm tính", "", invoice.subtotal],
-                ["VAT", "", invoice.vatAmount || 0],
-                ["Chiết khấu", "", invoice.discountAmount || 0],
-                ["Tổng cộng (1)", detailQuantity, detailGrandTotal],
-                ["Nợ cũ (2)", "", detailOldDebt],
-                ["Số tiền thanh toán (3)", "", detailPaidAmount],
-                ["Còn nợ (1 + 2 - 3)", "", detailDebtAfter],
-              ].map(([label, quantity, value], index) => (
-                <SoftBox
-                  key={label}
-                  display="grid"
-                  sx={{
-                    gridTemplateColumns: { xs: "1fr 58px 128px", sm: "1fr 90px 180px" },
-                    borderBottom: index < 6 ? "1px solid #c7cdd4" : 0,
-                    bgcolor: index === 6 ? "#fff7ed" : "#fff",
-                  }}
-                >
-                  <SoftTypography
-                    variant="button"
-                    fontWeight={index >= 3 ? "bold" : "regular"}
-                    px={1.5}
-                    py={0.65}
-                  >
-                    {label}
-                  </SoftTypography>
-                  <SoftTypography
-                    variant="button"
-                    fontWeight={index >= 3 ? "bold" : "regular"}
-                    textAlign="center"
-                    px={1}
-                    py={0.65}
-                    sx={{ borderLeft: "1px solid #c7cdd4" }}
-                  >
-                    {quantity === "" ? "" : numberText(quantity)}
-                  </SoftTypography>
-                  <SoftTypography
-                    variant="button"
-                    fontWeight={index >= 3 ? "bold" : "regular"}
-                    color={index === 6 && detailDebtAfter > 0 ? "error" : "dark"}
-                    textAlign="right"
-                    px={1.5}
-                    py={0.65}
-                    sx={{ borderLeft: "1px solid #c7cdd4" }}
-                  >
-                    {money(value)}
-                  </SoftTypography>
-                </SoftBox>
-              ))}
-            </SoftBox>
-            <SoftBox mt={2}>
-              <SoftTypography variant="button" display="block">
-                Nhân viên: {invoice.salespersonName || invoice.salespersonId?.fullName || "—"}
+            {invoice && (
+              <SoftTypography variant="caption" color="text" display="block">
+                {dateTime(invoice.createdAt || invoice.date)}
               </SoftTypography>
-              <SoftTypography variant="button" display="block">
-                Thanh toán:{" "}
-                {(invoice.payments || [])
-                  .map(
-                    (p) => `${p.method === "CASH" ? "Tiền mặt" : "Chuyển khoản"} ${money(p.amount)}`
-                  )
-                  .join(" · ") || "Chưa thanh toán"}
-              </SoftTypography>
-              {(invoice.promotionApplications || [])
-                .filter((application) => application.activationCode)
-                .map((application) => (
-                  <SoftBox
-                    key={application.activationCode}
-                    mt={1}
-                    p={1.5}
-                    bgcolor="#F3E5F5"
-                    borderRadius={1}
-                  >
-                    <SoftTypography variant="caption" color="text">
-                      Mã kích hoạt {application.promotionName || application.promotionCode}
-                    </SoftTypography>
-                    <SoftTypography variant="button" fontWeight="bold" display="block">
-                      {application.activationCode}
-                    </SoftTypography>
-                  </SoftBox>
-                ))}
+            )}
+          </SoftBox>
+          <IconButton onClick={onClose} aria-label="Đóng chi tiết hóa đơn">
+            <Icon>close</Icon>
+          </IconButton>
+        </SoftBox>
+        <SoftBox height="calc(100% - 128px)" overflow="auto" p={{ xs: 1, sm: 2, md: 3 }}>
+          {!invoice ? (
+            <SoftBox bgcolor="#fff" p={4} textAlign="center" maxWidth={1080} mx="auto">
+              <SoftTypography>Đang tải hóa đơn...</SoftTypography>
             </SoftBox>
-            <SoftButton
-              variant="gradient"
-              color="info"
-              fullWidth
-              sx={{ mt: 3 }}
-              startIcon={<Icon>print</Icon>}
-              onClick={() => {
-                try {
-                  printInvoice(invoice);
-                } catch (error) {
-                  toast.error(error.message || "Không thể xuất hóa đơn");
-                }
-              }}
-            >
-              Xuất hóa đơn
-            </SoftButton>
-            <SoftButton
-              variant="outlined"
-              color="secondary"
-              fullWidth
-              sx={{ mt: 1 }}
-              onClick={onClose}
-            >
-              Đóng
-            </SoftButton>
-          </>
-        )}
+          ) : (
+            <InvoicePaperView invoice={invoice} />
+          )}
+        </SoftBox>
+        <SoftBox
+          height={64}
+          px={{ xs: 1.5, md: 2.5 }}
+          display="flex"
+          alignItems="center"
+          gap={1}
+          bgcolor="#fff"
+          sx={{ borderTop: "1px solid #d7dce1" }}
+        >
+          <SoftButton variant="outlined" color="secondary" fullWidth onClick={onClose}>
+            Đóng
+          </SoftButton>
+          <SoftButton
+            variant="gradient"
+            color="info"
+            fullWidth
+            disabled={!invoice}
+            startIcon={<Icon>print</Icon>}
+            onClick={() => {
+              try {
+                printInvoice(invoice);
+              } catch (error) {
+                toast.error(error.message || "Không thể xuất hóa đơn");
+              }
+            }}
+          >
+            Xuất hóa đơn
+          </SoftButton>
+        </SoftBox>
       </SoftBox>
     </Modal>
   );
