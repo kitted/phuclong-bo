@@ -1,6 +1,24 @@
 import AxiosInstance from "./api";
 
-export const CUSTOMER_SEGMENTS = ["VIP", "THÂN THIẾT", "TIỀM NĂNG", "ĐẠI LÝ", "THƯỜNG"];
+export const CUSTOMER_SEGMENTS = [
+  { value: "TEMPORARILY_INACTIVE", label: "Tạm ngừng hoạt động" },
+  { value: "ACTIVE", label: "Đang hoạt động" },
+  { value: "HIGHLY_ACTIVE", label: "Hoạt động tốt" },
+  { value: "STOPPED_BUYING", label: "Ngừng mua hàng" },
+  { value: "CHURNED", label: "Khách rời đi" },
+  { value: "NEW_CUSTOMER", label: "Khách mới" },
+];
+
+export const CUSTOMER_SEGMENT_LABELS = CUSTOMER_SEGMENTS.reduce(
+  (result, item) => ({ ...result, [item.value]: item.label }),
+  {}
+);
+
+export const CUSTOMER_SOURCE_LABELS = {
+  LEAD: "Khách lead",
+  LEGACY: "Khách cũ",
+  NEW: "Khách mới",
+};
 export const PRODUCT_TYPES = ["Trà", "Cà phê", "Nước đóng chai", "Bánh & Snack", "Nguyên liệu"];
 
 export const CustomerService = {
@@ -15,6 +33,10 @@ export const CustomerService = {
   exportExcel: () => AxiosInstance.get("/admin/customers/export", { responseType: "blob" }),
   getPromotionActivations: (id, params = {}) =>
     AxiosInstance.get(`/admin/customers/${id}/promotion-activations`, { params }),
+  getDebtHistory: (id, params = {}) =>
+    AxiosInstance.get(`/admin/customers/${id}/debt-history`, { params }),
+  getDebtHistoryChart: (id, params = {}) =>
+    AxiosInstance.get(`/admin/customers/${id}/debt-history/chart`, { params }),
 };
 
 export const PromotionActivationService = {

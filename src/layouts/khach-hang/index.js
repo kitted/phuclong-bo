@@ -8,8 +8,6 @@ import Pagination from "@mui/material/Pagination";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
-import Tab from "@mui/material/Tab";
-import Tabs from "@mui/material/Tabs";
 import Tooltip from "@mui/material/Tooltip";
 import { useSelector } from "react-redux";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -18,12 +16,18 @@ import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
-import { CustomerService, CUSTOMER_SEGMENTS } from "services/crmService";
+import {
+  CustomerService,
+  CUSTOMER_SEGMENTS,
+  CUSTOMER_SEGMENT_LABELS,
+  CUSTOMER_SOURCE_LABELS,
+} from "services/crmService";
 import { toast } from "react-toastify";
 import { downloadBlob, exportExcel, readExcelFile } from "utils/excel";
 import { DebtPaymentHistory, DebtPaymentModal } from "./debt-payment";
 import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
+import CustomerDebtHistory from "./debt-history";
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
@@ -37,10 +41,59 @@ const EMPTY_FORM = {
   email: "",
   address: "",
   source: "LEAD",
-  segment: "THƯỜNG",
+  segment: "NEW_CUSTOMER",
   zaloConnected: false,
   debtLimit: 0,
   note: "",
+};
+const normalizePhone = (value) =>
+  String(value || "")
+    .split(/[,;|/]+/)
+    .map((phone) => phone.replace(/\D/g, ""))
+    .filter(Boolean)
+    .map((phone) => (phone.startsWith("0") ? phone : `0${phone}`))
+    .filter((phone, index, values) => values.indexOf(phone) === index)
+    .join(", ");
+const normalizeImportPhones = (row) => {
+  const next = { ...row };
+  const phoneKey = Object.keys(next).find((key) =>
+    ["phone", "phone number", "so dien thoai", "sdt", "dien thoai"].includes(
+      String(key).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
+    )
+  );
+  if (phoneKey) next[phoneKey] = normalizePhone(next[phoneKey]);
+  return next;
+};
+const CUSTOMER_IMPORT_BATCH_SIZE = 50;
+const importCustomerBatches = async (rows) => {
+  const summary = {
+    totalRows: rows.length,
+    created: 0,
+    updated: 0,
+    failed: 0,
+    debtLedgersCreated: 0,
+    duplicatePhonesAccepted: 0,
+    errors: [],
+  };
+  for (let start = 0; start < rows.length; start += CUSTOMER_IMPORT_BATCH_SIZE) {
+    const batch = rows.slice(start, start + CUSTOMER_IMPORT_BATCH_SIZE);
+    const response = await CustomerService.importExcel(batch);
+    const result = response.data?.data || {};
+    summary.created += Number(result.created) || 0;
+    summary.updated += Number(result.updated) || 0;
+    summary.failed += Number(result.failed) || 0;
+    summary.debtLedgersCreated += Number(result.debtLedgersCreated) || 0;
+    summary.duplicatePhonesAccepted += Number(result.duplicatePhonesAccepted) || 0;
+    if (Array.isArray(result.errors)) {
+      summary.errors.push(
+        ...result.errors.map((error) => ({
+          ...error,
+          row: start + (Number(error.row) || 2),
+        }))
+      );
+    }
+  }
+  return summary;
 };
 const badge = (label, color, background) => (
   <span
@@ -75,11 +128,15 @@ function CustomerForm({ open, customer, onClose, onSaved }) {
   );
   const set = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const save = async () => {
-    if (!form.name.trim() || !form.phone.trim())
-      return toast.error("Tên và số điện thoại là bắt buộc");
+    if (!form.name.trim()) return toast.error("Tên khách hàng là bắt buộc");
     try {
       setSaving(true);
-      const payload = { ...form, debtLimit: Number(form.debtLimit) || 0 };
+      const payload = {
+        ...form,
+        name: form.name.trim(),
+        phone: normalizePhone(form.phone) || undefined,
+        debtLimit: Number(form.debtLimit) || 0,
+      };
       if (customer?.id) await CustomerService.update(customer.id, payload);
       else await CustomerService.create(payload);
       toast.success(customer ? "Đã cập nhật khách hàng" : "Đã thêm khách hàng");
@@ -117,10 +174,12 @@ function CustomerForm({ open, customer, onClose, onSaved }) {
             <SoftInput value={form.name} onChange={(e) => set("name", e.target.value)} fullWidth />
           </Grid>
           <Grid item xs={12} md={6}>
-            <SoftTypography variant="caption">Số điện thoại *</SoftTypography>
+            <SoftTypography variant="caption">Số điện thoại</SoftTypography>
             <SoftInput
               value={form.phone}
               onChange={(e) => set("phone", e.target.value)}
+              onBlur={() => set("phone", normalizePhone(form.phone))}
+              placeholder="VD: 0901234567, 0912345678"
               fullWidth
             />
           </Grid>
@@ -145,7 +204,7 @@ function CustomerForm({ open, customer, onClose, onSaved }) {
             <FormControl fullWidth size="small">
               <Select value={form.source} onChange={(e) => set("source", e.target.value)}>
                 <MenuItem value="LEAD">Khách lead</MenuItem>
-                <MenuItem value="LEGACY">Hệ thống cũ</MenuItem>
+                <MenuItem value="LEGACY">Khách cũ</MenuItem>
                 <MenuItem value="NEW">Khách mới</MenuItem>
               </Select>
             </FormControl>
@@ -155,8 +214,8 @@ function CustomerForm({ open, customer, onClose, onSaved }) {
             <FormControl fullWidth size="small">
               <Select value={form.segment} onChange={(e) => set("segment", e.target.value)}>
                 {CUSTOMER_SEGMENTS.map((item) => (
-                  <MenuItem value={item} key={item}>
-                    {item}
+                  <MenuItem value={item.value} key={item.value}>
+                    {item.label}
                   </MenuItem>
                 ))}
               </Select>
@@ -247,7 +306,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
       setInteractionOpen(false);
       setInteraction({ channel: "Zalo", action: "", result: "" });
       await loadDetail();
-      setTab(5);
+      setTab(6);
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể ghi nhận tương tác");
     } finally {
@@ -391,83 +450,66 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
               </Grid>
             </Grid>
             <Card sx={{ mt: 2, overflow: "hidden", borderRadius: { xs: readOnly ? 0 : 2, md: 2 } }}>
-              {readOnly ? (
-                <SoftBox
-                  display="flex"
-                  sx={{
-                    overflowX: "auto",
-                    WebkitOverflowScrolling: "touch",
-                    scrollbarWidth: "none",
-                    borderBottom: "1px solid #e4e6eb",
-                    "&::-webkit-scrollbar": { display: "none" },
-                  }}
-                >
-                  {[
-                    "Hồ sơ",
-                    `Hóa đơn (${customer.invoices.length})`,
-                    `Voucher (${customer.vouchers.length})`,
-                    `Mã kích hoạt (${activations.length})`,
-                    "Phiếu thu công nợ",
-                    `Tương tác (${customer.interactions.length})`,
-                  ].map((label, index) => (
-                    <SoftBox
-                      key={label}
-                      component="button"
-                      type="button"
-                      onClick={() => setTab(index)}
-                      px={1.75}
-                      py={1.5}
-                      flexShrink={0}
-                      sx={{
-                        border: 0,
-                        borderBottom: tab === index ? "3px solid #1877f2" : "3px solid transparent",
-                        background: "#fff",
-                        color: tab === index ? "#1877f2" : "#65676b",
-                        fontSize: 12,
-                        fontWeight: tab === index ? 700 : 500,
-                        whiteSpace: "nowrap",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {label}
-                    </SoftBox>
-                  ))}
-                </SoftBox>
-              ) : (
-              <Tabs
-                value={tab}
-                onChange={(_, value) => setTab(value)}
+              <SoftBox
+                display="flex"
                 sx={{
+                  overflowX: "auto",
+                  WebkitOverflowScrolling: "touch",
+                  scrollbarWidth: "none",
                   borderBottom: "1px solid #e4e6eb",
-                  "& .MuiTabs-flexContainer": { flexWrap: "nowrap" },
-                  "& .MuiTab-root": {
-                    minWidth: { xs: "50%", md: "auto" },
-                    flex: { md: 1 },
-                    whiteSpace: "nowrap",
-                  },
+                  "&::-webkit-scrollbar": { display: "none" },
                 }}
               >
-                <Tab label="Hồ sơ" />
-                <Tab label={`Hóa đơn (${customer.invoices.length})`} />
-                <Tab label={`Voucher (${customer.vouchers.length})`} />
-                <Tab label={`Mã kích hoạt (${activations.length})`} />
-                <Tab label="Phiếu thu công nợ" />
-                <Tab label={`Lịch sử tương tác (${customer.interactions.length})`} />
-              </Tabs>
-              )}
+                {[
+                  "Hồ sơ",
+                  `Hóa đơn (${customer.invoices.length})`,
+                  `Voucher (${customer.vouchers.length})`,
+                  `Mã kích hoạt (${activations.length})`,
+                  "Phiếu thu công nợ",
+                  "Lịch sử công nợ",
+                  `Tương tác (${customer.interactions.length})`,
+                ].map((label, index) => (
+                  <SoftBox
+                    key={label}
+                    component="button"
+                    type="button"
+                    onClick={() => setTab(index)}
+                    px={{ xs: 1.75, md: 2.25 }}
+                    py={1.5}
+                    flex={{ md: "1 0 auto" }}
+                    flexShrink={0}
+                    sx={{
+                      border: 0,
+                      borderBottom:
+                        tab === index ? "3px solid #1877f2" : "3px solid transparent",
+                      background: "#fff",
+                      color: tab === index ? "#1877f2" : "#65676b",
+                      fontSize: 12,
+                      fontWeight: tab === index ? 700 : 500,
+                      minWidth: { md: 120 },
+                      whiteSpace: "nowrap",
+                      cursor: "pointer",
+                      "&:hover": { background: "#f5f7fa" },
+                    }}
+                  >
+                    {label}
+                  </SoftBox>
+                ))}
+              </SoftBox>
               <SoftBox p={{ xs: readOnly ? 1.5 : 3, md: 3 }} sx={{ overflow: "hidden" }}>
                 {tab === 0 && (
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
                       {[
-                        ["Phân loại", customer.segment],
+                        [
+                          "Phân loại",
+                          CUSTOMER_SEGMENT_LABELS[customer.segment] || customer.segment,
+                        ],
                         [
                           "Nguồn",
-                          customer.source === "LEGACY"
-                            ? "Hệ thống cũ"
-                            : customer.source === "LEAD"
-                            ? "Khách lead"
-                            : "Khách mới",
+                          customer.sourceLabel ||
+                            CUSTOMER_SOURCE_LABELS[customer.source] ||
+                            customer.source,
                         ],
                         ["Địa chỉ", customer.address],
                         ["Đơn gần nhất", customer.lastOrderAt || "—"],
@@ -563,6 +605,12 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
                   />
                 )}
                 {tab === 5 && (
+                  <CustomerDebtHistory
+                    customerId={customerId}
+                    refreshKey={debtRefreshKey}
+                  />
+                )}
+                {tab === 6 && (
                   <DataTable
                     headers={["Thời gian", "Kênh", "Tương tác", "Kết quả"]}
                     rows={customer.interactions.map((item) => [
@@ -775,14 +823,15 @@ export default function KhachHang() {
     if (!file) return;
     try {
       setImporting(true);
-      const rows = await readExcelFile(file);
+      const rows = (await readExcelFile(file)).map(normalizeImportPhones);
       if (rows.length > 10000) throw new Error("Mỗi lần chỉ được import tối đa 10.000 dòng");
-      const response = await CustomerService.importExcel(rows);
-      const result = response.data?.data || {};
+      const result = await importCustomerBatches(rows);
       toast.success(
         `Import ${result.totalRows || 0} dòng: thêm ${result.created || 0}, cập nhật ${
           result.updated || 0
-        }, lỗi ${result.failed || 0}`
+        }, lịch sử công nợ ${result.debtLedgersCreated || 0}, chấp nhận ${
+          result.duplicatePhonesAccepted || 0
+        } số điện thoại trùng, lỗi ${result.failed || 0}`
       );
       if (result.errors?.length)
         exportExcel(
@@ -896,8 +945,8 @@ export default function KhachHang() {
                 <Select displayEmpty value={segment} onChange={(e) => setSegment(e.target.value)}>
                   <MenuItem value="">Mọi phân loại</MenuItem>
                   {CUSTOMER_SEGMENTS.map((item) => (
-                    <MenuItem key={item} value={item}>
-                      {item}
+                    <MenuItem key={item.value} value={item.value}>
+                      {item.label}
                     </MenuItem>
                   ))}
                 </Select>
@@ -906,7 +955,7 @@ export default function KhachHang() {
                 <Select displayEmpty value={source} onChange={(e) => setSource(e.target.value)}>
                   <MenuItem value="">Mọi nguồn</MenuItem>
                   <MenuItem value="LEAD">Khách lead</MenuItem>
-                  <MenuItem value="LEGACY">Hệ thống cũ</MenuItem>
+                  <MenuItem value="LEGACY">Khách cũ</MenuItem>
                   <MenuItem value="NEW">Khách mới</MenuItem>
                 </Select>
               </FormControl>
@@ -999,17 +1048,19 @@ export default function KhachHang() {
                           </td>
                           <td style={{ padding: 10 }}>
                             {badge(
-                              item.source === "LEGACY"
-                                ? "Hệ thống cũ"
-                                : item.source === "LEAD"
-                                ? "Lead"
-                                : "Khách mới",
+                              item.sourceLabel ||
+                                CUSTOMER_SOURCE_LABELS[item.source] ||
+                                item.source,
                               "#1565C0",
                               "#E3F2FD"
                             )}
                           </td>
                           <td style={{ padding: 10 }}>
-                            {badge(item.segment, "#6A1B9A", "#F3E5F5")}
+                            {badge(
+                              CUSTOMER_SEGMENT_LABELS[item.segment] || item.segment,
+                              "#6A1B9A",
+                              "#F3E5F5"
+                            )}
                           </td>
                           <td style={{ padding: 10 }}>
                             {item.zaloConnected

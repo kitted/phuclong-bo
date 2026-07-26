@@ -28,6 +28,7 @@ import EmployeeService from "services/employeeService";
 import { toast } from "react-toastify";
 import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
+import { printInvoice } from "utils/invoicePrint";
 
 const money = (value = 0) =>
   new Intl.NumberFormat("vi-VN", {
@@ -176,6 +177,10 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   const [productOptions, setProductOptions] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [items, setItems] = useState([{ product: null, qty: 1, search: "" }]);
+  const [gifts, setGifts] = useState([]);
+  const [giftSearch, setGiftSearch] = useState("");
+  const [giftOptions, setGiftOptions] = useState([]);
+  const [giftOptionsLoading, setGiftOptionsLoading] = useState(false);
   const [preview, setPreview] = useState(null);
   const [previewError, setPreviewError] = useState("");
   const [appliedVoucher, setAppliedVoucher] = useState("");
@@ -189,6 +194,15 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   const [submitting, setSubmitting] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState(null);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const printCreatedInvoice = async () => {
+    try {
+      const id = getId(createdInvoice);
+      const printable = id ? unwrap(await InvoiceService.getById(id)) : createdInvoice;
+      printInvoice(printable);
+    } catch (error) {
+      toast.error(errorMessage(error, "Không thể xuất hóa đơn"));
+    }
+  };
   useEffect(() => {
     if (!open) return;
     setCreatedInvoice(null);
@@ -209,6 +223,8 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     setSalesperson(isAdmin ? null : authUser || null);
     setTruck(null);
     setItems([{ product: null, qty: 1, search: "" }]);
+    setGifts([]);
+    setGiftSearch("");
     setPreview(null);
     setAppliedVoucher("");
     setGiftPromotions({ eligiblePromotions: [], nearlyEligiblePromotions: [] });
@@ -287,6 +303,28 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     }, 350);
     return () => clearTimeout(timer);
   }, [open, form.sourceType, truck, productSearch]);
+  useEffect(() => {
+    if (!open || !gifts.length || (form.sourceType === "truck" && !truck)) {
+      setGiftOptions([]);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setGiftOptionsLoading(true);
+      const request =
+        form.sourceType === "truck"
+          ? TruckService.getTruckAvailableProducts(getId(truck), {
+              search: giftSearch || undefined,
+              page: 1,
+              limit: 20,
+            })
+          : ProductService.getAll({ search: giftSearch || undefined, page: 1, limit: 20 });
+      request
+        .then((response) => setGiftOptions(listOf(response)))
+        .catch(() => setGiftOptions([]))
+        .finally(() => setGiftOptionsLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [open, gifts.length, form.sourceType, truck, giftSearch]);
   const previewItems = useMemo(
     () =>
       items
@@ -331,7 +369,9 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     const timer = setTimeout(() => loadPreview(appliedVoucher, true), 350);
     return () => clearTimeout(timer);
   }, [open, loadPreview, previewItems.length, appliedVoucher]);
+  /* Promotion rule UI is temporarily disabled. Direct invoice gifts are used instead. */
   useEffect(() => {
+    if (true) return undefined;
     if (!open || !previewItems.length) {
       setGiftPromotions({ eligiblePromotions: [], nearlyEligiblePromotions: [] });
       return undefined;
@@ -428,8 +468,8 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       return toast.error("Vui lòng chọn đầy đủ sản phẩm và số lượng");
     if (form.sourceType === "truck" && !truck) return toast.error("Vui lòng chọn xe xuất hàng");
     if (!preview) return toast.error(previewError || "Chưa tính được giá trị hóa đơn");
-    if (selectedGiftPromotion && !appliedGiftPromotion)
-      return toast.error("Vui lòng xác nhận lựa chọn quà tặng");
+    if (gifts.some((gift) => !gift.product || Number(gift.qty) <= 0))
+      return toast.error("Vui lòng chọn đầy đủ sản phẩm quà tặng và số lượng");
     if (form.paymentMode === "DEBT" && !customer)
       return toast.error("Hóa đơn ghi nợ bắt buộc chọn khách hàng CRM");
     if (paidAmount > grandTotal)
@@ -458,13 +498,11 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
         truckId: getId(truck) || undefined,
         salespersonId: isAdmin ? getId(salesperson) : undefined,
         voucherCode: appliedVoucher || undefined,
-        promotionApplications: appliedGiftPromotion
-          ? [
-              {
-                promotionId: appliedGiftPromotion.promotionId,
-                giftSelections: appliedGiftPromotion.giftSelections,
-              },
-            ]
+        gifts: gifts.length
+          ? gifts.map((gift) => ({
+              productId: getId(gift.product) || gift.product?.productId,
+              qty: Number(gift.qty),
+            }))
           : undefined,
         payments,
         items: previewItems,
@@ -508,6 +546,14 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
               {createdInvoice.code}
             </SoftTypography>
           </SoftBox>
+          {(createdInvoice.giftCode || createdInvoice.gift?.code) && (
+            <SoftBox mt={2} p={2} bgcolor="#E3F2FD" borderRadius={2} textAlign="center">
+              <SoftTypography variant="caption" color="text" display="block">Mã quà tặng kèm đơn</SoftTypography>
+              <SoftTypography variant="h6" color="info" fontWeight="bold" sx={{ letterSpacing: 1 }}>
+                {createdInvoice.giftCode || createdInvoice.gift?.code}
+              </SoftTypography>
+            </SoftBox>
+          )}
           {(createdInvoice.promotionActivations || []).length > 0 && (
             <SoftBox mt={3} p={2} bgcolor="#F3E5F5" borderRadius={2}>
               <SoftTypography variant="button" fontWeight="bold" color="secondary">
@@ -547,9 +593,14 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
           <SoftTypography variant="caption" color="text" display="block" mt={2}>
             Mã kích hoạt đã được lưu vào hồ sơ khách hàng và hóa đơn.
           </SoftTypography>
-          <SoftButton variant="gradient" color="success" fullWidth sx={{ mt: 3 }} onClick={onClose}>
-            Hoàn tất
-          </SoftButton>
+          <SoftBox display="flex" gap={1.5} mt={3}>
+            <SoftButton variant="outlined" color="info" fullWidth startIcon={<Icon>print</Icon>} onClick={printCreatedInvoice}>
+              Xuất hóa đơn
+            </SoftButton>
+            <SoftButton variant="gradient" color="success" fullWidth onClick={onClose}>
+              Hoàn tất
+            </SoftButton>
+          </SoftBox>
         </SoftBox>
       </Modal>
     );
@@ -793,7 +844,51 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
           >
             Thêm sản phẩm
           </SoftButton>
-          {(giftPromotions.eligiblePromotions.length > 0 ||
+          <SoftBox mt={2} p={2} border="1px solid #BBDEFB" borderRadius={2} bgcolor="#F7FBFF">
+            <SoftBox display="flex" justifyContent="space-between" alignItems="center" gap={1}>
+              <SoftBox>
+                <SoftTypography variant="button" fontWeight="bold" color="info">
+                  Quà tặng kèm đơn
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text" display="block">
+                  Chọn hàng có sẵn từ cùng nguồn xuất; quà có giá bán bằng 0 và vẫn trừ tồn.
+                </SoftTypography>
+              </SoftBox>
+              <SoftButton
+                size="small"
+                variant="outlined"
+                color="info"
+                startIcon={<Icon>card_giftcard</Icon>}
+                onClick={() => setGifts((current) => [...current, { product: null, qty: 1, search: "" }])}
+              >
+                Thêm quà
+              </SoftButton>
+            </SoftBox>
+            {gifts.map((gift, index) => (
+              <SoftBox key={index} display="flex" flexDirection={{ xs: "column", sm: "row" }} gap={1} mt={1.5} p={1.25} bgcolor="#fff" borderRadius={2}>
+                <SoftBox flex={1}>
+                  <SearchSelect
+                    value={gift.product}
+                    onChange={(product) => setGifts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, product } : item))}
+                    options={giftOptions}
+                    loading={giftOptionsLoading}
+                    inputValue={gift.search || ""}
+                    onInputChange={(search) => {
+                      setGifts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, search } : item));
+                      setGiftSearch(search);
+                    }}
+                    placeholder="Tìm sản phẩm làm quà..."
+                    label={(product) => `${product.code || ""} · ${product.name || ""} · còn ${product.stock ?? product.quantity ?? product.warehouseQuantity ?? 0} ${product.unit || ""}`}
+                  />
+                </SoftBox>
+                <SoftBox display="flex" gap={1} alignItems="center" sx={{ width: { xs: "100%", sm: 130 } }}>
+                  <SoftInput type="number" value={gift.qty} inputProps={{ min: 1, step: 1 }} onChange={(event) => setGifts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, qty: event.target.value } : item))} />
+                  <IconButton onClick={() => setGifts((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Icon color="error">delete</Icon></IconButton>
+                </SoftBox>
+              </SoftBox>
+            ))}
+          </SoftBox>
+          {false && (giftPromotions.eligiblePromotions.length > 0 ||
             giftPromotions.nearlyEligiblePromotions.length > 0) && (
             <SoftBox mt={2} p={2} border="1px solid #D1E7DD" borderRadius={2}>
               <SoftTypography variant="button" fontWeight="bold" color="success">
@@ -1218,10 +1313,26 @@ function InvoiceDetail({ id, onClose, mobile = false }) {
                 ))}
             </SoftBox>
             <SoftButton
+              variant="gradient"
+              color="info"
+              fullWidth
+              sx={{ mt: 3 }}
+              startIcon={<Icon>print</Icon>}
+              onClick={() => {
+                try {
+                  printInvoice(invoice);
+                } catch (error) {
+                  toast.error(error.message || "Không thể xuất hóa đơn");
+                }
+              }}
+            >
+              Xuất hóa đơn
+            </SoftButton>
+            <SoftButton
               variant="outlined"
               color="secondary"
               fullWidth
-              sx={{ mt: 3 }}
+              sx={{ mt: 1 }}
               onClick={onClose}
             >
               Đóng
