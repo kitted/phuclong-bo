@@ -209,8 +209,9 @@ function TruckModal({ open, onClose, truck, onSaved }) {
 }
 
 function TransferModal({ open, onClose, truck, type, onSaved }) {
-  const [items, setItems] = useState([{ productId: "", qty: 1 }]);
+  const [items, setItems] = useState([]);
   const [products, setProducts] = useState([]);
+  const [productSearch, setProductSearch] = useState("");
   const [code, setCode] = useState("");
   const [transferDate, setTransferDate] = useState(todayValue());
   const [note, setNote] = useState("");
@@ -219,22 +220,18 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
   const isLoad = type === "LOAD";
   useEffect(() => {
     if (!open || !truck) return;
-    setItems([{ productId: "", qty: 1 }]);
+    setItems([]);
     setProducts([]);
+    setProductSearch("");
     setCode("");
     setTransferDate(todayValue());
     setNote("");
-    setLoadingProducts(true);
-    if (isLoad)
-      TruckService.getAvailableProducts({ limit: 1000 })
-        .then((response) => setProducts(listOf(response)))
-        .catch((error) => toast.error(apiError(error, "Không thể tải sản phẩm trong kho")))
-        .finally(() => setLoadingProducts(false));
-    else
+    if (!isLoad) {
+      setLoadingProducts(true);
       TruckService.getById(getId(truck))
         .then((response) =>
           setProducts(
-            (unwrap(response)?.inventory || []).map((item) => ({
+            (Array.isArray(unwrap(response)?.inventory) ? unwrap(response).inventory : []).map((item) => ({
               ...productOf(item),
               id: productIdOf(item),
               stock: quantityOf(item),
@@ -243,15 +240,105 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
         )
         .catch((error) => toast.error(apiError(error, "Không thể tải tồn xe")))
         .finally(() => setLoadingProducts(false));
+    }
   }, [open, truck, isLoad]);
-  const change = (index, key, value) =>
+
+  useEffect(() => {
+    if (!open || !truck || !isLoad) return undefined;
+    let active = true;
+    const timer = setTimeout(() => {
+      setLoadingProducts(true);
+      TruckService.getAvailableProducts({
+        search: productSearch.trim() || undefined,
+        page: 1,
+        limit: 20,
+      })
+        .then((response) => {
+          if (!active) return;
+          const nextProducts = listOf(response);
+          setProducts(
+            productSearch.trim()
+              ? nextProducts
+              : [...nextProducts].sort((a, b) =>
+                  String(a.code || a.name || "").localeCompare(
+                    String(b.code || b.name || ""),
+                    "vi",
+                    { numeric: true }
+                  )
+                )
+          );
+        })
+        .catch((error) => active && toast.error(apiError(error, "Không thể tải sản phẩm trong kho")))
+        .finally(() => active && setLoadingProducts(false));
+    }, productSearch ? 300 : 0);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [open, truck, isLoad, productSearch]);
+
+  const stockOf = (product) =>
+    Number(product?.stock ?? product?.warehouseQuantity ?? product?.quantity ?? product?.qty ?? 0);
+  const selectedProduct = (item) =>
+    item.product ||
+    products.find((product) => String(getId(product) || product.productId) === String(item.productId)) ||
+    {};
+  const addProduct = (product) => {
+    const productId = getId(product) || product?.productId;
+    if (!productId) return;
+    const stock = stockOf(product);
+    if (stock <= 0) {
+      toast.warning("Sản phẩm này hiện không còn tồn khả dụng");
+      return;
+    }
+    setItems((current) => {
+      const existingIndex = current.findIndex(
+        (item) => String(item.productId) === String(productId)
+      );
+      if (existingIndex >= 0) {
+        const currentQty = Number(current[existingIndex].qty || 0);
+        if (stock > 0 && currentQty >= stock) {
+          toast.warning(`Sản phẩm chỉ còn ${stock} ${product.unit || ""}`);
+          return current;
+        }
+        return current.map((item, index) =>
+          index === existingIndex ? { ...item, qty: currentQty + 1, product } : item
+        );
+      }
+      return [...current, { productId, qty: 1, product }];
+    });
+    setProductSearch("");
+  };
+  const changeQty = (index, value) =>
     setItems((current) =>
-      current.map((item, i) => (i === index ? { ...item, [key]: value } : item))
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        if (value === "") return { ...item, qty: "" };
+        const product = selectedProduct(item);
+        const stock = stockOf(product);
+        const quantity = Math.max(1, Math.floor(Number(value) || 1));
+        return { ...item, qty: stock > 0 ? Math.min(quantity, stock) : quantity };
+      })
     );
+  const selectedTotalQuantity = items.reduce(
+    (sum, item) => sum + Number(item.qty || 0),
+    0
+  );
   const save = async () => {
     const normalized = items.map((item) => ({ productId: item.productId, qty: Number(item.qty) }));
+    if (!normalized.length) return toast.error("Vui lòng chọn ít nhất một sản phẩm");
     if (normalized.some((item) => !item.productId || !Number.isInteger(item.qty) || item.qty <= 0))
       return toast.error("Sản phẩm và số lượng nguyên dương là bắt buộc");
+    const overStockItem = items.find((item) => {
+      const stock = stockOf(selectedProduct(item));
+      return stock > 0 && Number(item.qty) > stock;
+    });
+    if (overStockItem) {
+      const product = selectedProduct(overStockItem);
+      return toast.error(
+        `${product.name || "Sản phẩm"} chỉ còn ${stockOf(product)} ${product.unit || ""}`
+      );
+    }
     try {
       setSaving(true);
       const payload = {
@@ -279,23 +366,65 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
-          width: { xs: "94%", md: 650 },
-          maxHeight: "90vh",
+          width: { xs: "96%", md: 760 },
+          maxHeight: { xs: "94dvh", md: "92vh" },
           overflowY: "auto",
           bgcolor: "background.paper",
           borderRadius: 3,
           boxShadow: 24,
-          p: 4,
+          p: { xs: 2, md: 3.5 },
         }}
       >
-        <SoftTypography variant="h5" fontWeight="bold">
-          {isLoad ? "Xuất hàng lên" : "Hoàn hàng từ"} {truck?.name}
-        </SoftTypography>
-        <SoftTypography variant="caption" color="text">
-          {isLoad
-            ? "Kho chính sẽ được trừ sau khi phiếu thành công"
-            : "Hàng trên xe sẽ được nhập lại kho chính"}
-        </SoftTypography>
+        <SoftBox display="flex" justifyContent="space-between" alignItems="flex-start" gap={2}>
+          <SoftBox display="flex" alignItems="center" gap={1.5}>
+            <SoftBox
+              width={46}
+              height={46}
+              borderRadius={2}
+              bgcolor={isLoad ? "#e3f2fd" : "#fff3e0"}
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              flexShrink={0}
+            >
+              <Icon sx={{ color: isLoad ? "#1565c0" : "#e65100", fontSize: 28 }}>
+                {isLoad ? "add_road" : "assignment_return"}
+              </Icon>
+            </SoftBox>
+            <SoftBox>
+              <SoftTypography
+                variant="h5"
+                fontWeight="bold"
+                sx={{ fontSize: { xs: "1.1rem", md: "1.3rem" } }}
+              >
+                {isLoad ? "Xuất hàng lên xe" : "Hoàn hàng về kho"}
+              </SoftTypography>
+              <SoftTypography variant="button" fontWeight="bold" color="info" display="block">
+                {truck?.name} · {truck?.licensePlate || truck?.code}
+              </SoftTypography>
+            </SoftBox>
+          </SoftBox>
+          <IconButton onClick={onClose} sx={{ bgcolor: "#f0f2f5" }}>
+            <Icon>close</Icon>
+          </IconButton>
+        </SoftBox>
+        <SoftBox
+          mt={1.5}
+          px={1.5}
+          py={1}
+          borderRadius={2}
+          bgcolor={isLoad ? "#e8f5e9" : "#fff8e1"}
+        >
+          <SoftTypography
+            variant="caption"
+            fontWeight="bold"
+            sx={{ color: isLoad ? "#2e7d32" : "#e65100" }}
+          >
+            {isLoad
+              ? "Kho chính sẽ tự động trừ tồn sau khi tạo phiếu thành công."
+              : "Hàng trên xe sẽ được cộng trở lại kho chính."}
+          </SoftTypography>
+        </SoftBox>
         <Grid container spacing={2} mt={0.5}>
           <Field label="Mã phiếu">
             <SoftInput
@@ -312,60 +441,245 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
             />
           </Field>
         </Grid>
-        <SoftBox mt={2}>
-          {loadingProducts && (
-            <SoftTypography variant="caption" color="text" display="block" mb={1}>
-              Đang tải danh sách sản phẩm...
-            </SoftTypography>
-          )}
-          {items.map((item, index) => (
-            <SoftBox key={index} display="flex" gap={1} mb={1.5}>
-              <FormControl size="small" sx={{ flex: 2 }}>
-                <Select
-                  displayEmpty
-                  value={item.productId}
-                  onChange={(e) => change(index, "productId", e.target.value)}
+        <SoftBox mt={2.5}>
+          <SoftTypography variant="button" fontWeight="bold" display="block" mb={0.75}>
+            {isLoad ? "Tìm và chọn hàng trong kho" : "Tìm và chọn hàng trên xe"}
+          </SoftTypography>
+          <Autocomplete
+            value={null}
+            inputValue={productSearch}
+            onInputChange={(_, value, reason) => {
+              if (reason !== "reset") setProductSearch(value);
+            }}
+            onChange={(_, product) => product && addProduct(product)}
+            options={products}
+            loading={loadingProducts}
+            openOnFocus
+            autoHighlight
+            filterOptions={isLoad ? (options) => options : undefined}
+            getOptionLabel={(product) =>
+              product?.name || product?.productName || product?.code || ""
+            }
+            isOptionEqualToValue={(option, value) =>
+              String(getId(option) || option.productId) ===
+              String(getId(value) || value.productId)
+            }
+            noOptionsText={
+              loadingProducts
+                ? "Đang tìm sản phẩm..."
+                : isLoad
+                ? "Không tìm thấy hàng còn tồn trong kho"
+                : "Không tìm thấy hàng trên xe"
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                autoFocus
+                placeholder="Nhập tên, mã hoặc barcode sản phẩm..."
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    minHeight: 54,
+                    borderRadius: 2,
+                    bgcolor: "#fff",
+                  },
+                }}
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: (
+                    <>
+                      <Icon sx={{ color: "#1565c0", mr: 1 }}>search</Icon>
+                      {params.InputProps.startAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+            renderOption={(props, product) => {
+              const { key, ...optionProps } = props;
+              const stock = stockOf(product);
+              return (
+                <SoftBox
+                  component="li"
+                  key={key || getId(product)}
+                  {...optionProps}
+                  sx={{
+                    display: "flex !important",
+                    justifyContent: "space-between !important",
+                    alignItems: "center !important",
+                    gap: "12px !important",
+                    py: "10px !important",
+                  }}
                 >
-                  <MenuItem value="">
-                    <em>Chọn sản phẩm</em>
-                  </MenuItem>
-                  {!loadingProducts && products.length === 0 && (
-                    <MenuItem disabled>Không có sản phẩm khả dụng</MenuItem>
-                  )}
-                  {products.map((product) => (
-                    <MenuItem key={getId(product)} value={getId(product)}>
-                      {product.code ? `${product.code} - ` : ""}
-                      {product.name} (còn {product.stock ?? product.quantity ?? 0}{" "}
-                      {product.unit || ""})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <SoftBox sx={{ flex: 1 }}>
-                <SoftInput
-                  type="number"
-                  inputProps={{ min: 1, step: 1 }}
-                  value={item.qty}
-                  onChange={(e) => change(index, "qty", e.target.value)}
-                />
+                  <SoftBox minWidth={0}>
+                    <SoftTypography variant="button" fontWeight="bold" display="block">
+                      {product.name || product.productName || "Sản phẩm"}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="text">
+                      {[product.code, product.barcode].filter(Boolean).join(" · ") || "Chưa có mã"}
+                    </SoftTypography>
+                  </SoftBox>
+                  <SoftBox
+                    px={1.25}
+                    py={0.6}
+                    borderRadius={1.5}
+                    bgcolor="#e8f5e9"
+                    flexShrink={0}
+                    textAlign="center"
+                  >
+                    <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "#2e7d32" }}>
+                      Còn {stock} {product.unit || ""}
+                    </SoftTypography>
+                  </SoftBox>
+                </SoftBox>
+              );
+            }}
+          />
+
+          {!productSearch && products.length > 0 && (
+            <SoftBox mt={1.25}>
+              <SoftTypography variant="caption" color="text" display="block" mb={0.75}>
+                Gợi ý chọn nhanh
+              </SoftTypography>
+              <SoftBox display="flex" gap={0.75} sx={{ overflowX: "auto", pb: 0.5 }}>
+                {products.slice(0, 6).map((product) => (
+                  <SoftButton
+                    key={getId(product) || product.productId}
+                    variant="outlined"
+                    color={isLoad ? "info" : "warning"}
+                    size="small"
+                    onClick={() => addProduct(product)}
+                    sx={{
+                      minWidth: 150,
+                      justifyContent: "flex-start",
+                      textTransform: "none",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <SoftBox textAlign="left" minWidth={0}>
+                      <SoftTypography
+                        variant="caption"
+                        fontWeight="bold"
+                        display="block"
+                        sx={{ color: "inherit" }}
+                      >
+                        {product.name || product.productName}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" sx={{ color: "inherit", opacity: 0.8 }}>
+                        Còn {stockOf(product)} {product.unit || ""}
+                      </SoftTypography>
+                    </SoftBox>
+                  </SoftButton>
+                ))}
               </SoftBox>
-              <IconButton
-                disabled={items.length === 1}
-                onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
-              >
-                <Icon color="error">remove_circle</Icon>
-              </IconButton>
             </SoftBox>
-          ))}
+          )}
         </SoftBox>
-        <SoftButton
-          variant="text"
-          color={isLoad ? "info" : "warning"}
-          startIcon={<Icon>add</Icon>}
-          onClick={() => setItems((current) => [...current, { productId: "", qty: 1 }])}
-        >
-          Thêm dòng
-        </SoftButton>
+
+        <SoftBox mt={2.5}>
+          <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+            <SoftTypography variant="button" fontWeight="bold">
+              Sản phẩm đã chọn
+            </SoftTypography>
+            <SoftTypography variant="caption" color="info" fontWeight="bold">
+              {items.length} loại
+            </SoftTypography>
+          </SoftBox>
+          {!items.length && (
+            <SoftBox
+              py={3}
+              px={2}
+              borderRadius={2}
+              textAlign="center"
+              bgcolor="#f8fafc"
+              sx={{ border: "1px dashed #b8c6d8" }}
+            >
+              <Icon sx={{ color: "#90a4ae", fontSize: 34 }}>inventory_2</Icon>
+              <SoftTypography variant="caption" color="text" display="block">
+                Tìm sản phẩm phía trên hoặc bấm vào một gợi ý để chọn nhanh
+              </SoftTypography>
+            </SoftBox>
+          )}
+          {items.map((item, index) => {
+            const product = selectedProduct(item);
+            const stock = stockOf(product);
+            const quantity = Number(item.qty || 0);
+            return (
+              <SoftBox
+                key={item.productId}
+                p={{ xs: 1.25, md: 1.5 }}
+                mb={1}
+                borderRadius={2}
+                bgcolor="#fff"
+                sx={{ border: "1px solid #dce5ef" }}
+              >
+                <SoftBox display="flex" justifyContent="space-between" gap={1}>
+                  <SoftBox minWidth={0}>
+                    <SoftTypography variant="button" fontWeight="bold" display="block">
+                      {index + 1}. {product.name || product.productName || "Sản phẩm"}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="text">
+                      {product.code ? `${product.code} · ` : ""}
+                      Còn <b>{stock}</b> {product.unit || ""}
+                    </SoftTypography>
+                  </SoftBox>
+                  <IconButton
+                    size="small"
+                    aria-label="Xóa sản phẩm"
+                    onClick={() =>
+                      setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                    }
+                    sx={{ alignSelf: "flex-start", bgcolor: "#ffebee" }}
+                  >
+                    <Icon color="error">delete</Icon>
+                  </IconButton>
+                </SoftBox>
+                <SoftBox
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  gap={1}
+                  mt={1.25}
+                >
+                  <SoftTypography variant="caption" fontWeight="bold">
+                    Số lượng
+                  </SoftTypography>
+                  <SoftBox display="flex" alignItems="center" gap={0.75}>
+                    <IconButton
+                      onClick={() => changeQty(index, Math.max(1, quantity - 1))}
+                      disabled={quantity <= 1}
+                      sx={{ width: 40, height: 40, border: "1px solid #d5dde7" }}
+                    >
+                      <Icon>remove</Icon>
+                    </IconButton>
+                    <SoftBox width={80}>
+                      <SoftInput
+                        type="number"
+                        inputProps={{ min: 1, max: stock || undefined, step: 1 }}
+                        value={item.qty}
+                        onChange={(event) => changeQty(index, event.target.value)}
+                        sx={{ textAlign: "center" }}
+                      />
+                    </SoftBox>
+                    <IconButton
+                      onClick={() => changeQty(index, quantity + 1)}
+                      disabled={stock > 0 && quantity >= stock}
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        color: "#fff",
+                        bgcolor: "#1976d2",
+                        "&:hover": { bgcolor: "#1565c0" },
+                        "&.Mui-disabled": { bgcolor: "#e0e0e0" },
+                      }}
+                    >
+                      <Icon>add</Icon>
+                    </IconButton>
+                  </SoftBox>
+                </SoftBox>
+              </SoftBox>
+            );
+          })}
+        </SoftBox>
         <SoftBox mt={2}>
           <SoftTypography variant="caption" fontWeight="medium">
             Ghi chú
@@ -380,10 +694,14 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
             variant="gradient"
             color={isLoad ? "info" : "warning"}
             fullWidth
-            disabled={saving || loadingProducts || !transferDate || products.length === 0}
+            disabled={saving || !transferDate || items.length === 0}
             onClick={save}
           >
-            {saving ? "Đang xử lý..." : isLoad ? "Xuất lên xe" : "Hoàn về kho"}
+            {saving
+              ? "Đang xử lý..."
+              : isLoad
+              ? `Xuất ${selectedTotalQuantity} sản phẩm lên xe`
+              : `Hoàn ${selectedTotalQuantity} sản phẩm về kho`}
           </SoftButton>
         </SoftBox>
       </SoftBox>

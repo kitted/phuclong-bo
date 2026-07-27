@@ -66,9 +66,28 @@ export function printInvoice(invoice) {
   const subtotal = Number(invoice.subtotal ?? invoice.totalAmount ?? 0);
   const discount = Number(invoice.discountAmount || 0);
   const grandTotal = Number(invoice.grandTotal ?? invoice.totalAmount ?? subtotal - discount);
-  const oldDebt = Number(invoice.customerDebtBefore ?? invoice.previousDebt ?? invoice.oldDebt ?? 0);
-  const paid = Number(invoice.paidAmount || 0);
-  const remainingDebt = Number(invoice.customerDebtAfter ?? invoice.totalCustomerDebtAfter ?? oldDebt + grandTotal - paid);
+  const paid = Number(
+    invoice.receivedAmount ?? invoice.totalReceivedAmount ?? invoice.paidAmount ?? 0
+  );
+  const existingDebtPaidAmount = Number(invoice.existingDebtPaidAmount || 0);
+  const oldDebt = Number(
+    invoice.customerDebtBefore ??
+      invoice.debtPayment?.customerDebtBefore ??
+      invoice.debtPaymentSnapshot?.customerDebtBefore ??
+      invoice.previousDebt ??
+      invoice.oldDebt ??
+      existingDebtPaidAmount
+  );
+  const remainingDebt = Math.max(
+    0,
+    Number(
+      invoice.customerDebtAfter ??
+        invoice.debtPayment?.customerDebtAfter ??
+        invoice.debtPaymentSnapshot?.customerDebtAfter ??
+        invoice.totalCustomerDebtAfter ??
+        oldDebt + grandTotal - paid
+    )
+  );
   const occurredAt = new Date(invoice.createdAt || invoice.date || Date.now());
   const totalQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
   const rows = items.map((item, index) => {

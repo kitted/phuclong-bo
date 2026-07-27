@@ -71,6 +71,39 @@ const dateTime = (value) =>
         hour12: false,
       })
     : "—";
+const invoiceCustomer = (invoice = {}) => {
+  const populatedCustomer =
+    invoice.customerId && typeof invoice.customerId === "object" ? invoice.customerId : {};
+  const legacyCustomer =
+    invoice.customer && typeof invoice.customer === "object" ? invoice.customer : {};
+  const snapshot = invoice.customerSnapshot || invoice.customerInfo || {};
+  const code =
+    populatedCustomer.code ||
+    populatedCustomer.customerCode ||
+    snapshot.code ||
+    snapshot.customerCode ||
+    legacyCustomer.code ||
+    invoice.customerCode ||
+    "";
+  const name =
+    populatedCustomer.name ||
+    populatedCustomer.fullName ||
+    populatedCustomer.customerName ||
+    snapshot.name ||
+    snapshot.customerName ||
+    legacyCustomer.name ||
+    invoice.customerName ||
+    (typeof invoice.customer === "string" ? invoice.customer : "") ||
+    "Khách lẻ";
+  const phone =
+    populatedCustomer.phone ||
+    populatedCustomer.phones?.[0] ||
+    snapshot.phone ||
+    legacyCustomer.phone ||
+    invoice.customerPhone ||
+    "";
+  return { code, name, phone, label: code ? `${code} · ${name}` : name };
+};
 
 function Field({ label, children, xs = 12, md = 6 }) {
   return (
@@ -551,10 +584,18 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   const vatAmount = Number(preview?.vatAmount || 0);
   const discountAmount = Number(preview?.discountAmount || 0);
   const totalQuantity = previewItems.reduce((sum, item) => sum + Number(item.qty || 0), 0);
-  const invoiceDebt = Math.max(0, grandTotal - paidAmount);
   const currentDebt = Number(customer?.debt || 0);
   const debtLimit = Number(customer?.debtLimit || 0);
-  const projectedDebt = currentDebt + invoiceDebt;
+  const paysExistingDebt = form.paymentMode === "PAY_WITH_DEBT";
+  const invoicePaidAmount = Math.min(grandTotal, paidAmount);
+  const previousDebtPaidAmount = paysExistingDebt
+    ? Math.min(currentDebt, Math.max(0, paidAmount - grandTotal))
+    : 0;
+  const invoiceDebt = Math.max(0, grandTotal - invoicePaidAmount);
+  const projectedDebt = paysExistingDebt
+    ? Math.max(0, currentDebt + grandTotal - paidAmount)
+    : currentDebt + invoiceDebt;
+  const maximumPaymentAmount = grandTotal + (paysExistingDebt ? currentDebt : 0);
   const customerPhones = customer
     ? Array.from(
         new Set(
@@ -646,8 +687,16 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       return toast.error("Vui lòng chọn đầy đủ sản phẩm quà tặng và số lượng");
     if (form.paymentMode === "DEBT" && !customer)
       return toast.error("Hóa đơn ghi nợ bắt buộc chọn khách hàng CRM");
-    if (paidAmount > grandTotal)
-      return toast.error("Tổng tiền thanh toán không được vượt giá trị hóa đơn");
+    if (paysExistingDebt && !customer)
+      return toast.error("Vui lòng chọn khách hàng để thanh toán công nợ cũ");
+    if (paysExistingDebt && currentDebt <= 0)
+      return toast.error("Khách hàng hiện không có công nợ cũ");
+    if (paidAmount > maximumPaymentAmount)
+      return toast.error(
+        paysExistingDebt
+          ? "Số tiền thanh toán không được vượt tổng hóa đơn và công nợ cũ"
+          : "Tổng tiền thanh toán không được vượt giá trị hóa đơn"
+      );
     if (!customer && paidAmount !== grandTotal) return toast.error("Khách lẻ phải thanh toán đủ");
     if (overLimit && !form.allowDebtLimitOverride)
       return toast.error("Hóa đơn vượt hạn mức công nợ của khách hàng");
@@ -679,6 +728,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
             }))
           : undefined,
         payments,
+        applyExcessToDebt: paysExistingDebt || undefined,
         items: previewItems,
         note: form.note.trim() || undefined,
         allowDebtLimitOverride: Boolean(form.allowDebtLimitOverride),
@@ -686,11 +736,19 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
           ? form.debtOverrideReason.trim()
           : undefined,
       });
-      toast.success(`Đã tạo hóa đơn ${unwrap(response)?.code || ""}`);
+      const created = unwrap(response) || {};
+      toast.success(
+        created.debtPaymentCode
+          ? `Đã tạo hóa đơn ${created.code || ""} và phiếu thu ${created.debtPaymentCode}`
+          : `Đã tạo hóa đơn ${created.code || ""}`
+      );
       setCreatedInvoice({
-        ...unwrap(response),
-        customerDebtBefore: currentDebt,
-        customerDebtAfter: projectedDebt,
+        ...created,
+        customerDebtBefore: created.customerDebtBefore ?? currentDebt,
+        customerDebtAfter: created.customerDebtAfter ?? projectedDebt,
+        receivedAmount: created.receivedAmount ?? paidAmount,
+        existingDebtPaidAmount:
+          created.existingDebtPaidAmount ?? previousDebtPaidAmount,
       });
       onCreated();
     } catch (error) {
@@ -735,6 +793,62 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
               <SoftTypography variant="h6" color="info" fontWeight="bold" sx={{ letterSpacing: 1 }}>
                 {createdInvoice.giftCode || createdInvoice.gift?.code}
               </SoftTypography>
+            </SoftBox>
+          )}
+          {Number(createdInvoice.existingDebtPaidAmount || 0) > 0 && (
+            <SoftBox
+              mt={2}
+              p={2}
+              bgcolor="#E8F5E9"
+              borderRadius={2}
+              sx={{ border: "1px solid #81c784" }}
+            >
+              <SoftBox display="flex" alignItems="center" gap={1} mb={1.25}>
+                <Icon sx={{ color: "#2e7d32" }}>check_circle</Icon>
+                <SoftTypography variant="button" fontWeight="bold" sx={{ color: "#1b5e20" }}>
+                  Đã thanh toán kèm công nợ cũ
+                </SoftTypography>
+              </SoftBox>
+              <Grid container spacing={1}>
+                {[
+                  ["Khách đã trả", createdInvoice.receivedAmount],
+                  ["Đã trừ nợ cũ", createdInvoice.existingDebtPaidAmount],
+                  ["Công nợ còn lại", createdInvoice.customerDebtAfter],
+                ].map(([label, value]) => (
+                  <Grid item xs={12} sm={4} key={label}>
+                    <SoftBox bgcolor="rgba(255,255,255,.75)" borderRadius={1.5} p={1}>
+                      <SoftTypography variant="caption" color="text" display="block">
+                        {label}
+                      </SoftTypography>
+                      <SoftTypography
+                        variant="button"
+                        fontWeight="bold"
+                        display="block"
+                        sx={{ color: label === "Công nợ còn lại" && value > 0 ? "#c62828" : "#2e7d32" }}
+                      >
+                        {money(value)}
+                      </SoftTypography>
+                    </SoftBox>
+                  </Grid>
+                ))}
+              </Grid>
+              {(createdInvoice.debtPaymentCode || createdInvoice.debtPayment?.code) && (
+                <SoftBox
+                  mt={1.25}
+                  pt={1.25}
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ borderTop: "1px dashed #81c784" }}
+                >
+                  <SoftTypography variant="caption" color="text">
+                    Phiếu thu công nợ
+                  </SoftTypography>
+                  <SoftTypography variant="button" fontWeight="bold" sx={{ color: "#1565c0" }}>
+                    {createdInvoice.debtPaymentCode || createdInvoice.debtPayment?.code}
+                  </SoftTypography>
+                </SoftBox>
+              )}
             </SoftBox>
           )}
           {(createdInvoice.promotionActivations || []).length > 0 && (
@@ -986,6 +1100,18 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                           voucherCode: "",
                           allowDebtLimitOverride: false,
                           debtOverrideReason: "",
+                          paymentMode:
+                            current.paymentMode === "PAY_WITH_DEBT"
+                              ? "PAY_NOW"
+                              : current.paymentMode,
+                          cashAmount:
+                            current.paymentMode === "PAY_WITH_DEBT" ? 0 : current.cashAmount,
+                          bankAmount:
+                            current.paymentMode === "PAY_WITH_DEBT" ? 0 : current.bankAmount,
+                          referenceCode:
+                            current.paymentMode === "PAY_WITH_DEBT"
+                              ? ""
+                              : current.referenceCode,
                         }));
                       }}
                       sx={{
@@ -1828,60 +1954,161 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
             <SoftTypography variant="button" fontWeight="bold">
               Hình thức ghi nhận hóa đơn
             </SoftTypography>
-            <RadioGroup
-              row={isAdmin}
-              value={form.paymentMode}
-              onChange={(event) => {
-                const value = event.target.value;
-                setForm((current) => ({
-                  ...current,
-                  paymentMode: value,
-                  ...(value === "DEBT" ? { cashAmount: 0, bankAmount: 0, referenceCode: "" } : {}),
-                }));
-              }}
+            <SoftBox
+              display={{ xs: "flex", md: "grid" }}
+              gap={1.25}
+              mt={1.25}
               sx={{
-                gap: 1,
-                mt: 1,
-                flexDirection: isAdmin ? { md: "column" } : undefined,
+                gridTemplateColumns: {
+                  md: isAdmin ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                },
+                overflowX: { xs: "auto", md: "visible" },
+                scrollSnapType: { xs: "x mandatory", md: "none" },
+                WebkitOverflowScrolling: "touch",
+                scrollbarWidth: "none",
+                "&::-webkit-scrollbar": { display: "none" },
               }}
             >
-              <FormControlLabel
-                value="PAY_NOW"
-                control={<Radio />}
-                label="Thanh toán ngay / một phần"
-                sx={{
-                  flex: 1,
-                  m: 0,
-                  px: 1.25,
-                  py: 0.75,
-                  border: `2px solid ${
-                    form.paymentMode === "PAY_NOW" ? "#2e7d32" : "#e5e7eb"
-                  }`,
-                  borderRadius: 2,
-                  bgcolor: form.paymentMode === "PAY_NOW" ? "#f0fdf4" : "#fff",
-                }}
-              />
-              <FormControlLabel
-                value="DEBT"
-                control={<Radio />}
-                label="Ghi nợ toàn bộ"
-                sx={{
-                  flex: 1,
-                  m: 0,
-                  px: 1.25,
-                  py: 0.75,
-                  border: `2px solid ${
-                    form.paymentMode === "DEBT" ? "#ed6c02" : "#e5e7eb"
-                  }`,
-                  borderRadius: 2,
-                  bgcolor: form.paymentMode === "DEBT" ? "#fff7ed" : "#fff",
-                }}
-              />
-            </RadioGroup>
+              {[
+                {
+                  value: "PAY_NOW",
+                  label: "Thanh toán hóa đơn",
+                  subtitle: "Thanh toán đủ hoặc một phần; phần chưa trả sẽ cộng vào công nợ",
+                  icon: "payments",
+                  color: "#2e7d32",
+                  background: "#ecfdf3",
+                },
+                {
+                  value: "PAY_WITH_DEBT",
+                  label: "Thanh toán hóa đơn và trừ nợ cũ",
+                  subtitle: customer
+                    ? `Công nợ cũ: ${money(currentDebt)}`
+                    : "Chọn khách hàng có công nợ để sử dụng",
+                  icon: "account_balance_wallet",
+                  color: "#00897b",
+                  background: "#e0f2f1",
+                  disabled: !customer || currentDebt <= 0,
+                },
+                {
+                  value: "DEBT",
+                  label: "Ghi nợ toàn bộ",
+                  subtitle: "Cộng toàn bộ giá trị hóa đơn vào công nợ",
+                  icon: "pending_actions",
+                  color: "#ed6c02",
+                  background: "#fff7ed",
+                },
+              ].map((option) => {
+                const selected = form.paymentMode === option.value;
+                return (
+                  <SoftBox
+                    key={option.value}
+                    component="button"
+                    type="button"
+                    disabled={option.disabled}
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        paymentMode: option.value,
+                        ...(option.value === "DEBT"
+                          ? { cashAmount: 0, bankAmount: 0, referenceCode: "" }
+                          : {}),
+                      }))
+                    }
+                    p={1.5}
+                    textAlign="left"
+                    sx={{
+                      minWidth: { xs: 225, md: 0 },
+                      minHeight: 126,
+                      scrollSnapAlign: "start",
+                      border: selected
+                        ? `2px solid ${option.color}`
+                        : "1px solid #dfe3e8",
+                      borderRadius: 2,
+                      background: selected ? option.background : "#fff",
+                      boxShadow: selected
+                        ? `0 5px 16px ${option.color}29`
+                        : "0 2px 7px rgba(0,0,0,.05)",
+                      cursor: option.disabled ? "not-allowed" : "pointer",
+                      opacity: option.disabled ? 0.5 : 1,
+                      position: "relative",
+                      transition: "transform .16s ease, box-shadow .16s ease, border-color .16s ease",
+                      "&:hover": option.disabled
+                        ? undefined
+                        : {
+                            transform: "translateY(-2px)",
+                            boxShadow: `0 7px 18px ${option.color}26`,
+                            borderColor: option.color,
+                          },
+                      "&:focus-visible": {
+                        outline: `3px solid ${option.color}45`,
+                        outlineOffset: 2,
+                      },
+                    }}
+                  >
+                    {selected && (
+                      <Icon
+                        sx={{
+                          position: "absolute",
+                          top: 10,
+                          right: 10,
+                          color: option.color,
+                          fontSize: 22,
+                        }}
+                      >
+                        check_circle
+                      </Icon>
+                    )}
+                    <SoftBox
+                      width={40}
+                      height={40}
+                      borderRadius={1.5}
+                      bgcolor={selected ? option.color : "#eef2f6"}
+                      color={selected ? "#fff" : "#52606d"}
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      mb={1}
+                    >
+                      <Icon>{option.icon}</Icon>
+                    </SoftBox>
+                    <SoftTypography
+                      variant="button"
+                      fontWeight="bold"
+                      display="block"
+                      pr={selected ? 2.5 : 0}
+                      sx={{ color: selected ? option.color : "#253858", lineHeight: 1.25 }}
+                    >
+                      {option.label}
+                    </SoftTypography>
+                    <SoftTypography
+                      variant="caption"
+                      color="text"
+                      display="block"
+                      mt={0.5}
+                      sx={{ lineHeight: 1.3 }}
+                    >
+                      {option.subtitle}
+                    </SoftTypography>
+                  </SoftBox>
+                );
+              })}
+            </SoftBox>
             {form.paymentMode === "DEBT" && (
               <SoftTypography variant="caption" color="error">
                 Hóa đơn sẽ ở trạng thái Chưa thanh toán và toàn bộ thành tiền được cộng vào công nợ
                 khách hàng.
+              </SoftTypography>
+            )}
+            {form.paymentMode === "PAY_WITH_DEBT" && (
+              <SoftTypography
+                variant="caption"
+                fontWeight="bold"
+                display="block"
+                mt={1}
+                sx={{ color: "#00695c" }}
+              >
+                Tiền thanh toán sẽ trả hóa đơn hiện tại trước; phần còn lại tự động trừ vào công
+                nợ cũ.
               </SoftTypography>
             )}
           </SoftBox>
@@ -1947,6 +2174,60 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                 </Field>
               )}
             </Grid>
+          )}
+          {form.paymentMode === "PAY_WITH_DEBT" && (
+            <SoftBox
+              mt={2}
+              p={2}
+              borderRadius={2}
+              bgcolor="#e8f5e9"
+              sx={{ border: "2px solid #81c784" }}
+            >
+              <SoftBox display="flex" alignItems="center" gap={1} mb={1.25}>
+                <Icon sx={{ color: "#2e7d32", fontSize: 26 }}>account_balance_wallet</Icon>
+                <SoftBox>
+                  <SoftTypography
+                    variant="button"
+                    fontWeight="bold"
+                    display="block"
+                    sx={{ color: "#1b5e20" }}
+                  >
+                    Thanh toán kèm công nợ cũ
+                  </SoftTypography>
+                  <SoftTypography variant="caption" sx={{ color: "#2e5d34" }}>
+                    Có thể thu tối đa {money(grandTotal + currentDebt)}
+                  </SoftTypography>
+                </SoftBox>
+              </SoftBox>
+              <Grid container spacing={1}>
+                {[
+                  ["Tiền hóa đơn", invoicePaidAmount, "#1565c0"],
+                  ["Trừ nợ cũ", previousDebtPaidAmount, "#2e7d32"],
+                  ["Công nợ còn lại", projectedDebt, projectedDebt > 0 ? "#c62828" : "#2e7d32"],
+                ].map(([label, value, color]) => (
+                  <Grid item xs={12} sm={4} key={label}>
+                    <SoftBox p={1.25} borderRadius={1.5} bgcolor="rgba(255,255,255,.8)">
+                      <SoftTypography variant="caption" color="text" display="block">
+                        {label}
+                      </SoftTypography>
+                      <SoftTypography
+                        variant="button"
+                        fontWeight="bold"
+                        display="block"
+                        sx={{ color }}
+                      >
+                        {money(value)}
+                      </SoftTypography>
+                    </SoftBox>
+                  </Grid>
+                ))}
+              </Grid>
+              {paidAmount > maximumPaymentAmount && (
+                <SoftTypography variant="caption" color="error" fontWeight="bold" display="block" mt={1}>
+                  Số tiền đang vượt quá tổng cần thu {money(paidAmount - maximumPaymentAmount)}.
+                </SoftTypography>
+              )}
+            </SoftBox>
           )}
           {overLimit && (
             <SoftBox mt={2} p={2} bgcolor="#FFF3E0" borderRadius={2}>
@@ -2252,14 +2533,27 @@ function InvoicePaperView({ invoice }) {
   const subtotal = Number(invoice.subtotal ?? invoice.totalAmount ?? 0);
   const discount = Number(invoice.discountAmount || 0);
   const grandTotal = Number(invoice.grandTotal ?? invoice.totalAmount ?? 0);
-  const paidAmount = Number(invoice.paidAmount || 0);
-  const oldDebt = Number(
-    invoice.customerDebtBefore ?? invoice.previousDebt ?? invoice.oldDebt ?? 0
+  const paidAmount = Number(
+    invoice.receivedAmount ?? invoice.totalReceivedAmount ?? invoice.paidAmount ?? 0
   );
-  const debtAfter = Number(
-    invoice.customerDebtAfter ??
-      invoice.totalCustomerDebtAfter ??
-      oldDebt + grandTotal - paidAmount
+  const existingDebtPaidAmount = Number(invoice.existingDebtPaidAmount || 0);
+  const oldDebt = Number(
+    invoice.customerDebtBefore ??
+      invoice.debtPayment?.customerDebtBefore ??
+      invoice.debtPaymentSnapshot?.customerDebtBefore ??
+      invoice.previousDebt ??
+      invoice.oldDebt ??
+      existingDebtPaidAmount
+  );
+  const debtAfter = Math.max(
+    0,
+    Number(
+      invoice.customerDebtAfter ??
+        invoice.debtPayment?.customerDebtAfter ??
+        invoice.debtPaymentSnapshot?.customerDebtAfter ??
+        invoice.totalCustomerDebtAfter ??
+        oldDebt + grandTotal - paidAmount
+    )
   );
   const totalQuantity = (invoice.items || []).reduce(
     (sum, item) => sum + Number(item.qty || 0),
@@ -2778,7 +3072,7 @@ export default function HoaDon() {
               </FormControl>
             </SoftBox>
             {isStaff && <SoftBox display={{ xs: "block", md: "none" }}>
-              {!loading && invoices.map((invoice) => <SoftBox key={getId(invoice)} py={1.5} display="flex" gap={1.25} alignItems="center" onClick={() => setDetailId(getId(invoice))} sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}><SoftBox width={44} height={44} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox><SoftBox flex={1} minWidth={0}><SoftTypography variant="button" fontWeight="bold" display="block">{invoice.code}</SoftTypography><SoftTypography variant="caption" color="text" display="block" noWrap>{invoice.customerId?.name || invoice.customer || "Khách lẻ"} · {dateTime(invoice.createdAt || invoice.date)}</SoftTypography><SoftTypography variant="caption" sx={{ color: invoice.debtAmount > 0 ? "#c62828" : "#2e7d32" }}>{invoice.paymentStatus === "PAID" ? "Đã thanh toán" : `Công nợ ${money(invoice.debtAmount)}`}</SoftTypography></SoftBox><SoftTypography variant="button" fontWeight="bold">{money(invoice.grandTotal ?? invoice.totalAmount)}</SoftTypography></SoftBox>)}
+              {!loading && invoices.map((invoice) => <SoftBox key={getId(invoice)} py={1.5} display="flex" gap={1.25} alignItems="center" onClick={() => setDetailId(getId(invoice))} sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}><SoftBox width={44} height={44} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox><SoftBox flex={1} minWidth={0}><SoftTypography variant="button" fontWeight="bold" display="block">{invoice.code}</SoftTypography><SoftTypography variant="caption" color="text" display="block" noWrap>{invoiceCustomer(invoice).label} · {dateTime(invoice.createdAt || invoice.date)}</SoftTypography><SoftTypography variant="caption" sx={{ color: invoice.debtAmount > 0 ? "#c62828" : "#2e7d32" }}>{invoice.paymentStatus === "PAID" ? "Đã thanh toán" : `Công nợ ${money(invoice.debtAmount)}`}</SoftTypography></SoftBox><SoftTypography variant="button" fontWeight="bold">{money(invoice.grandTotal ?? invoice.totalAmount)}</SoftTypography></SoftBox>)}
             </SoftBox>}
             <SoftBox sx={{ overflowX: "auto", display: { xs: isStaff ? "none" : "block", md: "block" } }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -2845,9 +3139,9 @@ export default function HoaDon() {
                         {dateTime(invoice.createdAt || invoice.date)}
                       </td>
                       <td style={{ padding: 12, fontSize: 13 }}>
-                        {invoice.customerId?.name || invoice.customer || "Khách lẻ"}
+                        {invoiceCustomer(invoice).label}
                         <br />
-                        <span style={{ color: "#6B7280" }}>{invoice.customerId?.phone || ""}</span>
+                        <span style={{ color: "#6B7280" }}>{invoiceCustomer(invoice).phone}</span>
                       </td>
                       <td style={{ padding: 12, fontSize: 13 }}>
                         {invoice.salespersonName || invoice.salespersonId?.fullName || "—"}

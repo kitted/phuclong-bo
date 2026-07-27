@@ -44,6 +44,32 @@ const initials = (name = "NV") =>
     .toUpperCase();
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString("vi-VN") : "—");
 const formatDateTime = (value) => value ? new Date(value).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
+const invoiceCustomer = (invoice = {}) => {
+  const populatedCustomer =
+    invoice.customerId && typeof invoice.customerId === "object" ? invoice.customerId : {};
+  const legacyCustomer =
+    invoice.customer && typeof invoice.customer === "object" ? invoice.customer : {};
+  const snapshot = invoice.customerSnapshot || invoice.customerInfo || {};
+  const code =
+    populatedCustomer.code ||
+    populatedCustomer.customerCode ||
+    snapshot.code ||
+    snapshot.customerCode ||
+    legacyCustomer.code ||
+    invoice.customerCode ||
+    "";
+  const name =
+    populatedCustomer.name ||
+    populatedCustomer.fullName ||
+    populatedCustomer.customerName ||
+    snapshot.name ||
+    snapshot.customerName ||
+    legacyCustomer.name ||
+    invoice.customerName ||
+    (typeof invoice.customer === "string" ? invoice.customer : "") ||
+    "Khách lẻ";
+  return { code, name, label: code ? `${code} · ${name}` : name };
+};
 
 const KPI_META = {
   PROMOTION_ACTIVATION_COUNT: { label: "Mã kích hoạt", icon: "confirmation_number", money: false },
@@ -240,16 +266,21 @@ export default function StaffHome() {
           <SoftBox px={2} pb={1}>
             <SoftTypography variant="h6" fontWeight="bold">Hóa đơn mới nhất</SoftTypography>
             {!invoices.length && <SoftTypography variant="button" color="text" display="block" py={2}>Chưa có hóa đơn trong kỳ.</SoftTypography>}
-            {invoices.map((invoice, index) => (
-              <SoftBox key={invoice.id || invoice._id || index} py={1.5} display="flex" alignItems="center" gap={1.25} sx={{ borderBottom: index === invoices.length - 1 ? 0 : "1px solid #edf0f5", cursor: "pointer" }} onClick={() => navigate(`/hoa-don?search=${encodeURIComponent(invoice.code || "")}`)}>
-                <SoftBox width={42} height={42} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox>
-                <SoftBox flex={1} minWidth={0}>
-                  <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>{invoice.code || "Hóa đơn"} · {invoice.customerName || invoice.customer?.name || "Khách lẻ"}</SoftTypography>
-                  <SoftTypography variant="caption" color="text">{formatDateTime(invoice.createdAt || invoice.date)} · {invoice.paymentStatus === "PAID" ? "Đã thanh toán" : invoice.paymentStatus === "PARTIAL" ? "Thanh toán một phần" : "Cộng công nợ"}</SoftTypography>
+            {invoices.map((invoice, index) => {
+              const customer = invoiceCustomer(invoice);
+              return (
+                <SoftBox key={invoice.id || invoice._id || index} py={1.5} display="flex" alignItems="center" gap={1.25} sx={{ borderBottom: index === invoices.length - 1 ? 0 : "1px solid #edf0f5", cursor: "pointer" }} onClick={() => navigate(`/hoa-don?search=${encodeURIComponent(invoice.code || "")}`)}>
+                  <SoftBox width={42} height={42} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox>
+                  <SoftBox flex={1} minWidth={0}>
+                    <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
+                      {invoice.code || "Hóa đơn"} · {customer.label}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="text">{formatDateTime(invoice.createdAt || invoice.date)} · {invoice.paymentStatus === "PAID" ? "Đã thanh toán" : invoice.paymentStatus === "PARTIAL" ? "Thanh toán một phần" : "Cộng công nợ"}</SoftTypography>
+                  </SoftBox>
+                  <SoftTypography variant="button" fontWeight="bold">{money(invoice.grandTotal ?? invoice.totalAmount)}</SoftTypography>
                 </SoftBox>
-                <SoftTypography variant="button" fontWeight="bold">{money(invoice.grandTotal ?? invoice.totalAmount)}</SoftTypography>
-              </SoftBox>
-            ))}
+              );
+            })}
           </SoftBox>
           <SoftButton variant="text" color="info" fullWidth onClick={() => navigate("/hoa-don")}>Xem tất cả hoạt động</SoftButton>
         </Card>
