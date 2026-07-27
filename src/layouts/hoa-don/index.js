@@ -60,6 +60,8 @@ const numberText = (value) => new Intl.NumberFormat("vi-VN").format(Number(value
 const moneyValue = (value) => Number(String(value || "").replace(/[^0-9]/g, "")) || 0;
 const stockOf = (product) =>
   Number(product?.stock ?? product?.quantity ?? product?.warehouseQuantity ?? 0);
+const invoiceReceivedAmount = (invoice = {}) =>
+  Number(invoice.receivedAmount ?? invoice.totalReceivedAmount ?? invoice.paidAmount ?? 0);
 const dateTime = (value) =>
   value
     ? new Date(value).toLocaleString("vi-VN", {
@@ -281,16 +283,21 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   const [appliedGiftPromotion, setAppliedGiftPromotion] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState(null);
+  const [exportingInvoice, setExportingInvoice] = useState(false);
   const sourceAutoSelectedRef = useRef(false);
   const sourceCardsRef = useRef(null);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const printCreatedInvoice = async () => {
     try {
+      setExportingInvoice(true);
       const id = getId(createdInvoice);
       const printable = id ? unwrap(await InvoiceService.getById(id)) : createdInvoice;
-      printInvoice(printable);
+      const result = await printInvoice(printable);
+      if (result?.downloaded) toast.success("Đã tải ảnh hóa đơn xuống thiết bị");
     } catch (error) {
       toast.error(errorMessage(error, "Không thể xuất hóa đơn"));
+    } finally {
+      setExportingInvoice(false);
     }
   };
   useEffect(() => {
@@ -891,8 +898,15 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
             Mã kích hoạt đã được lưu vào hồ sơ khách hàng và hóa đơn.
           </SoftTypography>
           <SoftBox display="flex" gap={1.5} mt={3}>
-            <SoftButton variant="outlined" color="info" fullWidth startIcon={<Icon>print</Icon>} onClick={printCreatedInvoice}>
-              Xuất hóa đơn
+            <SoftButton
+              variant="outlined"
+              color="info"
+              fullWidth
+              disabled={exportingInvoice}
+              startIcon={<Icon>{isAdmin ? "print" : "image"}</Icon>}
+              onClick={printCreatedInvoice}
+            >
+              {exportingInvoice ? "Đang tạo ảnh..." : isAdmin ? "Xuất hóa đơn" : "Lưu ảnh hóa đơn"}
             </SoftButton>
             <SoftButton variant="gradient" color="success" fullWidth onClick={onClose}>
               Hoàn tất
@@ -2774,7 +2788,7 @@ function InvoicePaperView({ invoice }) {
         fontSize={{ xs: 13, sm: 16 }}
         mt={2.5}
       >
-        Số tiền bằng chữ: <i>{moneyInWords(grandTotal)}.</i>
+        Số tiền bằng chữ: <i>{moneyInWords(paidAmount)}.</i>
       </SoftTypography>
 
       <SoftBox
@@ -2822,6 +2836,7 @@ function InvoicePaperView({ invoice }) {
 
 function InvoiceDetail({ id, onClose, mobile = false }) {
   const [invoice, setInvoice] = useState(null);
+  const [exporting, setExporting] = useState(false);
   useEffect(() => {
     if (id) {
       setInvoice(null);
@@ -2895,17 +2910,21 @@ function InvoiceDetail({ id, onClose, mobile = false }) {
             variant="gradient"
             color="info"
             fullWidth
-            disabled={!invoice}
-            startIcon={<Icon>print</Icon>}
-            onClick={() => {
+            disabled={!invoice || exporting}
+            startIcon={<Icon>{mobile ? "image" : "print"}</Icon>}
+            onClick={async () => {
               try {
-                printInvoice(invoice);
+                setExporting(true);
+                const result = await printInvoice(invoice);
+                if (result?.downloaded) toast.success("Đã tải ảnh hóa đơn xuống thiết bị");
               } catch (error) {
                 toast.error(error.message || "Không thể xuất hóa đơn");
+              } finally {
+                setExporting(false);
               }
             }}
           >
-            Xuất hóa đơn
+            {exporting ? "Đang tạo ảnh..." : mobile ? "Lưu ảnh hóa đơn" : "Xuất hóa đơn"}
           </SoftButton>
         </SoftBox>
       </SoftBox>
@@ -3072,7 +3091,7 @@ export default function HoaDon() {
               </FormControl>
             </SoftBox>
             {isStaff && <SoftBox display={{ xs: "block", md: "none" }}>
-              {!loading && invoices.map((invoice) => <SoftBox key={getId(invoice)} py={1.5} display="flex" gap={1.25} alignItems="center" onClick={() => setDetailId(getId(invoice))} sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}><SoftBox width={44} height={44} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox><SoftBox flex={1} minWidth={0}><SoftTypography variant="button" fontWeight="bold" display="block">{invoice.code}</SoftTypography><SoftTypography variant="caption" color="text" display="block" noWrap>{invoiceCustomer(invoice).label} · {dateTime(invoice.createdAt || invoice.date)}</SoftTypography><SoftTypography variant="caption" sx={{ color: invoice.debtAmount > 0 ? "#c62828" : "#2e7d32" }}>{invoice.paymentStatus === "PAID" ? "Đã thanh toán" : `Công nợ ${money(invoice.debtAmount)}`}</SoftTypography></SoftBox><SoftBox textAlign="right" flexShrink={0}><SoftTypography variant="caption" color="text" display="block">Đã trả</SoftTypography><SoftTypography variant="button" fontWeight="bold" sx={{ color: Number(invoice.paidAmount) > 0 ? "#2e7d32" : "#6b7280" }}>{money(invoice.paidAmount)}</SoftTypography></SoftBox></SoftBox>)}
+              {!loading && invoices.map((invoice) => <SoftBox key={getId(invoice)} py={1.5} display="flex" gap={1.25} alignItems="center" onClick={() => setDetailId(getId(invoice))} sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}><SoftBox width={44} height={44} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox><SoftBox flex={1} minWidth={0}><SoftTypography variant="button" fontWeight="bold" display="block">{invoice.code}</SoftTypography><SoftTypography variant="caption" color="text" display="block" noWrap>{invoiceCustomer(invoice).label} · {dateTime(invoice.createdAt || invoice.date)}</SoftTypography><SoftTypography variant="caption" sx={{ color: invoice.debtAmount > 0 ? "#c62828" : "#2e7d32" }}>{invoice.paymentStatus === "PAID" ? "Đã thanh toán" : `Công nợ ${money(invoice.debtAmount)}`}</SoftTypography></SoftBox><SoftBox textAlign="right" flexShrink={0}><SoftTypography variant="caption" color="text" display="block">Đã trả (3)</SoftTypography><SoftTypography variant="button" fontWeight="bold" sx={{ color: invoiceReceivedAmount(invoice) > 0 ? "#2e7d32" : "#6b7280" }}>{money(invoiceReceivedAmount(invoice))}</SoftTypography></SoftBox></SoftBox>)}
             </SoftBox>}
             <SoftBox sx={{ overflowX: "auto", display: { xs: isStaff ? "none" : "block", md: "block" } }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -3150,7 +3169,7 @@ export default function HoaDon() {
                         {money(invoice.grandTotal ?? invoice.totalAmount)}
                       </td>
                       <td style={{ padding: 12, fontSize: 13, color: "#2E7D32" }}>
-                        {money(invoice.paidAmount)}
+                        {money(invoiceReceivedAmount(invoice))}
                       </td>
                       <td
                         style={{

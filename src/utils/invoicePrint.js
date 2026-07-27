@@ -42,10 +42,8 @@ export const moneyInWords = (input) => {
   return `${text.charAt(0).toUpperCase()}${text.slice(1)} đồng`;
 };
 
-export function printInvoice(invoice) {
+const buildInvoiceDocument = (invoice, autoPrint = false) => {
   if (!invoice) return;
-  const popup = window.open("", "_blank", "width=900,height=1000");
-  if (!popup) throw new Error("Trình duyệt đang chặn cửa sổ in hóa đơn");
   const logoUrl = new URL(
     `${process.env.PUBLIC_URL || ""}/og-1200x1200.png`,
     window.location.origin
@@ -102,7 +100,7 @@ export function printInvoice(invoice) {
       <td class="note">${escapeHtml(gift ? item.giftCode || invoice.giftCode || "Quà tặng" : item.note || "")}</td>
     </tr>`;
   }).join("");
-  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(invoice.code || "Hóa đơn")}</title><style>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(invoice.code || "Hóa đơn")}</title><style>
     @page {
       size: A3 portrait;
       margin: 12mm;
@@ -358,7 +356,7 @@ export function printInvoice(invoice) {
       </tbody>
     </table>
     ${invoice.giftCode ? `<p class="gift-code"><b>Mã quà tặng:</b> ${escapeHtml(invoice.giftCode)}</p>` : ""}
-    <p class="words">Số tiền bằng chữ: <i>${escapeHtml(moneyInWords(grandTotal))}.</i></p>
+    <p class="words">Số tiền bằng chữ: <i>${escapeHtml(moneyInWords(paid))}.</i></p>
     <div class="signatures">
       <div>
         <div class="signature-date">&nbsp;</div>
@@ -375,6 +373,87 @@ export function printInvoice(invoice) {
     </div>
     <p class="bank">Số TK: ............, Ngân hàng: ............, Chủ TK: ............</p>
   </main>
-    <script>window.onload=()=>setTimeout(()=>window.print(),250);</script></body></html>`);
+    ${autoPrint ? "<script>window.onload=()=>setTimeout(()=>window.print(),250);</script>" : ""}
+  </body></html>`;
+};
+
+const invoiceFileName = (invoice) =>
+  `${String(invoice?.code || "hoa-don").replace(/[^a-zA-Z0-9_-]/g, "-")}.png`;
+
+const downloadBlob = (blob, fileName) => {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+};
+
+export async function saveInvoiceImage(invoice) {
+  if (!invoice) throw new Error("Không tìm thấy dữ liệu hóa đơn");
+  const html2pdfModule = await import("html2pdf.js/dist/html2pdf.bundle.min.js");
+  const html2pdf = html2pdfModule.default || html2pdfModule;
+  const html = buildInvoiceDocument(invoice, false);
+  const worker = html2pdf()
+    .set({
+      margin: 0,
+      filename: invoiceFileName(invoice),
+      image: { type: "png", quality: 1 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: "#ffffff",
+        logging: false,
+        windowWidth: 1120,
+      },
+      jsPDF: { unit: "mm", format: "a3", orientation: "portrait" },
+    })
+    .from(html, "string")
+    .toCanvas();
+  const canvas = await worker.get("canvas");
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png", 1));
+  if (!blob) throw new Error("Không thể tạo ảnh hóa đơn");
+
+  const fileName = invoiceFileName(invoice);
+  const file =
+    typeof File === "function" ? new File([blob], fileName, { type: "image/png" }) : null;
+  if (
+    file &&
+    navigator.share &&
+    navigator.canShare &&
+    navigator.canShare({ files: [file] })
+  ) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: `Hóa đơn ${invoice.code || ""}`,
+        text: "Chọn “Lưu hình ảnh” để lưu hóa đơn vào thư viện ảnh.",
+      });
+      return { shared: true };
+    } catch (error) {
+      if (error?.name === "AbortError") return { cancelled: true };
+    }
+  }
+
+  downloadBlob(blob, fileName);
+  return { downloaded: true };
+}
+
+export async function printInvoice(invoice, options = {}) {
+  if (!invoice) return;
+  const isMobile =
+    options.mobile ??
+    window.matchMedia?.("(max-width: 767px), (pointer: coarse)")?.matches ??
+    false;
+  if (isMobile) return saveInvoiceImage(invoice);
+
+  const popup = window.open("", "_blank", "width=900,height=1000");
+  if (!popup) throw new Error("Trình duyệt đang chặn cửa sổ in hóa đơn");
+  popup.document.write(buildInvoiceDocument(invoice, true));
   popup.document.close();
+  return { printed: true };
 }
