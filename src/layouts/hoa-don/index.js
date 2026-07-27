@@ -62,6 +62,65 @@ const stockOf = (product) =>
   Number(product?.stock ?? product?.quantity ?? product?.warehouseQuantity ?? 0);
 const invoiceReceivedAmount = (invoice = {}) =>
   Number(invoice.receivedAmount ?? invoice.totalReceivedAmount ?? invoice.paidAmount ?? 0);
+const sameId = (left, right) =>
+  Boolean(left && right && String(getId(left) || left) === String(getId(right) || right));
+const invoiceCustomerId = (invoice = {}) =>
+  getId(invoice.customerId) ||
+  getId(invoice.customerSnapshot) ||
+  invoice.customerId ||
+  invoice.customerSnapshot?.id;
+const invoiceDebtHistoryDate = (invoice = {}) => {
+  const value = new Date(invoice.createdAt || invoice.date || Date.now());
+  if (Number.isNaN(value.getTime())) return undefined;
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
+    value.getDate()
+  ).padStart(2, "0")}`;
+};
+const enrichInvoiceDebtSnapshot = async (invoice = {}) => {
+  const hasDebtSnapshot =
+    invoice.customerDebtBefore !== undefined &&
+    invoice.customerDebtBefore !== null &&
+    invoice.customerDebtAfter !== undefined &&
+    invoice.customerDebtAfter !== null;
+  if (hasDebtSnapshot) return invoice;
+  const customerId = invoiceCustomerId(invoice);
+  if (!customerId) return invoice;
+  const date = invoiceDebtHistoryDate(invoice);
+  try {
+    const response = await CustomerService.getDebtHistory(customerId, {
+      type: "INVOICE_DEBT",
+      from: date,
+      to: date,
+      page: 1,
+      limit: 100,
+    });
+    const rows = Array.isArray(response.data?.data) ? response.data.data : [];
+    const invoiceId = getId(invoice);
+    const ledger = rows.find(
+      (item) =>
+        sameId(item.invoiceId, invoiceId) ||
+        sameId(item.referenceId, invoiceId) ||
+        (item.referenceCode && invoice.code && item.referenceCode === invoice.code)
+    );
+    if (!ledger) return invoice;
+    return {
+      ...invoice,
+      customerDebtBefore:
+        ledger.previousDebt ??
+        ledger.customerDebtBefore ??
+        ledger.debtBefore ??
+        invoice.customerDebtBefore,
+      customerDebtAfter:
+        ledger.balanceAfter ??
+        ledger.customerDebtAfter ??
+        ledger.debtAfter ??
+        invoice.customerDebtAfter,
+    };
+  } catch {
+    // Hóa đơn vẫn có thể xem được khi API lịch sử công nợ chưa được cấp quyền.
+    return invoice;
+  }
+};
 const dateTime = (value) =>
   value
     ? new Date(value).toLocaleString("vi-VN", {
@@ -2839,11 +2898,19 @@ function InvoiceDetail({ id, onClose, mobile = false }) {
   const [exporting, setExporting] = useState(false);
   useEffect(() => {
     if (id) {
+      let active = true;
       setInvoice(null);
       InvoiceService.getById(id)
-        .then((response) => setInvoice(unwrap(response)))
+        .then((response) => enrichInvoiceDebtSnapshot(unwrap(response)))
+        .then((data) => {
+          if (active) setInvoice(data);
+        })
         .catch((error) => toast.error(errorMessage(error, "Không thể tải hóa đơn")));
+      return () => {
+        active = false;
+      };
     }
+    return undefined;
   }, [id]);
   return (
     <Modal open={Boolean(id)} onClose={onClose}>
