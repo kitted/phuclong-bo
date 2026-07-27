@@ -19,7 +19,8 @@ import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
-import { TruckService } from "services/warehouseService";
+import { InvoiceService, TruckService } from "services/warehouseService";
+import InventoryService from "services/inventoryService";
 import { downloadBlob } from "utils/excel";
 import { toast } from "react-toastify";
 import { useSelector } from "react-redux";
@@ -29,6 +30,8 @@ import MobileLoadMore from "components/MobileLoadMore";
 const EMPTY_TRUCK = { code: "", name: "", licensePlate: "", driverId: "", status: "active" };
 const EMPTY_META = { totalPages: 1, totalItems: 0 };
 const getId = (value) => value?.id || value?._id;
+const sameId = (left, right) =>
+  Boolean(left && right && String(getId(left) || left) === String(getId(right) || right));
 const unwrap = (response) => response?.data?.data ?? response?.data;
 const listOf = (response) => {
   const value = unwrap(response);
@@ -43,6 +46,32 @@ const productOf = (item) =>
   {};
 const productIdOf = (item) => getId(productOf(item)) || item?.productId;
 const quantityOf = (item) => Number(item?.qty ?? item?.quantity ?? 0);
+const optionalQuantity = (...values) => {
+  const value = values.find((item) => item !== undefined && item !== null && item !== "");
+  return value === undefined ? null : Number(value);
+};
+const saleInventorySnapshot = (item = {}) => {
+  const deducted = Number(item.qty ?? item.quantityDeducted ?? item.deductedQuantity ?? 0);
+  let before = optionalQuantity(
+    item.truckQuantityBefore,
+    item.sourceQuantityBefore,
+    item.quantityBefore,
+    item.stockBefore,
+    item.inventoryBefore,
+    item.inventorySnapshot?.before
+  );
+  let after = optionalQuantity(
+    item.truckQuantityAfter,
+    item.sourceQuantityAfter,
+    item.quantityAfter,
+    item.stockAfter,
+    item.inventoryAfter,
+    item.inventorySnapshot?.after
+  );
+  if (before === null && after !== null) before = after + deducted;
+  if (after === null && before !== null) after = before - deducted;
+  return { before, deducted, after };
+};
 const apiError = (error, fallback) => {
   const message = error?.response?.data?.message;
   return Array.isArray(message) ? message.join(", ") : message || fallback;
@@ -64,6 +93,45 @@ const todayValue = () => {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
     value.getDate()
   ).padStart(2, "0")}`;
+};
+const currentWeekValue = () => {
+  const value = new Date();
+  const dateValue = new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+  const day = dateValue.getUTCDay() || 7;
+  dateValue.setUTCDate(dateValue.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(dateValue.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((dateValue - yearStart) / 86400000 + 1) / 7);
+  return `${dateValue.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+};
+const weekRange = (weekValue) => {
+  const [yearText, weekText] = String(weekValue || "").split("-W");
+  const year = Number(yearText);
+  const week = Number(weekText);
+  if (!year || !week) return {};
+  const januaryFourth = new Date(year, 0, 4);
+  const monday = new Date(januaryFourth);
+  monday.setDate(januaryFourth.getDate() - ((januaryFourth.getDay() || 7) - 1) + (week - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const toValue = (value) =>
+    `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
+      value.getDate()
+    ).padStart(2, "0")}`;
+  return { from: toValue(monday), to: toValue(sunday) };
+};
+const invoiceCustomerLabel = (invoice = {}) => {
+  const customer =
+    (invoice.customerId && typeof invoice.customerId === "object" ? invoice.customerId : null) ||
+    invoice.customerSnapshot ||
+    {};
+  const code = customer.code || customer.customerCode || invoice.customerCode || "";
+  const name =
+    customer.name ||
+    customer.customerName ||
+    invoice.customerName ||
+    (typeof invoice.customer === "string" ? invoice.customer : "") ||
+    "Khách lẻ";
+  return [code, name].filter(Boolean).join(" · ");
 };
 
 function Field({ label, children, xs = 12, md = 6 }) {
@@ -984,6 +1052,13 @@ function TruckInventoryModal({ truck, onClose }) {
   const [loading, setLoading] = useState(false);
   const [pricesLoading, setPricesLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [detailTab, setDetailTab] = useState(0);
+  const [salesPeriod, setSalesPeriod] = useState("WEEK");
+  const [salesDate, setSalesDate] = useState(todayValue());
+  const [salesWeek, setSalesWeek] = useState(currentWeekValue());
+  const [salesSort, setSalesSort] = useState("desc");
+  const [salesInvoices, setSalesInvoices] = useState([]);
+  const [salesLoading, setSalesLoading] = useState(false);
 
   useEffect(() => {
     if (!truck) return undefined;
@@ -991,6 +1066,12 @@ function TruckInventoryModal({ truck, onClose }) {
     setDetail(null);
     setAvailableProducts([]);
     setSearch("");
+    setDetailTab(0);
+    setSalesPeriod("WEEK");
+    setSalesDate(todayValue());
+    setSalesWeek(currentWeekValue());
+    setSalesSort("desc");
+    setSalesInvoices([]);
     setLoading(true);
     setPricesLoading(true);
     TruckService.getById(getId(truck))
@@ -1026,6 +1107,151 @@ function TruckInventoryModal({ truck, onClose }) {
       active = false;
     };
   }, [truck]);
+
+  useEffect(() => {
+    if (!truck || detailTab !== 1) return undefined;
+    let active = true;
+    const range =
+      salesPeriod === "DAY"
+        ? { from: salesDate, to: salesDate }
+        : salesPeriod === "WEEK"
+        ? weekRange(salesWeek)
+        : {};
+    const params = {
+      truckId: getId(truck),
+      sourceType: "truck",
+      from: range.from,
+      to: range.to,
+      page: 1,
+      limit: 100,
+    };
+    setSalesLoading(true);
+    InvoiceService.getAll(params)
+      .then(async (firstResponse) => {
+        const firstPage = listOf(firstResponse);
+        const totalPages = metaOf(firstResponse).totalPages || 1;
+        if (totalPages <= 1) return firstPage;
+        const remaining = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, index) =>
+            InvoiceService.getAll({ ...params, page: index + 2 })
+          )
+        );
+        return firstPage.concat(...remaining.map(listOf));
+      })
+      .then(async (invoices) => {
+        const truckInvoices = invoices.filter(
+          (invoice) =>
+            invoice.sourceType === "truck" && sameId(invoice.truckId, getId(truck))
+        );
+        const completed = await Promise.all(
+          truckInvoices.map(async (invoice) => {
+            if (Array.isArray(invoice.items)) return invoice;
+            try {
+              return unwrap(await InvoiceService.getById(getId(invoice))) || invoice;
+            } catch {
+              return invoice;
+            }
+          })
+        );
+        const productIds = Array.from(
+          new Set(
+            completed.flatMap((invoice) =>
+              (Array.isArray(invoice.items) ? invoice.items : [])
+                .map(
+                  (item) =>
+                    getId(item.productId) ||
+                    getId(item.product) ||
+                    (typeof item.productId === "string" ? item.productId : null)
+                )
+                .filter(Boolean)
+            )
+          )
+        );
+        const movementGroups = await Promise.all(
+          productIds.map(async (productId) => {
+            const movementParams = {
+              from: range.from,
+              to: range.to,
+              page: 1,
+              limit: 100,
+            };
+            const firstResponse = await InventoryService.getProductMovements(
+              productId,
+              movementParams
+            );
+            const firstPage = listOf(firstResponse);
+            const totalPages = metaOf(firstResponse).totalPages || 1;
+            if (totalPages <= 1) {
+              return firstPage.map((movement) => ({ ...movement, productId }));
+            }
+            const remaining = await Promise.all(
+              Array.from({ length: totalPages - 1 }, (_, index) =>
+                InventoryService.getProductMovements(productId, {
+                  ...movementParams,
+                  page: index + 2,
+                })
+              )
+            );
+            return firstPage
+              .concat(...remaining.map(listOf))
+              .map((movement) => ({ ...movement, productId }));
+          })
+        );
+        const movements = movementGroups.flat();
+        const usedMovements = new Set();
+        const withInventorySnapshots = completed.map((invoice) => ({
+          ...invoice,
+          items: (Array.isArray(invoice.items) ? invoice.items : []).map((item) => {
+            const productId =
+              getId(item.productId) ||
+              getId(item.product) ||
+              (typeof item.productId === "string" ? item.productId : null);
+            const giftTypes = [
+              "INVOICE_GIFT_FROM_TRUCK",
+              "PROMOTION_GIFT_FROM_TRUCK",
+            ];
+            const expectedTypes =
+              item.lineType === "GIFT" ? giftTypes : ["TRUCK_SALE"];
+            const movementIndex = movements.findIndex(
+              (movement, index) =>
+                !usedMovements.has(index) &&
+                sameId(movement.productId, productId) &&
+                expectedTypes.includes(movement.type) &&
+                sameId(movement.sourceLocation?.id, getId(truck)) &&
+                (sameId(movement.reference?.id, getId(invoice)) ||
+                  (movement.reference?.code &&
+                    invoice.code &&
+                    movement.reference.code === invoice.code))
+            );
+            if (movementIndex < 0) return item;
+            usedMovements.add(movementIndex);
+            const movement = movements[movementIndex];
+            return {
+              ...item,
+              truckQuantityBefore: movement.quantityBefore,
+              truckQuantityAfter: movement.quantityAfter,
+            };
+          }),
+        }));
+        if (!active) return;
+        const sorted = [...withInventorySnapshots].sort((left, right) => {
+          const leftTime = new Date(left.createdAt || left.date || 0).getTime();
+          const rightTime = new Date(right.createdAt || right.date || 0).getTime();
+          return salesSort === "asc" ? leftTime - rightTime : rightTime - leftTime;
+        });
+        setSalesInvoices(sorted);
+      })
+      .catch((error) => {
+        if (active) {
+          setSalesInvoices([]);
+          toast.error(apiError(error, "Không thể tải lịch sử bán hàng trên xe"));
+        }
+      })
+      .finally(() => active && setSalesLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [truck, detailTab, salesPeriod, salesDate, salesWeek, salesSort]);
 
   if (!truck) return null;
 
@@ -1249,6 +1475,29 @@ function TruckInventoryModal({ truck, onClose }) {
             </Grid>
           </SoftBox>
 
+          <Tabs
+            value={detailTab}
+            onChange={(_, value) => setDetailTab(value)}
+            variant="fullWidth"
+            sx={{
+              mb: 2,
+              bgcolor: "#eef2f6",
+              borderRadius: 2,
+              p: 0.5,
+              "& .MuiTab-root": {
+                minHeight: 44,
+                borderRadius: 1.5,
+                fontWeight: 700,
+                textTransform: "none",
+              },
+              "& .Mui-selected": { bgcolor: "#fff", color: "#1565c0" },
+            }}
+          >
+            <Tab icon={<Icon>inventory_2</Icon>} iconPosition="start" label="Hàng hiện có" />
+            <Tab icon={<Icon>receipt_long</Icon>} iconPosition="start" label="Lịch sử bán hàng" />
+          </Tabs>
+
+          <SoftBox display={detailTab === 0 ? "block" : "none"}>
           <SoftBox
             display="flex"
             alignItems={{ xs: "stretch", md: "center" }}
@@ -1473,6 +1722,350 @@ function TruckInventoryModal({ truck, onClose }) {
                 </SoftBox>
               </SoftBox>
             </>
+          )}
+          </SoftBox>
+
+          {detailTab === 1 && (
+            <SoftBox>
+              <SoftBox
+                display="flex"
+                gap={1}
+                pb={1}
+                sx={{ overflowX: "auto", scrollbarWidth: "none" }}
+              >
+                {[
+                  ["DAY", "Theo ngày", "today"],
+                  ["WEEK", "Theo tuần", "date_range"],
+                  ["ALL", "Tất cả", "history"],
+                ].map(([value, label, icon]) => {
+                  const selected = salesPeriod === value;
+                  return (
+                    <SoftBox
+                      component="button"
+                      type="button"
+                      key={value}
+                      onClick={() => setSalesPeriod(value)}
+                      px={1.5}
+                      py={1}
+                      minWidth={112}
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      gap={0.75}
+                      sx={{
+                        border: `2px solid ${selected ? "#1976d2" : "#dce2e9"}`,
+                        borderRadius: 2,
+                        bgcolor: selected ? "#e3f2fd" : "#fff",
+                        color: selected ? "#0d47a1" : "#5f6b7a",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <Icon sx={{ fontSize: 20 }}>{icon}</Icon>
+                      <SoftTypography
+                        variant="button"
+                        fontWeight="bold"
+                        sx={{ color: "inherit" }}
+                      >
+                        {label}
+                      </SoftTypography>
+                    </SoftBox>
+                  );
+                })}
+              </SoftBox>
+
+              <Grid container spacing={1.25} mt={0.25} mb={2}>
+                {salesPeriod === "DAY" && (
+                  <Grid item xs={12} sm={6}>
+                    <SoftInput
+                      type="date"
+                      value={salesDate}
+                      onChange={(event) => setSalesDate(event.target.value)}
+                    />
+                  </Grid>
+                )}
+                {salesPeriod === "WEEK" && (
+                  <Grid item xs={12} sm={6}>
+                    <SoftInput
+                      type="week"
+                      value={salesWeek}
+                      onChange={(event) => setSalesWeek(event.target.value)}
+                    />
+                  </Grid>
+                )}
+                <Grid item xs={12} sm={salesPeriod === "ALL" ? 12 : 6}>
+                  <FormControl fullWidth size="small">
+                    <Select
+                      value={salesSort}
+                      onChange={(event) => setSalesSort(event.target.value)}
+                      sx={{ bgcolor: "#fff", minHeight: 40 }}
+                    >
+                      <MenuItem value="desc">Mới nhất trước</MenuItem>
+                      <MenuItem value="asc">Cũ nhất trước</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+
+              {!salesLoading && salesInvoices.length > 0 && (
+                <Grid container spacing={1} mb={1.5}>
+                  {[
+                    ["Hóa đơn", salesInvoices.length, "receipt_long", "#1565c0", "#e3f2fd"],
+                    [
+                      "Sản phẩm đã trừ",
+                      salesInvoices.reduce(
+                        (sum, invoice) =>
+                          sum +
+                          (Array.isArray(invoice.items)
+                            ? invoice.items.reduce(
+                                (itemSum, item) => itemSum + Number(item.qty || 0),
+                                0
+                              )
+                            : 0),
+                        0
+                      ),
+                      "remove_shopping_cart",
+                      "#c62828",
+                      "#ffebee",
+                    ],
+                  ].map(([label, value, icon, color, background]) => (
+                    <Grid item xs={6} key={label}>
+                      <SoftBox p={1.4} borderRadius={2} bgcolor={background}>
+                        <SoftBox display="flex" alignItems="center" gap={0.75}>
+                          <Icon sx={{ color, fontSize: 21 }}>{icon}</Icon>
+                          <SoftTypography variant="caption" color="text">
+                            {label}
+                          </SoftTypography>
+                        </SoftBox>
+                        <SoftTypography variant="h6" fontWeight="bold" sx={{ color }}>
+                          {value}
+                        </SoftTypography>
+                      </SoftBox>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
+
+              {salesLoading && (
+                <SoftBox py={6} textAlign="center">
+                  <Icon sx={{ color: "#1565c0", fontSize: 38 }}>hourglass_top</Icon>
+                  <SoftTypography variant="button" color="text" display="block" mt={1}>
+                    Đang tải lịch sử bán hàng...
+                  </SoftTypography>
+                </SoftBox>
+              )}
+
+              {!salesLoading && !salesInvoices.length && (
+                <SoftBox py={6} textAlign="center" bgcolor="#fff" borderRadius={2}>
+                  <Icon sx={{ color: "#b0bec5", fontSize: 46 }}>receipt_long</Icon>
+                  <SoftTypography variant="button" color="text" display="block" mt={1}>
+                    Không có hóa đơn bán từ xe trong khoảng thời gian này
+                  </SoftTypography>
+                </SoftBox>
+              )}
+
+              {!salesLoading &&
+                salesInvoices.map((invoice) => {
+                  const items = Array.isArray(invoice.items) ? invoice.items : [];
+                  const soldQuantity = items.reduce(
+                    (sum, item) => sum + Number(item.qty || 0),
+                    0
+                  );
+                  return (
+                    <SoftBox
+                      key={getId(invoice) || invoice.code}
+                      bgcolor="#fff"
+                      borderRadius={2.5}
+                      mb={1.25}
+                      overflow="hidden"
+                      sx={{ border: "1px solid #dfe5ec" }}
+                    >
+                      <SoftBox
+                        px={{ xs: 1.5, md: 2 }}
+                        py={1.35}
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="flex-start"
+                        gap={1}
+                        bgcolor="#f8fbff"
+                        sx={{ borderBottom: "1px solid #e5eaf0" }}
+                      >
+                        <SoftBox minWidth={0}>
+                          <SoftTypography variant="button" fontWeight="bold" display="block">
+                            {invoice.code || "Hóa đơn"}
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text" display="block">
+                            {date(invoice.createdAt || invoice.date)}
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text" display="block" noWrap>
+                            {invoiceCustomerLabel(invoice)}
+                          </SoftTypography>
+                        </SoftBox>
+                        <SoftBox
+                          px={1.1}
+                          py={0.65}
+                          bgcolor="#ffebee"
+                          borderRadius={2}
+                          textAlign="center"
+                          flexShrink={0}
+                        >
+                          <SoftTypography
+                            variant="button"
+                            fontWeight="bold"
+                            sx={{ color: "#c62828" }}
+                          >
+                            −{soldQuantity}
+                          </SoftTypography>
+                          <SoftTypography
+                            variant="caption"
+                            display="block"
+                            sx={{ color: "#8e1b1b" }}
+                          >
+                            sản phẩm
+                          </SoftTypography>
+                        </SoftBox>
+                      </SoftBox>
+
+                      <SoftBox px={{ xs: 1.5, md: 2 }} py={0.5}>
+                        {items.map((item, index) => {
+                          const product =
+                            (item.productId && typeof item.productId === "object"
+                              ? item.productId
+                              : null) || item.product || {};
+                          const isGift = item.lineType === "GIFT";
+                          const stockSnapshot = saleInventorySnapshot(item);
+                          const unit = item.unit || product.unit || "";
+                          return (
+                            <SoftBox
+                              key={`${getId(item) || getId(product) || item.productId}-${index}`}
+                              py={1.25}
+                              sx={{
+                                borderBottom:
+                                  index < items.length - 1 ? "1px dashed #e3e7ed" : 0,
+                              }}
+                            >
+                              <SoftBox
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="space-between"
+                                gap={1}
+                              >
+                                <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                                  <SoftBox
+                                    width={34}
+                                    height={34}
+                                    borderRadius="50%"
+                                    bgcolor={isGift ? "#fff3e0" : "#e8f5e9"}
+                                    color={isGift ? "#ef6c00" : "#2e7d32"}
+                                    display="flex"
+                                    alignItems="center"
+                                    justifyContent="center"
+                                    flexShrink={0}
+                                  >
+                                    <Icon sx={{ fontSize: 19 }}>
+                                      {isGift ? "redeem" : "remove_shopping_cart"}
+                                    </Icon>
+                                  </SoftBox>
+                                  <SoftBox minWidth={0}>
+                                    <SoftTypography
+                                      variant="button"
+                                      fontWeight="bold"
+                                      display="block"
+                                    >
+                                      {item.productName ||
+                                        product.name ||
+                                        item.name ||
+                                        "Sản phẩm"}
+                                    </SoftTypography>
+                                    <SoftTypography variant="caption" color="text" display="block">
+                                      {[
+                                        item.productCode || product.code,
+                                        isGift ? "Quà tặng" : "Hàng bán",
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </SoftTypography>
+                                  </SoftBox>
+                                </SoftBox>
+                                <SoftTypography variant="caption" color="text" flexShrink={0}>
+                                  {unit}
+                                </SoftTypography>
+                              </SoftBox>
+
+                              <SoftBox
+                                mt={1.1}
+                                display="grid"
+                                sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+                                gap={{ xs: 0.75, md: 1 }}
+                              >
+                                {[
+                                  ["Trước khi bán", stockSnapshot.before, "#1565c0", "#e3f2fd"],
+                                  ["Đã trừ", stockSnapshot.deducted, "#c62828", "#ffebee"],
+                                  ["Còn lại", stockSnapshot.after, "#2e7d32", "#e8f5e9"],
+                                ].map(([label, value, color, background]) => (
+                                  <SoftBox
+                                    key={label}
+                                    px={{ xs: 0.75, md: 1.25 }}
+                                    py={0.85}
+                                    borderRadius={1.75}
+                                    bgcolor={background}
+                                    textAlign="center"
+                                  >
+                                    <SoftTypography
+                                      variant="caption"
+                                      display="block"
+                                      sx={{
+                                        color,
+                                        fontSize: { xs: 10, sm: 12 },
+                                        lineHeight: 1.2,
+                                      }}
+                                    >
+                                      {label}
+                                    </SoftTypography>
+                                    <SoftTypography
+                                      variant="button"
+                                      fontWeight="bold"
+                                      sx={{ color, fontSize: { xs: 14, sm: 16 } }}
+                                    >
+                                      {value === null
+                                        ? "—"
+                                        : `${label === "Đã trừ" ? "−" : ""}${value}`}
+                                    </SoftTypography>
+                                  </SoftBox>
+                                ))}
+                              </SoftBox>
+                              {stockSnapshot.before === null &&
+                                stockSnapshot.after === null && (
+                                  <SoftTypography
+                                    variant="caption"
+                                    color="text"
+                                    display="block"
+                                    mt={0.6}
+                                    textAlign="right"
+                                    sx={{ fontStyle: "italic" }}
+                                  >
+                                    Hóa đơn cũ chưa có snapshot tồn xe
+                                  </SoftTypography>
+                                )}
+                            </SoftBox>
+                          );
+                        })}
+                        {!items.length && (
+                          <SoftTypography
+                            variant="caption"
+                            color="text"
+                            display="block"
+                            py={1.5}
+                            textAlign="center"
+                          >
+                            API danh sách chưa trả chi tiết sản phẩm của hóa đơn này
+                          </SoftTypography>
+                        )}
+                      </SoftBox>
+                    </SoftBox>
+                  );
+                })}
+            </SoftBox>
           )}
         </SoftBox>
       </SoftBox>
