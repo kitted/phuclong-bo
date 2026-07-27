@@ -70,6 +70,8 @@ const invoiceCustomer = (invoice = {}) => {
     "Khách lẻ";
   return { code, name, label: code ? `${code} · ${name}` : name };
 };
+const invoiceReceivedAmount = (invoice = {}) =>
+  Number(invoice.receivedAmount ?? invoice.totalReceivedAmount ?? invoice.paidAmount ?? 0);
 
 const KPI_META = {
   PROMOTION_ACTIVATION_COUNT: { label: "Mã kích hoạt", icon: "confirmation_number", money: false },
@@ -170,7 +172,7 @@ export default function StaffHome() {
     try {
       const requests = [
         DashboardAnalyticsService.overview(params),
-        InvoiceService.getAll({ page: 1, limit: 5, sortBy: "date", sortOrder: "desc" }),
+        InvoiceService.getAll({ page: 1, limit: 3, sortBy: "date", sortOrder: "desc" }),
         EmployeeKpiService.getAll({ status: "ACTIVE", page: 1, limit: 20 }),
       ];
       const [overviewResult, invoiceResult, kpiResult] = await Promise.allSettled(requests);
@@ -277,7 +279,18 @@ export default function StaffHome() {
                     </SoftTypography>
                     <SoftTypography variant="caption" color="text">{formatDateTime(invoice.createdAt || invoice.date)} · {invoice.paymentStatus === "PAID" ? "Đã thanh toán" : invoice.paymentStatus === "PARTIAL" ? "Thanh toán một phần" : "Cộng công nợ"}</SoftTypography>
                   </SoftBox>
-                  <SoftTypography variant="button" fontWeight="bold">{money(invoice.grandTotal ?? invoice.totalAmount)}</SoftTypography>
+                  <SoftBox textAlign="right" flexShrink={0}>
+                    <SoftTypography variant="caption" color="text" display="block">
+                      Đã trả (3)
+                    </SoftTypography>
+                    <SoftTypography
+                      variant="button"
+                      fontWeight="bold"
+                      sx={{ color: invoiceReceivedAmount(invoice) > 0 ? "#2e7d32" : "#6b7280" }}
+                    >
+                      {money(invoiceReceivedAmount(invoice))}
+                    </SoftTypography>
+                  </SoftBox>
                 </SoftBox>
               );
             })}
