@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import Card from "@mui/material/Card";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
@@ -28,6 +28,8 @@ import { DebtPaymentHistory, DebtPaymentModal } from "./debt-payment";
 import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
 import CustomerDebtHistory from "./debt-history";
+
+const CustomerStoreProfile = lazy(() => import("./store-profile"));
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
@@ -95,6 +97,107 @@ const importCustomerBatches = async (rows) => {
   }
   return summary;
 };
+const normalizeText = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .trim()
+    .toUpperCase();
+const interactionStatus = (value, connectedLabel, disconnectedLabel) => {
+  const normalized = normalizeText(value);
+  if (
+    ["DA KET BAN", "DA GUI", "CO", "YES", "TRUE", "CONNECTED", "SENT"].includes(normalized)
+  )
+    return connectedLabel;
+  if (
+    [
+      "CHUA KET BAN",
+      "KHONG GUI",
+      "CHUA GUI",
+      "KHONG",
+      "NO",
+      "FALSE",
+      "NOT_CONNECTED",
+      "NOT_SENT",
+    ].includes(normalized)
+  )
+    return disconnectedLabel;
+  return "";
+};
+const interactionDate = (value) => {
+  if (!value) return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+  const text = String(value).trim();
+  const vietnameseDate = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (vietnameseDate) {
+    const [, day, month, year] = vietnameseDate;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T12:00:00+07:00`;
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+};
+const normalizeInteractionRow = (row, index) => {
+  const customerCode = String(
+    row.makhachhang || row.customerCode || row.customercode || ""
+  )
+    .trim()
+    .toUpperCase();
+  const rawDate = row.ngay || row.date || row.interactiondate || "";
+  return {
+    rowNumber: index + 2,
+    customerCode,
+    customerName: String(row.tenkhachhang || row.customerName || row.customername || "").trim(),
+    zaloStatus: interactionStatus(
+      row.tinhtrangzalo || row.zaloStatus || row.zalostatus,
+      "CONNECTED",
+      "NOT_CONNECTED"
+    ),
+    invoiceStatus: interactionStatus(
+      row.tinhtranghoadon || row.invoiceStatus || row.invoicestatus,
+      "SENT",
+      "NOT_SENT"
+    ),
+    interaction: String(row.tuongtac || row.interaction || row.action || "").trim(),
+    phone: normalizePhone(row.sodienthoai || row.phone || row.sdt || ""),
+    note: String(row.note || row.ghichu || "").trim(),
+    occurredAt: interactionDate(rawDate),
+    originalDate: rawDate,
+  };
+};
+const CUSTOMER_INTERACTION_IMPORT_BATCH_SIZE = 50;
+const importInteractionBatches = async (rows) => {
+  const summary = {
+    totalRows: rows.length,
+    imported: 0,
+    created: 0,
+    updated: 0,
+    zaloUpdated: 0,
+    duplicatesSkipped: 0,
+    failed: 0,
+    errors: [],
+  };
+  for (let start = 0; start < rows.length; start += CUSTOMER_INTERACTION_IMPORT_BATCH_SIZE) {
+    const batch = rows.slice(start, start + CUSTOMER_INTERACTION_IMPORT_BATCH_SIZE);
+    const response = await CustomerService.importInteractions(batch);
+    const result = response.data?.data || {};
+    summary.imported += Number(result.imported) || 0;
+    summary.created += Number(result.created) || 0;
+    summary.updated += Number(result.updated) || 0;
+    summary.zaloUpdated += Number(result.zaloUpdated) || 0;
+    summary.duplicatesSkipped += Number(result.duplicatesSkipped) || 0;
+    summary.failed += Number(result.failed) || 0;
+    if (Array.isArray(result.errors)) {
+      summary.errors.push(
+        ...result.errors.map((error) => ({
+          ...error,
+          row: error.row || error.rowNumber || batch[Number(error.index) || 0]?.rowNumber,
+        }))
+      );
+    }
+  }
+  return summary;
+};
 const badge = (label, color, background) => (
   <span
     style={{
@@ -109,6 +212,67 @@ const badge = (label, color, background) => (
     {label}
   </span>
 );
+const hasCustomerLocation = (customer = {}) => {
+  if (typeof customer.hasStoreLocation === "boolean") return customer.hasStoreLocation;
+  const location = customer.storeLocation || {};
+  const latitude = Number(location.latitude ?? location.lat);
+  const longitude = Number(location.longitude ?? location.lng ?? location.lon);
+  return Number.isFinite(latitude) && Number.isFinite(longitude);
+};
+const hasCustomerStorefront = (customer = {}) => {
+  if (typeof customer.hasStorefrontImage === "boolean") return customer.hasStorefrontImage;
+  const image = customer.storefrontImage || {};
+  return Boolean(
+    image.url ||
+      image.secureUrl ||
+      image.secure_url ||
+      customer.storefrontImageUrl ||
+      customer.storeImageUrl
+  );
+};
+const CustomerStoreTags = ({ customer }) => {
+  const hasLocation = hasCustomerLocation(customer);
+  const hasStorefront = hasCustomerStorefront(customer);
+  if (!hasLocation && !hasStorefront) return null;
+  return (
+    <SoftBox display="flex" gap={0.6} flexWrap="wrap" mt={0.5}>
+      {hasLocation && (
+        <SoftBox
+          display="inline-flex"
+          alignItems="center"
+          gap={0.35}
+          px={0.75}
+          py={0.2}
+          borderRadius={1}
+          bgcolor="#e7f3ff"
+          sx={{ color: "#1565c0" }}
+        >
+          <Icon sx={{ fontSize: "14px !important" }}>location_on</Icon>
+          <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "inherit" }}>
+            Vị trí
+          </SoftTypography>
+        </SoftBox>
+      )}
+      {hasStorefront && (
+        <SoftBox
+          display="inline-flex"
+          alignItems="center"
+          gap={0.35}
+          px={0.75}
+          py={0.2}
+          borderRadius={1}
+          bgcolor="#fff3e0"
+          sx={{ color: "#e65100" }}
+        >
+          <Icon sx={{ fontSize: "14px !important" }}>storefront</Icon>
+          <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "inherit" }}>
+            Cửa tiệm
+          </SoftTypography>
+        </SoftBox>
+      )}
+    </SoftBox>
+  );
+};
 const normalizeCustomerDetail = (response) => {
   const data = response?.data?.data || response?.data || {};
   return {
@@ -306,7 +470,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
       setInteractionOpen(false);
       setInteraction({ channel: "Zalo", action: "", result: "" });
       await loadDetail();
-      setTab(6);
+      setTab(7);
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể ghi nhận tương tác");
     } finally {
@@ -467,6 +631,7 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
                   `Mã kích hoạt (${activations.length})`,
                   "Phiếu thu công nợ",
                   "Lịch sử công nợ",
+                  "Cửa tiệm",
                   `Tương tác (${customer.interactions.length})`,
                 ].map((label, index) => (
                   <SoftBox
@@ -611,13 +776,47 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
                   />
                 )}
                 {tab === 6 && (
+                  <Suspense
+                    fallback={
+                      <SoftBox py={6} textAlign="center">
+                        <SoftTypography variant="button" color="text">
+                          Đang tải bản đồ cửa tiệm...
+                        </SoftTypography>
+                      </SoftBox>
+                    }
+                  >
+                    <CustomerStoreProfile
+                      customer={customer}
+                      readOnly={readOnly}
+                      onSaved={loadDetail}
+                    />
+                  </Suspense>
+                )}
+                {tab === 7 && (
                   <DataTable
-                    headers={["Thời gian", "Kênh", "Tương tác", "Kết quả"]}
+                    headers={[
+                      "Ngày",
+                      "Tình trạng Zalo",
+                      "Tình trạng hóa đơn",
+                      "Tương tác",
+                      "Số điện thoại",
+                      "Note",
+                    ]}
                     rows={customer.interactions.map((item) => [
-                      dateTime(item.at),
-                      item.channel,
-                      item.action,
-                      item.result,
+                      dateTime(item.occurredAt || item.at),
+                      item.zaloStatus === "CONNECTED"
+                        ? badge("Đã kết bạn", "#2E7D32", "#E8F5E9")
+                        : item.zaloStatus === "NOT_CONNECTED"
+                        ? badge("Chưa kết bạn", "#6B7280", "#F3F4F6")
+                        : item.channel || "—",
+                      item.invoiceStatus === "SENT"
+                        ? badge("Đã gửi", "#4338CA", "#EDE9FE")
+                        : item.invoiceStatus === "NOT_SENT"
+                        ? badge("Không gửi", "#475569", "#E2E8F0")
+                        : "—",
+                      item.interaction || item.action || "—",
+                      item.phone || customer.phone || "—",
+                      item.note || item.result || "—",
                     ])}
                   />
                 )}
@@ -773,7 +972,10 @@ export default function KhachHang() {
   const [selected, setSelected] = useState(null);
   const [detailId, setDetailId] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [interactionImporting, setInteractionImporting] = useState(false);
+  const [interactionExporting, setInteractionExporting] = useState(false);
   const importInputRef = useRef(null);
+  const interactionImportInputRef = useRef(null);
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 400);
     return () => clearTimeout(timer);
@@ -851,6 +1053,126 @@ export default function KhachHang() {
       event.target.value = "";
     }
   };
+  const handleInteractionImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setInteractionImporting(true);
+      const parsedRows = (await readExcelFile(file)).map(normalizeInteractionRow);
+      if (!parsedRows.length) throw new Error("File không có dữ liệu tương tác");
+      if (parsedRows.length > 10000)
+        throw new Error("Mỗi lần chỉ được import tối đa 10.000 dòng");
+      const localErrors = [];
+      const validRows = parsedRows.filter((row) => {
+        if (!row.customerCode) {
+          localErrors.push({ row: row.rowNumber, message: "Thiếu mã khách hàng", data: row });
+          return false;
+        }
+        if (!row.occurredAt) {
+          localErrors.push({
+            row: row.rowNumber,
+            message: "Ngày không hợp lệ hoặc đang để trống",
+            data: row,
+          });
+          return false;
+        }
+        if (
+          !row.zaloStatus &&
+          !row.invoiceStatus &&
+          !row.interaction &&
+          !row.note
+        ) {
+          localErrors.push({
+            row: row.rowNumber,
+            message: "Dòng chưa có nội dung hoặc trạng thái tương tác",
+            data: row,
+          });
+          return false;
+        }
+        return true;
+      });
+      const result = validRows.length
+        ? await importInteractionBatches(validRows)
+        : {
+            totalRows: 0,
+            imported: 0,
+            created: 0,
+            updated: 0,
+            zaloUpdated: 0,
+            duplicatesSkipped: 0,
+            failed: 0,
+            errors: [],
+          };
+      const errors = [...localErrors, ...(result.errors || [])];
+      toast.success(
+        `Import tương tác: thành công ${
+          result.imported || result.created || result.updated || 0
+        }, cập nhật Zalo ${result.zaloUpdated || 0}, bỏ qua trùng ${
+          result.duplicatesSkipped || 0
+        }, lỗi ${errors.length}`
+      );
+      if (errors.length) {
+        exportExcel(
+          errors.map((error) => ({
+            Dòng: error.row,
+            "Lỗi import": error.message,
+            "Mã khách hàng": error.data?.customerCode || "",
+            "Tên khách hàng": error.data?.customerName || "",
+            "Ngày": error.data?.originalDate || error.data?.occurredAt || "",
+            "Dữ liệu": JSON.stringify(error.data || {}),
+          })),
+          `loi-import-tuong-tac-khach-hang-${Date.now()}.xlsx`,
+          "Lỗi import"
+        );
+      }
+      refresh(true);
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          "Không thể import tình hình tương tác khách hàng"
+      );
+    } finally {
+      setInteractionImporting(false);
+      event.target.value = "";
+    }
+  };
+  const handleInteractionExport = async () => {
+    try {
+      setInteractionExporting(true);
+      const response = await CustomerService.exportInteractions();
+      downloadBlob(
+        response.data,
+        `tinh-hinh-tuong-tac-khach-hang-${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Không thể export tình hình tương tác khách hàng"
+      );
+    } finally {
+      setInteractionExporting(false);
+    }
+  };
+  const downloadInteractionTemplate = () => {
+    const displayDate = new Date().toLocaleDateString("vi-VN");
+    exportExcel(
+      [
+        {
+          "MÃ KHÁCH HÀNG": "KH001",
+          "TÊN KHÁCH HÀNG": "KHÁCH HÀNG MẪU",
+          "TÌNH TRẠNG ZALO": "ĐÃ KẾT BẠN",
+          "TÌNH TRẠNG HOÁ ĐƠN": "ĐÃ GỬI",
+          "TƯƠNG TÁC": "Khách đã nhận hóa đơn",
+          "#": "",
+          "SỐ ĐIỆN THOẠI": "0901234567",
+          NOTE: "Ghi chú mẫu",
+          NGÀY: displayDate,
+        },
+      ],
+      "mau-import-tuong-tac-khach-hang.xlsx",
+      "Tương tác khách hàng"
+    );
+  };
   return (
     <DashboardLayout compactMobile={isStaff}>
       {!isStaff && <DashboardNavbar />}
@@ -909,7 +1231,7 @@ export default function KhachHang() {
                   disabled={importing}
                   onClick={() => importInputRef.current?.click()}
                 >
-                  {importing ? "Đang import..." : "Import Excel"}
+                  {importing ? "Đang import..." : "Import khách hàng"}
                 </SoftButton>
                 <SoftButton
                   color="success"
@@ -917,8 +1239,54 @@ export default function KhachHang() {
                   startIcon={<Icon>download</Icon>}
                   onClick={handleExport}
                 >
-                  Export Excel
+                  Export khách hàng
                 </SoftButton>
+                <input
+                  ref={interactionImportInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleInteractionImport}
+                  style={{ display: "none" }}
+                />
+                <SoftBox
+                  display="flex"
+                  gap={0.75}
+                  flexWrap="wrap"
+                  p={0.6}
+                  borderRadius={2}
+                  bgcolor="#f3f8ff"
+                  sx={{ border: "1px solid #bbdefb" }}
+                >
+                  <SoftButton
+                    color="secondary"
+                    variant="text"
+                    size="small"
+                    startIcon={<Icon>description</Icon>}
+                    onClick={downloadInteractionTemplate}
+                  >
+                    File mẫu tương tác
+                  </SoftButton>
+                  <SoftButton
+                    color="info"
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Icon>upload_file</Icon>}
+                    disabled={interactionImporting}
+                    onClick={() => interactionImportInputRef.current?.click()}
+                  >
+                    {interactionImporting ? "Đang import..." : "Import tương tác"}
+                  </SoftButton>
+                  <SoftButton
+                    color="success"
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Icon>download</Icon>}
+                    disabled={interactionExporting}
+                    onClick={handleInteractionExport}
+                  >
+                    {interactionExporting ? "Đang export..." : "Export tương tác"}
+                  </SoftButton>
+                </SoftBox>
                 <SoftButton
                   color="info"
                   variant="gradient"
@@ -982,7 +1350,40 @@ export default function KhachHang() {
                 const warning = item.debtLimit > 0 && item.debt >= item.debtLimit;
                 return <SoftBox key={item.id || item._id} py={1.5} display="flex" gap={1.5} alignItems="center" onClick={() => setDetailId(item.id || item._id)} sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}>
                   <SoftBox width={44} height={44} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>person</Icon></SoftBox>
-                  <SoftBox flex={1} minWidth={0}><SoftBox display="flex" alignItems="center" gap={0.75}><SoftTypography variant="button" fontWeight="bold" display="block" noWrap>{item.name}</SoftTypography>{item.zaloConnected && <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "#0068ff", bgcolor: "#e7f3ff", px: 0.75, py: 0.15, borderRadius: 1 }}>Zalo</SoftTypography>}</SoftBox><SoftTypography variant="caption" color="text">{item.code} · {item.phone}</SoftTypography><SoftTypography variant="caption" display="block" sx={{ color: warning ? "#c62828" : "#65676b" }}>Công nợ {money(item.debt)} / {money(item.debtLimit)}</SoftTypography></SoftBox>
+                  <SoftBox flex={1} minWidth={0}>
+                    <SoftBox display="flex" alignItems="center" gap={0.75}>
+                      <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
+                        {item.name}
+                      </SoftTypography>
+                      {item.zaloConnected && (
+                        <SoftTypography
+                          variant="caption"
+                          fontWeight="bold"
+                          sx={{
+                            color: "#0068ff",
+                            bgcolor: "#e7f3ff",
+                            px: 0.75,
+                            py: 0.15,
+                            borderRadius: 1,
+                          }}
+                        >
+                          Zalo
+                        </SoftTypography>
+                      )}
+                    </SoftBox>
+                    <SoftTypography variant="caption" color="text">
+                      {item.code} · {item.phone}
+                    </SoftTypography>
+                    <CustomerStoreTags customer={item} />
+                    <SoftTypography
+                      variant="caption"
+                      display="block"
+                      mt={0.35}
+                      sx={{ color: warning ? "#c62828" : "#65676b" }}
+                    >
+                      Công nợ {money(item.debt)} / {money(item.debtLimit)}
+                    </SoftTypography>
+                  </SoftBox>
                   <Icon>chevron_right</Icon>
                 </SoftBox>;
               })}
@@ -1040,6 +1441,7 @@ export default function KhachHang() {
                             <SoftTypography variant="caption" display="block" color="text">
                               {item.code}
                             </SoftTypography>
+                            <CustomerStoreTags customer={item} />
                           </td>
                           <td style={{ padding: 10, fontSize: 13 }}>
                             {item.phone}

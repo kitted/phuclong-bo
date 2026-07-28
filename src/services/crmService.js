@@ -31,6 +31,24 @@ export const CustomerService = {
     AxiosInstance.post(`/admin/customers/${id}/interactions`, payload),
   importExcel: (rows) => AxiosInstance.post("/admin/customers/import", { rows }),
   exportExcel: () => AxiosInstance.get("/admin/customers/export", { responseType: "blob" }),
+  importInteractions: (rows) =>
+    AxiosInstance.post("/admin/customers/interactions/import", { rows }),
+  exportInteractions: (params = {}) =>
+    AxiosInstance.get("/admin/customers/interactions/export", {
+      params,
+      responseType: "blob",
+    }),
+  updateStoreProfile: (id, payload) =>
+    AxiosInstance.patch(`/admin/customers/${id}/store-profile`, payload),
+  uploadStorefrontImage: (id, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return AxiosInstance.post(`/admin/customers/${id}/storefront-image`, formData);
+  },
+  deleteStorefrontImage: (id) =>
+    AxiosInstance.delete(`/admin/customers/${id}/storefront-image`),
+  deleteStoreProfile: (id) =>
+    AxiosInstance.delete(`/admin/customers/${id}/store-profile`),
   getPromotionActivations: (id, params = {}) =>
     AxiosInstance.get(`/admin/customers/${id}/promotion-activations`, { params }),
   getDebtHistory: (id, params = {}) =>
