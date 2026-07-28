@@ -273,6 +273,23 @@ const CustomerStoreTags = ({ customer }) => {
     </SoftBox>
   );
 };
+const UnassignedCodeTag = () => (
+  <SoftBox
+    display="inline-flex"
+    alignItems="center"
+    gap={0.35}
+    px={0.75}
+    py={0.2}
+    borderRadius={1}
+    bgcolor="#f3e5f5"
+    sx={{ color: "#7b1fa2" }}
+  >
+    <Icon sx={{ fontSize: "14px !important" }}>badge</Icon>
+    <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "inherit" }}>
+      Chưa có mã
+    </SoftTypography>
+  </SoftBox>
+);
 const normalizeCustomerDetail = (response) => {
   const data = response?.data?.data || response?.data || {};
   return {
@@ -424,7 +441,183 @@ function CustomerForm({ open, customer, onClose, onSaved }) {
   );
 }
 
-function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false }) {
+function CustomerCodeModal({ open, customer, onClose, onSaved }) {
+  const [code, setCode] = useState("");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setCode(customer?.code || "");
+      setReason("");
+    }
+  }, [open, customer]);
+  const save = async () => {
+    if (!code.trim()) return toast.error("Vui lòng nhập mã khách hàng");
+    if (!reason.trim()) return toast.error("Vui lòng nhập lý do cấp hoặc đổi mã");
+    try {
+      setSaving(true);
+      await CustomerService.updateCode(customer.id || customer._id, code, reason);
+      toast.success(customer.code ? "Đã đổi mã khách hàng" : "Đã cấp mã khách hàng");
+      await onSaved?.();
+      onClose();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể cập nhật mã khách hàng");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Modal open={open} onClose={onClose}>
+      <SoftBox
+        sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "92%", sm: 480 },
+          bgcolor: "#fff",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: { xs: 2, sm: 3 },
+        }}
+      >
+        <SoftTypography variant="h5" fontWeight="bold">
+          {customer?.code ? "Đổi mã khách hàng" : "Cấp mã khách hàng"}
+        </SoftTypography>
+        <SoftTypography variant="caption" color="text" display="block" mb={2}>
+          Việc đổi mã không làm thay đổi mã snapshot trên các hóa đơn cũ.
+        </SoftTypography>
+        <SoftTypography variant="caption">Mã khách hàng mới *</SoftTypography>
+        <SoftInput
+          value={code}
+          placeholder="VD: KH405"
+          onChange={(event) =>
+            setCode(event.target.value.toUpperCase().replace(/\s+/g, ""))
+          }
+        />
+        <SoftTypography variant="caption" display="block" mt={1.5}>
+          Lý do cấp/đổi mã *
+        </SoftTypography>
+        <SoftInput
+          value={reason}
+          multiline
+          minRows={3}
+          inputProps={{ maxLength: 500 }}
+          placeholder="Nhập lý do để phục vụ truy xuất..."
+          onChange={(event) => setReason(event.target.value)}
+        />
+        <SoftBox display="flex" gap={1} mt={2.5}>
+          <SoftButton color="secondary" variant="outlined" fullWidth onClick={onClose}>
+            Hủy
+          </SoftButton>
+          <SoftButton color="info" variant="gradient" fullWidth disabled={saving} onClick={save}>
+            {saving ? "Đang lưu..." : customer?.code ? "Đổi mã" : "Cấp mã"}
+          </SoftButton>
+        </SoftBox>
+      </SoftBox>
+    </Modal>
+  );
+}
+
+function DeleteCustomerModal({ open, customer, onClose, onDeleted }) {
+  const [reason, setReason] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  useEffect(() => {
+    if (open) setReason("");
+  }, [open]);
+  const remove = async () => {
+    if (Number(customer?.debt || 0) > 0)
+      return toast.error("Không thể xóa khách hàng đang còn công nợ");
+    if (!reason.trim()) return toast.error("Vui lòng nhập lý do xóa khách hàng");
+    try {
+      setDeleting(true);
+      await CustomerService.remove(customer.id || customer._id, reason);
+      toast.success("Đã xóa khách hàng");
+      onClose();
+      await onDeleted?.();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể xóa khách hàng");
+    } finally {
+      setDeleting(false);
+    }
+  };
+  return (
+    <Modal open={open} onClose={onClose}>
+      <SoftBox
+        sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "92%", sm: 480 },
+          bgcolor: "#fff",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: { xs: 2, sm: 3 },
+        }}
+      >
+        <SoftTypography variant="h5" fontWeight="bold" color="error">
+          Xóa khách hàng
+        </SoftTypography>
+        <SoftTypography variant="button" display="block" mt={1}>
+          {customer?.code || "Chưa có mã"} · {customer?.name}
+        </SoftTypography>
+        <SoftBox
+          mt={1.5}
+          p={1.25}
+          borderRadius={1.5}
+          bgcolor={Number(customer?.debt || 0) > 0 ? "#ffebee" : "#fff8e1"}
+        >
+          <SoftTypography
+            variant="caption"
+            fontWeight="bold"
+            sx={{ color: Number(customer?.debt || 0) > 0 ? "#c62828" : "#e65100" }}
+          >
+            {Number(customer?.debt || 0) > 0
+              ? `Khách hàng còn công nợ ${money(customer.debt)} nên chưa thể xóa.`
+              : "Khách sẽ được lưu trữ dạng đã xóa. Mã cũ có thể cấp cho khách hàng khác."}
+          </SoftTypography>
+        </SoftBox>
+        <SoftTypography variant="caption" display="block" mt={1.5}>
+          Lý do xóa *
+        </SoftTypography>
+        <SoftInput
+          value={reason}
+          multiline
+          minRows={3}
+          inputProps={{ maxLength: 500 }}
+          disabled={Number(customer?.debt || 0) > 0}
+          placeholder="Nhập lý do để phục vụ audit..."
+          onChange={(event) => setReason(event.target.value)}
+        />
+        <SoftBox display="flex" gap={1} mt={2.5}>
+          <SoftButton color="secondary" variant="outlined" fullWidth onClick={onClose}>
+            Hủy
+          </SoftButton>
+          <SoftButton
+            color="error"
+            variant="gradient"
+            fullWidth
+            disabled={deleting || Number(customer?.debt || 0) > 0}
+            onClick={remove}
+          >
+            {deleting ? "Đang xóa..." : "Xác nhận xóa"}
+          </SoftButton>
+        </SoftBox>
+      </SoftBox>
+    </Modal>
+  );
+}
+
+function CustomerDetail({
+  customerId,
+  open,
+  onClose,
+  onEdit,
+  onChanged,
+  onDeleted,
+  readOnly = false,
+}) {
   const [customer, setCustomer] = useState(null);
   const [tab, setTab] = useState(0);
   const [interactionOpen, setInteractionOpen] = useState(false);
@@ -433,6 +626,8 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
   const [activations, setActivations] = useState([]);
   const [debtPaymentOpen, setDebtPaymentOpen] = useState(false);
   const [debtRefreshKey, setDebtRefreshKey] = useState(0);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const loadDetail = () =>
     CustomerService.getById(customerId).then((response) =>
       setCustomer(normalizeCustomerDetail(response))
@@ -511,7 +706,8 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
                   {customer.name}
                 </SoftTypography>
                 <SoftTypography variant="button" color="text">
-                  {customer.code} · {customer.phone} · {customer.email || "Chưa có email"}
+                  {customer.code || "Chưa có mã"} · {customer.phone || "Chưa có SĐT"} ·{" "}
+                  {customer.email || "Chưa có email"}
                 </SoftTypography>
               </SoftBox>
               <SoftBox display="flex" gap={1}>
@@ -544,12 +740,26 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
                 >
                   Chỉnh sửa
                 </SoftButton>}
+                {!readOnly && (
+                  <Tooltip title={customer.code ? "Đổi mã khách hàng" : "Cấp mã khách hàng"}>
+                    <IconButton color="info" onClick={() => setCodeOpen(true)}>
+                      <Icon>{customer.code ? "badge" : "add_card"}</Icon>
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {!readOnly && (
+                  <Tooltip title="Xóa khách hàng">
+                    <IconButton color="error" onClick={() => setDeleteOpen(true)}>
+                      <Icon>delete_outline</Icon>
+                    </IconButton>
+                  </Tooltip>
+                )}
                 <IconButton onClick={onClose}>
                   <Icon>close</Icon>
                 </IconButton>
               </SoftBox>
             </SoftBox>
-            {customer.debt > customer.debtLimit && (
+            {customer.debtLimit > 0 && customer.debt > customer.debtLimit && (
               <SoftBox
                 mt={2}
                 p={1.5}
@@ -895,6 +1105,21 @@ function CustomerDetail({ customerId, open, onClose, onEdit, readOnly = false })
                 </SoftBox>
               </SoftBox>
             </Modal>
+            <CustomerCodeModal
+              open={codeOpen}
+              customer={customer}
+              onClose={() => setCodeOpen(false)}
+              onSaved={async () => {
+                await loadDetail();
+                onChanged?.();
+              }}
+            />
+            <DeleteCustomerModal
+              open={deleteOpen}
+              customer={customer}
+              onClose={() => setDeleteOpen(false)}
+              onDeleted={onDeleted}
+            />
             <DebtPaymentModal
               open={debtPaymentOpen}
               customer={customer}
@@ -1372,8 +1597,13 @@ export default function KhachHang() {
                       )}
                     </SoftBox>
                     <SoftTypography variant="caption" color="text">
-                      {item.code} · {item.phone}
+                      {item.code || "Chưa có mã"} · {item.phone || "Chưa có SĐT"}
                     </SoftTypography>
+                    {!item.code && (
+                      <SoftBox mt={0.5}>
+                        <UnassignedCodeTag />
+                      </SoftBox>
+                    )}
                     <CustomerStoreTags customer={item} />
                     <SoftTypography
                       variant="caption"
@@ -1438,9 +1668,15 @@ export default function KhachHang() {
                             <SoftTypography variant="button" fontWeight="bold">
                               {item.name}
                             </SoftTypography>
-                            <SoftTypography variant="caption" display="block" color="text">
-                              {item.code}
-                            </SoftTypography>
+                            {item.code ? (
+                              <SoftTypography variant="caption" display="block" color="text">
+                                {item.code}
+                              </SoftTypography>
+                            ) : (
+                              <SoftBox mt={0.5}>
+                                <UnassignedCodeTag />
+                              </SoftBox>
+                            )}
                             <CustomerStoreTags customer={item} />
                           </td>
                           <td style={{ padding: 10, fontSize: 13 }}>
@@ -1540,6 +1776,11 @@ export default function KhachHang() {
         open={Boolean(detailId)}
         onClose={() => setDetailId(null)}
         readOnly={isStaff}
+        onChanged={() => refresh()}
+        onDeleted={() => {
+          setDetailId(null);
+          refresh(true);
+        }}
         onEdit={(customer) => {
           setDetailId(null);
           setSelected(customer);

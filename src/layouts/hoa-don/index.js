@@ -163,7 +163,16 @@ const invoiceCustomer = (invoice = {}) => {
     legacyCustomer.phone ||
     invoice.customerPhone ||
     "";
-  return { code, name, phone, label: code ? `${code} · ${name}` : name };
+  const isUnassigned =
+    populatedCustomer.codeStatus === "UNASSIGNED" ||
+    snapshot.codeStatus === "UNASSIGNED" ||
+    invoice.customerCodeStatus === "UNASSIGNED";
+  return {
+    code,
+    name,
+    phone,
+    label: code ? `${code} · ${name}` : isUnassigned ? `Chưa có mã · ${name}` : name,
+  };
 };
 
 function Field({ label, children, xs = 12, md = 6 }) {
@@ -318,7 +327,14 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     allowDebtLimitOverride: false,
     debtOverrideReason: "",
   });
+  const [customerMode, setCustomerMode] = useState("EXISTING");
   const [customer, setCustomer] = useState(null);
+  const [newCustomer, setNewCustomer] = useState({
+    name: "",
+    phone: "",
+    address: "",
+    note: "",
+  });
   const [customerSearch, setCustomerSearch] = useState("");
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(false);
@@ -385,7 +401,9 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       allowDebtLimitOverride: false,
       debtOverrideReason: "",
     });
+    setCustomerMode("EXISTING");
     setCustomer(null);
+    setNewCustomer({ name: "", phone: "", address: "", note: "" });
     setSalesperson(isAdmin ? null : authUser || null);
     sourceAutoSelectedRef.current = false;
     setTruck(null);
@@ -660,6 +678,8 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   const vatAmount = Number(preview?.vatAmount || 0);
   const discountAmount = Number(preview?.discountAmount || 0);
   const totalQuantity = previewItems.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+  const createsUnassignedCustomer = customerMode === "NEW";
+  const hasCustomerProfile = Boolean(customer) || createsUnassignedCustomer;
   const currentDebt = Number(customer?.debt || 0);
   const debtLimit = Number(customer?.debtLimit || 0);
   const paysExistingDebt = form.paymentMode === "PAY_WITH_DEBT";
@@ -757,8 +777,10 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     if (!preview) return toast.error(previewError || "Chưa tính được giá trị hóa đơn");
     if (gifts.some((gift) => !gift.product || Number(gift.qty) <= 0))
       return toast.error("Vui lòng chọn đầy đủ sản phẩm quà tặng và số lượng");
-    if (form.paymentMode === "DEBT" && !customer)
-      return toast.error("Hóa đơn ghi nợ bắt buộc chọn khách hàng CRM");
+    if (createsUnassignedCustomer && !newCustomer.name.trim())
+      return toast.error("Vui lòng nhập tên khách hàng mới");
+    if (form.paymentMode === "DEBT" && !hasCustomerProfile)
+      return toast.error("Hóa đơn ghi nợ bắt buộc có hồ sơ khách hàng");
     if (paysExistingDebt && !customer)
       return toast.error("Vui lòng chọn khách hàng để thanh toán công nợ cũ");
     if (paysExistingDebt && currentDebt <= 0)
@@ -769,7 +791,8 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
           ? "Số tiền thanh toán không được vượt tổng hóa đơn và công nợ cũ"
           : "Tổng tiền thanh toán không được vượt giá trị hóa đơn"
       );
-    if (!customer && paidAmount !== grandTotal) return toast.error("Khách lẻ phải thanh toán đủ");
+    if (!hasCustomerProfile && paidAmount !== grandTotal)
+      return toast.error("Khách lẻ phải thanh toán đủ");
     if (overLimit && !form.allowDebtLimitOverride)
       return toast.error("Hóa đơn vượt hạn mức công nợ của khách hàng");
     if (overLimit && form.allowDebtLimitOverride && !form.debtOverrideReason.trim())
@@ -789,6 +812,14 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
         code: form.code.trim() || undefined,
         date: `${form.date}T00:00:00+07:00`,
         customerId: getId(customer) || undefined,
+        newCustomer: createsUnassignedCustomer
+          ? {
+              name: newCustomer.name.trim(),
+              phone: newCustomer.phone.trim() || undefined,
+              address: newCustomer.address.trim() || undefined,
+              note: newCustomer.note.trim() || undefined,
+            }
+          : undefined,
         sourceType: form.sourceType,
         truckId: getId(truck) || undefined,
         salespersonId: isAdmin ? getId(salesperson) : undefined,
@@ -1139,6 +1170,105 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                 </Field>
               </>
             )}
+            <Grid item xs={12}>
+              <SoftTypography variant="caption" fontWeight="bold">
+                Chọn loại khách hàng
+              </SoftTypography>
+              <SoftBox
+                display="flex"
+                gap={1}
+                mt={0.75}
+                pb={0.5}
+                sx={{
+                  overflowX: "auto",
+                  scrollSnapType: "x mandatory",
+                  WebkitOverflowScrolling: "touch",
+                  scrollbarWidth: "none",
+                  "&::-webkit-scrollbar": { display: "none" },
+                }}
+              >
+                {[
+                  {
+                    value: "EXISTING",
+                    title: "Khách có hồ sơ",
+                    subtitle: "Tìm trong danh sách khách hàng",
+                    icon: "person_search",
+                    color: "#1565c0",
+                    background: "#e7f3ff",
+                  },
+                  {
+                    value: "NEW",
+                    title: "Khách mới chưa mã",
+                    subtitle: "Chỉ bắt buộc nhập tên",
+                    icon: "person_add",
+                    color: "#7b1fa2",
+                    background: "#f3e5f5",
+                  },
+                  {
+                    value: "WALK_IN",
+                    title: "Khách lẻ",
+                    subtitle: "Không tạo hồ sơ, phải trả đủ",
+                    icon: "person_outline",
+                    color: "#616161",
+                    background: "#f5f5f5",
+                  },
+                ].map((option) => {
+                  const selected = customerMode === option.value;
+                  return (
+                    <SoftBox
+                      key={option.value}
+                      component="button"
+                      type="button"
+                      onClick={() => {
+                        setCustomerMode(option.value);
+                        setCustomer(null);
+                        setCustomerSearch("");
+                        setAppliedVoucher("");
+                        setForm((current) => ({
+                          ...current,
+                          voucherCode: "",
+                          allowDebtLimitOverride: false,
+                          debtOverrideReason: "",
+                          paymentMode:
+                            option.value !== "EXISTING" &&
+                            (current.paymentMode === "PAY_WITH_DEBT" ||
+                              (option.value === "WALK_IN" && current.paymentMode === "DEBT"))
+                              ? "PAY_NOW"
+                              : current.paymentMode,
+                        }));
+                      }}
+                      p={1.25}
+                      textAlign="left"
+                      sx={{
+                        minWidth: { xs: 210, md: 0 },
+                        flex: { md: 1 },
+                        scrollSnapAlign: "start",
+                        border: selected
+                          ? `2px solid ${option.color}`
+                          : "1px solid #dfe3e8",
+                        borderRadius: 2,
+                        background: selected ? option.background : "#fff",
+                        cursor: "pointer",
+                        transition: "all .16s ease",
+                      }}
+                    >
+                      <SoftBox display="flex" alignItems="center" gap={1}>
+                        <Icon sx={{ color: option.color }}>{option.icon}</Icon>
+                        <SoftBox>
+                          <SoftTypography variant="button" fontWeight="bold" display="block">
+                            {option.title}
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text">
+                            {option.subtitle}
+                          </SoftTypography>
+                        </SoftBox>
+                      </SoftBox>
+                    </SoftBox>
+                  );
+                })}
+              </SoftBox>
+            </Grid>
+            {customerMode === "EXISTING" && (
             <Field label="Khách hàng" md={isAdmin ? 8 : 12}>
               <SoftBox display="flex" alignItems="stretch" gap={1}>
                 <SoftBox flex={1} minWidth={0}>
@@ -1159,7 +1289,9 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                     onInputChange={setCustomerSearch}
                     placeholder="Tìm mã, tên hoặc số điện thoại..."
                     label={(item) =>
-                      [item.code, item.name || "Khách hàng"].filter(Boolean).join(" · ")
+                      [item.code || "Chưa có mã", item.name || "Khách hàng"]
+                        .filter(Boolean)
+                        .join(" · ")
                     }
                     disabled={Boolean(customer)}
                     disableClearable
@@ -1216,6 +1348,108 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                 </SoftTypography>
               )}
             </Field>
+            )}
+            {customerMode === "NEW" && (
+              <Grid item xs={12} md={isAdmin ? 8 : 12}>
+                <SoftBox
+                  p={{ xs: 1.5, md: 2 }}
+                  borderRadius={2}
+                  bgcolor="#faf5ff"
+                  sx={{ border: "1px solid #ce93d8" }}
+                >
+                  <SoftBox display="flex" alignItems="center" gap={1} mb={1.5}>
+                    <Icon sx={{ color: "#7b1fa2" }}>person_add</Icon>
+                    <SoftBox>
+                      <SoftTypography variant="button" fontWeight="bold" display="block">
+                        Tạo hồ sơ khách hàng chưa có mã
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        Hồ sơ được tạo cùng hóa đơn và có thể cấp mã sau.
+                      </SoftTypography>
+                    </SoftBox>
+                  </SoftBox>
+                  <Grid container spacing={1.25}>
+                    <Grid item xs={12} sm={6}>
+                      <SoftTypography variant="caption">Tên khách hàng *</SoftTypography>
+                      <SoftInput
+                        value={newCustomer.name}
+                        placeholder="Nhập tên khách hàng"
+                        onChange={(event) =>
+                          setNewCustomer((current) => ({
+                            ...current,
+                            name: event.target.value,
+                          }))
+                        }
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <SoftTypography variant="caption">Số điện thoại</SoftTypography>
+                      <SoftInput
+                        value={newCustomer.phone}
+                        inputProps={{ inputMode: "tel" }}
+                        placeholder="Có thể bổ sung sau"
+                        onChange={(event) =>
+                          setNewCustomer((current) => ({
+                            ...current,
+                            phone: event.target.value,
+                          }))
+                        }
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <SoftTypography variant="caption">Địa chỉ</SoftTypography>
+                      <SoftInput
+                        value={newCustomer.address}
+                        placeholder="Có thể bổ sung sau"
+                        onChange={(event) =>
+                          setNewCustomer((current) => ({
+                            ...current,
+                            address: event.target.value,
+                          }))
+                        }
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <SoftTypography variant="caption">Ghi chú khách hàng</SoftTypography>
+                      <SoftInput
+                        value={newCustomer.note}
+                        multiline
+                        minRows={2}
+                        placeholder="Thông tin nhận biết khách hàng..."
+                        onChange={(event) =>
+                          setNewCustomer((current) => ({
+                            ...current,
+                            note: event.target.value,
+                          }))
+                        }
+                      />
+                    </Grid>
+                  </Grid>
+                  <SoftBox mt={1.25} p={1} borderRadius={1.5} bgcolor="#fff">
+                    <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "#6a1b9a" }}>
+                      Chưa có mã · Chưa đặt hạn mức · Có thể thanh toán hoặc ghi nợ
+                    </SoftTypography>
+                  </SoftBox>
+                </SoftBox>
+              </Grid>
+            )}
+            {customerMode === "WALK_IN" && (
+              <Grid item xs={12} md={isAdmin ? 8 : 12}>
+                <SoftBox
+                  p={1.5}
+                  borderRadius={2}
+                  bgcolor="#f5f5f5"
+                  sx={{ border: "1px solid #e0e0e0" }}
+                >
+                  <SoftTypography variant="button" fontWeight="bold">
+                    Hóa đơn khách lẻ
+                  </SoftTypography>
+                  <SoftTypography variant="caption" color="text" display="block">
+                    Không tạo hồ sơ khách hàng và hóa đơn phải được thanh toán đủ.
+                  </SoftTypography>
+                </SoftBox>
+              </Grid>
+            )}
             {isAdmin && (
               <Field label="Nhân viên xuất hóa đơn *" md={4}>
                 <SearchSelect
@@ -2073,10 +2307,13 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                 {
                   value: "DEBT",
                   label: "Ghi nợ toàn bộ",
-                  subtitle: "Cộng toàn bộ giá trị hóa đơn vào công nợ",
+                  subtitle: hasCustomerProfile
+                    ? "Cộng toàn bộ giá trị hóa đơn vào công nợ"
+                    : "Chọn hoặc tạo hồ sơ khách hàng để ghi nợ",
                   icon: "pending_actions",
                   color: "#ed6c02",
                   background: "#fff7ed",
+                  disabled: !hasCustomerProfile,
                 },
               ].map((option) => {
                 const selected = form.paymentMode === option.value;
