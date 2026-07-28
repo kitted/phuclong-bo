@@ -22,12 +22,14 @@ const input = {
     },
 
     input: {
-      height: pxToRem(22),
+      height: pxToRem(24),
+      lineHeight: `${pxToRem(24)} !important`,
       width: "max-content !important",
     },
 
     inputSizeSmall: {
-      height: pxToRem(14),
+      height: pxToRem(22),
+      lineHeight: `${pxToRem(22)} !important`,
     },
   },
 };

@@ -227,11 +227,21 @@ function SearchSelect({
   disabled = false,
   large = false,
   disableClearable = false,
+  dismissKeyboardOnSelect = false,
 }) {
   return (
     <Autocomplete
       value={value}
-      onChange={(_, selected) => onChange(selected)}
+      onChange={(_, selected) => {
+        onChange(selected);
+        if (dismissKeyboardOnSelect && selected) {
+          window.requestAnimationFrame(() => {
+            if (document.activeElement instanceof HTMLElement) {
+              document.activeElement.blur();
+            }
+          });
+        }
+      }}
       options={options}
       disabled={disabled}
       disableClearable={disableClearable}
@@ -251,18 +261,18 @@ function SearchSelect({
         large
           ? {
               "& .MuiOutlinedInput-root": {
-                minHeight: 58,
+                minHeight: 60,
                 fontSize: "16px",
                 borderRadius: "12px",
                 alignItems: "center",
-                paddingTop: "8px !important",
-                paddingBottom: "8px !important",
+                paddingTop: "9px !important",
+                paddingBottom: "9px !important",
               },
               "& .MuiOutlinedInput-root .MuiAutocomplete-input": {
-                height: "24px",
-                lineHeight: "24px",
-                paddingTop: "0 !important",
-                paddingBottom: "0 !important",
+                height: "28px",
+                lineHeight: "28px",
+                paddingTop: "1px !important",
+                paddingBottom: "1px !important",
                 textOverflow: "ellipsis",
               },
               "& .MuiInputBase-input.Mui-disabled": {
@@ -735,10 +745,6 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       ...current,
       allowDebtLimitOverride: enabled,
       debtOverrideReason: enabled ? current.debtOverrideReason : "",
-      paymentMode: enabled ? "DEBT" : "PAY_NOW",
-      cashAmount: enabled ? 0 : current.cashAmount,
-      bankAmount: enabled ? 0 : current.bankAmount,
-      referenceCode: enabled ? "" : current.referenceCode,
     }));
   };
   const updateItem = (index, patch) =>
@@ -766,7 +772,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     if (!customer && paidAmount !== grandTotal) return toast.error("Khách lẻ phải thanh toán đủ");
     if (overLimit && !form.allowDebtLimitOverride)
       return toast.error("Hóa đơn vượt hạn mức công nợ của khách hàng");
-    if (form.allowDebtLimitOverride && !form.debtOverrideReason.trim())
+    if (overLimit && form.allowDebtLimitOverride && !form.debtOverrideReason.trim())
       return toast.error("Vui lòng nhập lý do vượt hạn mức");
     try {
       setSubmitting(true);
@@ -797,8 +803,8 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
         applyExcessToDebt: paysExistingDebt || undefined,
         items: previewItems,
         note: form.note.trim() || undefined,
-        allowDebtLimitOverride: Boolean(form.allowDebtLimitOverride),
-        debtOverrideReason: form.allowDebtLimitOverride
+        allowDebtLimitOverride: Boolean(overLimit && form.allowDebtLimitOverride),
+        debtOverrideReason: overLimit && form.allowDebtLimitOverride
           ? form.debtOverrideReason.trim()
           : undefined,
       });
@@ -1560,6 +1566,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                       product.unit || ""
                     }`
                   }
+                  dismissKeyboardOnSelect
                 />
                 {item.product && (
                   <SoftBox
@@ -1767,6 +1774,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                         product.unit || ""
                       }`
                     }
+                    dismissKeyboardOnSelect
                   />
                   {gift.product && (
                     <SoftBox
@@ -2305,7 +2313,9 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
           {overLimit && (
             <SoftBox mt={2} p={2} bgcolor="#FFF3E0" borderRadius={2}>
               <SoftTypography variant="button" color="error" fontWeight="bold" display="block">
-                Hóa đơn vượt hạn mức công nợ {money(projectedDebt - debtLimit)}
+                {invoiceDebt > 0
+                  ? `Công nợ sau hóa đơn vượt hạn mức ${money(projectedDebt - debtLimit)}`
+                  : `Công nợ cũ đang vượt hạn mức ${money(projectedDebt - debtLimit)}`}
               </SoftTypography>
               <Grid container spacing={1} mt={0.5}>
                 {[
@@ -2405,7 +2415,9 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                         lineHeight: 1.25,
                       }}
                     >
-                      Vẫn cho khách mua và cộng toàn bộ hóa đơn vào công nợ
+                      {invoiceDebt > 0
+                        ? "Vẫn cho khách mua và cộng phần chưa thanh toán vào công nợ"
+                        : "Vẫn cho khách mua dù công nợ cũ đang vượt hạn mức"}
                     </SoftTypography>
                   </SoftBox>
                   <SoftTypography
@@ -2417,8 +2429,8 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                       lineHeight: 1.35,
                     }}
                   >
-                    Hóa đơn vẫn được tạo dù vượt hạn mức. Bắt buộc nhập lý do để lưu lịch sử
-                    truy xuất.
+                    Việc xác nhận này không thay đổi hình thức thanh toán đã chọn. Bắt buộc nhập
+                    lý do để lưu lịch sử truy xuất.
                   </SoftTypography>
                 </SoftBox>
               </SoftBox>

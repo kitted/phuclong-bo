@@ -33,6 +33,7 @@ const inputBase = {
     input: {
       width: "100% !important",
       height: `${pxToRem(22)}`,
+      lineHeight: `${pxToRem(22)} !important`,
       padding: "0 !important",
 
       "&::-webkit-input-placeholder": {
