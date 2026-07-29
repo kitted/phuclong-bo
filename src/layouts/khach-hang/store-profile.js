@@ -679,6 +679,7 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
         fullWidth
         maxWidth="sm"
         fullScreen={false}
+        sx={{ zIndex: 1700 }}
         PaperProps={{
           sx: {
             m: { xs: 1.25, sm: 3 },

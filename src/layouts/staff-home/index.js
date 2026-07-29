@@ -19,6 +19,7 @@ import { InvoiceService } from "services/warehouseService";
 import { CreateInvoiceModal } from "layouts/hoa-don";
 import { toast } from "react-toastify";
 import StaffAccountMenu from "components/StaffAccountMenu";
+import QuickCustomerLocation from "./quick-customer-location";
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", {
@@ -43,7 +44,17 @@ const initials = (name = "NV") =>
     .join("")
     .toUpperCase();
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString("vi-VN") : "—");
-const formatDateTime = (value) => value ? new Date(value).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
+const formatDateTime = (value) =>
+  value
+    ? new Date(value).toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+    : "—";
 const invoiceCustomer = (invoice = {}) => {
   const populatedCustomer =
     invoice.customerId && typeof invoice.customerId === "object" ? invoice.customerId : {};
@@ -84,7 +95,10 @@ function FeedHeader({ user, subtitle }) {
   const name = user?.fullName || user?.name || user?.username || "Nhân viên";
   return (
     <SoftBox display="flex" alignItems="center" gap={1.25} px={2} pt={1.75} pb={1}>
-      <Avatar src={user?.avatar || user?.avatarUrl} sx={{ width: 42, height: 42, bgcolor: "#1877f2" }}>
+      <Avatar
+        src={user?.avatar || user?.avatarUrl}
+        sx={{ width: 42, height: 42, bgcolor: "#1877f2" }}
+      >
         {initials(name)}
       </Avatar>
       <SoftBox flex={1} minWidth={0}>
@@ -95,7 +109,9 @@ function FeedHeader({ user, subtitle }) {
           {subtitle}
         </SoftTypography>
       </SoftBox>
-      <IconButton size="small"><Icon>more_horiz</Icon></IconButton>
+      <IconButton size="small">
+        <Icon>more_horiz</Icon>
+      </IconButton>
     </SoftBox>
   );
 }
@@ -103,7 +119,9 @@ function FeedHeader({ user, subtitle }) {
 function Stat({ label, value, color = "#1c1e21" }) {
   return (
     <SoftBox flex={1} minWidth={0}>
-      <SoftTypography variant="caption" color="text" display="block">{label}</SoftTypography>
+      <SoftTypography variant="caption" color="text" display="block">
+        {label}
+      </SoftTypography>
       <SoftTypography variant="button" fontWeight="bold" sx={{ color }} noWrap display="block">
         {value}
       </SoftTypography>
@@ -115,32 +133,75 @@ function KpiDetail({ item, open, onClose }) {
   const progress = item?.progress || {};
   const targets = progress.targets || item?.targets || [];
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" fullScreen={false} PaperProps={{ sx: { borderRadius: { xs: "20px 20px 0 0", sm: 3 }, m: { xs: 0, sm: 2 }, position: { xs: "fixed", sm: "relative" }, bottom: { xs: 0, sm: "auto" }, width: { xs: "100%", sm: "calc(100% - 32px)" } } }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      fullScreen={false}
+      PaperProps={{
+        sx: {
+          borderRadius: { xs: "20px 20px 0 0", sm: 3 },
+          m: { xs: 0, sm: 2 },
+          position: { xs: "fixed", sm: "relative" },
+          bottom: { xs: 0, sm: "auto" },
+          width: { xs: "100%", sm: "calc(100% - 32px)" },
+        },
+      }}
+    >
       <DialogTitle sx={{ pb: 1 }}>
         <SoftBox display="flex" alignItems="center" justifyContent="space-between">
-          <SoftTypography variant="h6" fontWeight="bold">{item?.name || "Chi tiết KPI"}</SoftTypography>
-          <IconButton onClick={onClose}><Icon>close</Icon></IconButton>
+          <SoftTypography variant="h6" fontWeight="bold">
+            {item?.name || "Chi tiết KPI"}
+          </SoftTypography>
+          <IconButton onClick={onClose}>
+            <Icon>close</Icon>
+          </IconButton>
         </SoftBox>
       </DialogTitle>
       <DialogContent>
         <SoftTypography variant="caption" color="text">
           {formatDate(item?.from || item?.startDate)} – {formatDate(item?.to || item?.endDate)}
         </SoftTypography>
-        {!targets.length && <SoftTypography variant="button" display="block" py={3}>Chưa có chỉ tiêu chi tiết.</SoftTypography>}
+        {!targets.length && (
+          <SoftTypography variant="button" display="block" py={3}>
+            Chưa có chỉ tiêu chi tiết.
+          </SoftTypography>
+        )}
         {targets.map((target, index) => {
-          const meta = KPI_META[target.metric] || { label: target.metric || "Chỉ tiêu", money: false };
+          const meta = KPI_META[target.metric] || {
+            label: target.metric || "Chỉ tiêu",
+            money: false,
+          };
           const actual = Number(target.actualValue || 0);
           const goal = Number(target.targetValue || 0);
           const percent = Number(target.progressPercent ?? (goal ? (actual / goal) * 100 : 0));
           return (
-            <SoftBox key={`${target.metric}-${index}`} py={2} sx={{ borderBottom: "1px solid #edf0f5" }}>
+            <SoftBox
+              key={`${target.metric}-${index}`}
+              py={2}
+              sx={{ borderBottom: "1px solid #edf0f5" }}
+            >
               <SoftBox display="flex" justifyContent="space-between" gap={2} mb={1}>
-                <SoftTypography variant="button" fontWeight="bold">{meta.label}</SoftTypography>
-                <SoftTypography variant="button" fontWeight="bold" color={percent >= 100 ? "success" : "info"}>{number(percent)}%</SoftTypography>
+                <SoftTypography variant="button" fontWeight="bold">
+                  {meta.label}
+                </SoftTypography>
+                <SoftTypography
+                  variant="button"
+                  fontWeight="bold"
+                  color={percent >= 100 ? "success" : "info"}
+                >
+                  {number(percent)}%
+                </SoftTypography>
               </SoftBox>
-              <LinearProgress variant="determinate" value={Math.min(percent, 100)} sx={{ height: 9, borderRadius: 9, mb: 1 }} />
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(percent, 100)}
+                sx={{ height: 9, borderRadius: 9, mb: 1 }}
+              />
               <SoftTypography variant="caption" color="text">
-                Đã đạt {meta.money ? money(actual) : number(actual)} / {meta.money ? money(goal) : number(goal)}
+                Đã đạt {meta.money ? money(actual) : number(actual)} /{" "}
+                {meta.money ? money(goal) : number(goal)}
               </SoftTypography>
             </SoftBox>
           );
@@ -155,17 +216,21 @@ export default function StaffHome() {
   const user = useSelector((state) => state.auth?.user || {});
   const [loading, setLoading] = useState(true);
   const [saleOpen, setSaleOpen] = useState(false);
+  const [customerLocationOpen, setCustomerLocationOpen] = useState(false);
   const [selectedKpi, setSelectedKpi] = useState(null);
   const [kpis, setKpis] = useState([]);
   const [overview, setOverview] = useState({});
   const [invoices, setInvoices] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0);
-  const params = useMemo(() => ({
-    period: "MONTH",
-    anchor: new Date().toISOString().slice(0, 10),
-    compare: "PREVIOUS_PERIOD",
-    timezone: "Asia/Ho_Chi_Minh",
-  }), []);
+  const params = useMemo(
+    () => ({
+      period: "MONTH",
+      anchor: new Date().toISOString().slice(0, 10),
+      compare: "PREVIOUS_PERIOD",
+      timezone: "Asia/Ho_Chi_Minh",
+    }),
+    []
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -179,14 +244,16 @@ export default function StaffHome() {
       if (overviewResult.status === "fulfilled") setOverview(unwrap(overviewResult.value) || {});
       if (invoiceResult.status === "fulfilled") setInvoices(listOf(invoiceResult.value));
       const baseKpis = kpiResult.status === "fulfilled" ? listOf(kpiResult.value) : [];
-      const detailed = await Promise.all(baseKpis.map(async (kpi) => {
-        try {
-          const response = await EmployeeKpiService.getProgress(kpi.id || kpi._id);
-          return { ...kpi, progress: unwrap(response) || {} };
-        } catch (_) {
-          return kpi;
-        }
-      }));
+      const detailed = await Promise.all(
+        baseKpis.map(async (kpi) => {
+          try {
+            const response = await EmployeeKpiService.getProgress(kpi.id || kpi._id);
+            return { ...kpi, progress: unwrap(response) || {} };
+          } catch (_) {
+            return kpi;
+          }
+        })
+      );
       setKpis(detailed);
     } catch (error) {
       toast.error(error?.response?.data?.message || "Không thể tải bảng tin bán hàng");
@@ -195,7 +262,9 @@ export default function StaffHome() {
     }
   }, [params]);
 
-  useEffect(() => { load(); }, [load, refreshKey]);
+  useEffect(() => {
+    load();
+  }, [load, refreshKey]);
   const name = user?.fullName || user?.name || user?.username || "Nhân viên";
   const sales = overview?.sales || {};
   const netRevenue = metricValue(sales.netRevenue);
@@ -205,40 +274,193 @@ export default function StaffHome() {
 
   return (
     <SoftBox minHeight="100vh" sx={{ bgcolor: "#f0f2f5", pb: { xs: 10, md: 4 } }}>
-      <SoftBox maxWidth={720} mx="auto" sx={{ bgcolor: { xs: "#f0f2f5", md: "transparent" }, minHeight: "100vh" }}>
-        <SoftBox position="sticky" top={0} zIndex={20} bgcolor="#fff" px={2} py={1.25} sx={{ borderBottom: "1px solid #e4e6eb" }}>
+      <SoftBox
+        maxWidth={720}
+        mx="auto"
+        sx={{ bgcolor: { xs: "#f0f2f5", md: "transparent" }, minHeight: "100vh" }}
+      >
+        <SoftBox
+          position="sticky"
+          top={0}
+          zIndex={20}
+          bgcolor="#fff"
+          px={2}
+          py={1.25}
+          sx={{ borderBottom: "1px solid #e4e6eb" }}
+        >
           <SoftBox display="flex" alignItems="center" gap={1.25}>
-            <Avatar src={user?.avatar || user?.avatarUrl} sx={{ width: 42, height: 42, bgcolor: "#1877f2" }}>{initials(name)}</Avatar>
+            <Avatar
+              src={user?.avatar || user?.avatarUrl}
+              sx={{ width: 42, height: 42, bgcolor: "#1877f2" }}
+            >
+              {initials(name)}
+            </Avatar>
             <SoftBox flex={1} minWidth={0}>
-              <SoftTypography variant="h6" fontWeight="bold" noWrap>{name}</SoftTypography>
-              <SoftTypography variant="caption" color="text">{user?.employeeCode || "Nhân viên kinh doanh"}</SoftTypography>
+              <SoftTypography variant="h6" fontWeight="bold" noWrap>
+                {name}
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text">
+                {user?.employeeCode || "Nhân viên kinh doanh"}
+              </SoftTypography>
             </SoftBox>
-            <IconButton onClick={() => setRefreshKey((value) => value + 1)} sx={{ bgcolor: "#f0f2f5" }}><Icon>refresh</Icon></IconButton>
-            <IconButton onClick={() => setSaleOpen(true)} sx={{ bgcolor: "#f0f2f5" }}><Icon>add</Icon></IconButton>
+            <IconButton
+              onClick={() => setRefreshKey((value) => value + 1)}
+              sx={{ bgcolor: "#f0f2f5" }}
+            >
+              <Icon>refresh</Icon>
+            </IconButton>
+            <IconButton onClick={() => setSaleOpen(true)} sx={{ bgcolor: "#f0f2f5" }}>
+              <Icon>add</Icon>
+            </IconButton>
             <StaffAccountMenu />
           </SoftBox>
         </SoftBox>
 
-        <Card sx={{ borderRadius: 0, boxShadow: "none", mt: { xs: 0, md: 2 }, mb: 1, overflow: "hidden" }}>
-          <SoftBox px={2} pt={1.5} display="flex" justifyContent="space-between" alignItems="center">
-            <SoftTypography variant="button" fontWeight="bold">KPI của tôi</SoftTypography>
-            <SoftTypography variant="caption" color="info">Chạm để xem tiến độ</SoftTypography>
+        <Card
+          sx={{
+            display: { xs: "block", md: "none" },
+            borderRadius: 0,
+            boxShadow: "none",
+            mb: 1,
+            overflow: "hidden",
+          }}
+        >
+          <SoftBox p={2}>
+            <SoftBox display="flex" alignItems="center" gap={1.25} mb={1.5}>
+              <SoftBox
+                width={46}
+                height={46}
+                borderRadius={2}
+                bgcolor="#e8f5e9"
+                color="#2e7d32"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                flexShrink={0}
+              >
+                <Icon sx={{ fontSize: "27px !important" }}>add_location_alt</Icon>
+              </SoftBox>
+              <SoftBox flex={1} minWidth={0}>
+                <SoftTypography variant="button" fontWeight="bold" display="block">
+                  Đang ghé cửa tiệm khách hàng?
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text" display="block">
+                  Cập nhật GPS và ảnh bảng hiệu ngay tại điểm bán
+                </SoftTypography>
+              </SoftBox>
+            </SoftBox>
+            <SoftButton
+              fullWidth
+              color="success"
+              variant="gradient"
+              startIcon={<Icon>my_location</Icon>}
+              onClick={() => setCustomerLocationOpen(true)}
+              sx={{ minHeight: 50, fontSize: 14 }}
+            >
+              Vị trí & ảnh cửa tiệm
+            </SoftButton>
           </SoftBox>
-          <SoftBox display="flex" gap={1.25} p={2} pt={1.25} sx={{ overflowX: "auto", scrollbarWidth: "none", "&::-webkit-scrollbar": { display: "none" } }}>
-            {loading && <SoftBox width="100%" display="flex" justifyContent="center" py={3}><CircularProgress size={28} /></SoftBox>}
+        </Card>
+
+        <Card
+          sx={{
+            borderRadius: 0,
+            boxShadow: "none",
+            mt: { xs: 0, md: 2 },
+            mb: 1,
+            overflow: "hidden",
+          }}
+        >
+          <SoftBox
+            px={2}
+            pt={1.5}
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <SoftTypography variant="button" fontWeight="bold">
+              KPI của tôi
+            </SoftTypography>
+            <SoftTypography variant="caption" color="info">
+              Chạm để xem tiến độ
+            </SoftTypography>
+          </SoftBox>
+          <SoftBox
+            display="flex"
+            gap={1.25}
+            p={2}
+            pt={1.25}
+            sx={{
+              overflowX: "auto",
+              scrollbarWidth: "none",
+              "&::-webkit-scrollbar": { display: "none" },
+            }}
+          >
+            {loading && (
+              <SoftBox width="100%" display="flex" justifyContent="center" py={3}>
+                <CircularProgress size={28} />
+              </SoftBox>
+            )}
             {!loading && !kpis.length && (
-              <SoftBox width="100%" p={2} borderRadius={2} bgcolor="#f0f2f5"><SoftTypography variant="button">Bạn chưa có KPI đang hoạt động.</SoftTypography></SoftBox>
+              <SoftBox width="100%" p={2} borderRadius={2} bgcolor="#f0f2f5">
+                <SoftTypography variant="button">Bạn chưa có KPI đang hoạt động.</SoftTypography>
+              </SoftBox>
             )}
             {kpis.map((kpi, index) => {
               const targets = kpi.progress?.targets || kpi.targets || [];
-              const average = targets.length ? targets.reduce((sum, item) => sum + Number(item.progressPercent || 0), 0) / targets.length : Number(kpi.progress?.progressPercent || 0);
+              const average = targets.length
+                ? targets.reduce((sum, item) => sum + Number(item.progressPercent || 0), 0) /
+                  targets.length
+                : Number(kpi.progress?.progressPercent || 0);
               return (
-                <SoftBox key={kpi.id || kpi._id || index} onClick={() => setSelectedKpi(kpi)} minWidth={158} height={205} p={1.5} borderRadius={3} color="#fff" display="flex" flexDirection="column" justifyContent="space-between" sx={{ cursor: "pointer", background: index % 2 ? "linear-gradient(145deg,#7b2ff7,#f107a3)" : "linear-gradient(145deg,#1877f2,#42b72a)", boxShadow: "0 4px 14px #0002" }}>
-                  <SoftBox width={45} height={45} borderRadius="50%" bgcolor="#fff" color="#1877f2" display="flex" alignItems="center" justifyContent="center"><Icon>flag</Icon></SoftBox>
+                <SoftBox
+                  key={kpi.id || kpi._id || index}
+                  onClick={() => setSelectedKpi(kpi)}
+                  minWidth={158}
+                  height={205}
+                  p={1.5}
+                  borderRadius={3}
+                  color="#fff"
+                  display="flex"
+                  flexDirection="column"
+                  justifyContent="space-between"
+                  sx={{
+                    cursor: "pointer",
+                    background:
+                      index % 2
+                        ? "linear-gradient(145deg,#7b2ff7,#f107a3)"
+                        : "linear-gradient(145deg,#1877f2,#42b72a)",
+                    boxShadow: "0 4px 14px #0002",
+                  }}
+                >
+                  <SoftBox
+                    width={45}
+                    height={45}
+                    borderRadius="50%"
+                    bgcolor="#fff"
+                    color="#1877f2"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    <Icon>flag</Icon>
+                  </SoftBox>
                   <SoftBox>
-                    <SoftTypography variant="h5" color="white" fontWeight="bold">{number(average)}%</SoftTypography>
-                    <SoftTypography variant="button" color="white" fontWeight="bold" display="block" sx={{ lineHeight: 1.25 }}>{kpi.name || `KPI ${index + 1}`}</SoftTypography>
-                    <SoftTypography variant="caption" color="white">Đến {formatDate(kpi.to || kpi.endDate)}</SoftTypography>
+                    <SoftTypography variant="h5" color="white" fontWeight="bold">
+                      {number(average)}%
+                    </SoftTypography>
+                    <SoftTypography
+                      variant="button"
+                      color="white"
+                      fontWeight="bold"
+                      display="block"
+                      sx={{ lineHeight: 1.25 }}
+                    >
+                      {kpi.name || `KPI ${index + 1}`}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="white">
+                      Đến {formatDate(kpi.to || kpi.endDate)}
+                    </SoftTypography>
                   </SoftBox>
                 </SoftBox>
               );
@@ -249,35 +471,99 @@ export default function StaffHome() {
         <Card sx={{ borderRadius: 0, boxShadow: "none", mb: 1 }}>
           <FeedHeader user={user} subtitle="Tổng kết bán hàng tháng này" />
           <SoftBox px={2} pb={2}>
-            <SoftTypography variant="h4" fontWeight="bold" color="info">{money(netRevenue)}</SoftTypography>
-            <SoftTypography variant="caption" color="text">Doanh thu cá nhân trong kỳ hiện tại</SoftTypography>
-            <SoftBox display="flex" gap={1.5} mt={2} pt={1.5} sx={{ borderTop: "1px solid #e4e6eb" }}>
+            <SoftTypography variant="h4" fontWeight="bold" color="info">
+              {money(netRevenue)}
+            </SoftTypography>
+            <SoftTypography variant="caption" color="text">
+              Doanh thu cá nhân trong kỳ hiện tại
+            </SoftTypography>
+            <SoftBox
+              display="flex"
+              gap={1.5}
+              mt={2}
+              pt={1.5}
+              sx={{ borderTop: "1px solid #e4e6eb" }}
+            >
               <Stat label="Hóa đơn" value={number(invoiceCount)} />
               <Stat label="Đã thu" value={money(collected)} color="#2e7d32" />
               <Stat label="Ghi nợ" value={money(credit)} color="#d32f2f" />
             </SoftBox>
           </SoftBox>
           <SoftBox display="flex" borderTop="1px solid #e4e6eb">
-            <SoftButton fullWidth variant="text" color="dark" onClick={() => navigate("/hoa-don")} startIcon={<Icon>receipt_long</Icon>}>Xem hóa đơn</SoftButton>
-            <SoftButton fullWidth variant="text" color="info" onClick={() => setSaleOpen(true)} startIcon={<Icon>add_shopping_cart</Icon>}>Bán ngay</SoftButton>
+            <SoftButton
+              fullWidth
+              variant="text"
+              color="dark"
+              onClick={() => navigate("/hoa-don")}
+              startIcon={<Icon>receipt_long</Icon>}
+            >
+              Xem hóa đơn
+            </SoftButton>
+            <SoftButton
+              fullWidth
+              variant="text"
+              color="info"
+              onClick={() => setSaleOpen(true)}
+              startIcon={<Icon>add_shopping_cart</Icon>}
+            >
+              Bán ngay
+            </SoftButton>
           </SoftBox>
         </Card>
 
         <Card sx={{ borderRadius: 0, boxShadow: "none", mb: 1 }}>
           <FeedHeader user={user} subtitle="Hoạt động bán hàng gần đây" />
           <SoftBox px={2} pb={1}>
-            <SoftTypography variant="h6" fontWeight="bold">Hóa đơn mới nhất</SoftTypography>
-            {!invoices.length && <SoftTypography variant="button" color="text" display="block" py={2}>Chưa có hóa đơn trong kỳ.</SoftTypography>}
+            <SoftTypography variant="h6" fontWeight="bold">
+              Hóa đơn mới nhất
+            </SoftTypography>
+            {!invoices.length && (
+              <SoftTypography variant="button" color="text" display="block" py={2}>
+                Chưa có hóa đơn trong kỳ.
+              </SoftTypography>
+            )}
             {invoices.map((invoice, index) => {
               const customer = invoiceCustomer(invoice);
               return (
-                <SoftBox key={invoice.id || invoice._id || index} py={1.5} display="flex" alignItems="center" gap={1.25} sx={{ borderBottom: index === invoices.length - 1 ? 0 : "1px solid #edf0f5", cursor: "pointer" }} onClick={() => navigate(`/hoa-don?search=${encodeURIComponent(invoice.code || "")}`)}>
-                  <SoftBox width={42} height={42} borderRadius="50%" bgcolor="#e7f3ff" color="#1877f2" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>receipt</Icon></SoftBox>
+                <SoftBox
+                  key={invoice.id || invoice._id || index}
+                  py={1.5}
+                  display="flex"
+                  alignItems="center"
+                  gap={1.25}
+                  sx={{
+                    borderBottom: index === invoices.length - 1 ? 0 : "1px solid #edf0f5",
+                    cursor: "pointer",
+                  }}
+                  onClick={() =>
+                    navigate(`/hoa-don?search=${encodeURIComponent(invoice.code || "")}`)
+                  }
+                >
+                  <SoftBox
+                    width={42}
+                    height={42}
+                    borderRadius="50%"
+                    bgcolor="#e7f3ff"
+                    color="#1877f2"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    flexShrink={0}
+                  >
+                    <Icon>receipt</Icon>
+                  </SoftBox>
                   <SoftBox flex={1} minWidth={0}>
                     <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
                       {invoice.code || "Hóa đơn"} · {customer.label}
                     </SoftTypography>
-                    <SoftTypography variant="caption" color="text">{formatDateTime(invoice.createdAt || invoice.date)} · {invoice.paymentStatus === "PAID" ? "Đã thanh toán" : invoice.paymentStatus === "PARTIAL" ? "Thanh toán một phần" : "Cộng công nợ"}</SoftTypography>
+                    <SoftTypography variant="caption" color="text">
+                      {formatDateTime(invoice.createdAt || invoice.date)} ·{" "}
+                      {invoice.paymentStatus === "PAID"
+                        ? "Đã thanh toán"
+                        : invoice.paymentStatus === "PARTIAL"
+                        ? "Thanh toán một phần"
+                        : "Cộng công nợ"}
+                    </SoftTypography>
                   </SoftBox>
                   <SoftBox textAlign="right" flexShrink={0}>
                     <SoftTypography variant="caption" color="text" display="block">
@@ -295,13 +581,48 @@ export default function StaffHome() {
               );
             })}
           </SoftBox>
-          <SoftButton variant="text" color="info" fullWidth onClick={() => navigate("/hoa-don")}>Xem tất cả hoạt động</SoftButton>
+          <SoftButton variant="text" color="info" fullWidth onClick={() => navigate("/hoa-don")}>
+            Xem tất cả hoạt động
+          </SoftButton>
         </Card>
       </SoftBox>
 
-      <SoftButton onClick={() => setSaleOpen(true)} variant="gradient" color="success" sx={{ position: "fixed", right: { xs: 16, md: 30 }, bottom: { xs: 78, md: 30 }, zIndex: 35, minWidth: 0, width: 58, height: 58, borderRadius: "50%", p: 0, boxShadow: "0 6px 20px #2e7d3260" }}><Icon sx={{ fontSize: "28px !important" }}>add_shopping_cart</Icon></SoftButton>
-      <CreateInvoiceModal open={saleOpen} onClose={() => setSaleOpen(false)} onCreated={() => { setSaleOpen(false); setRefreshKey((value) => value + 1); }} />
-      <KpiDetail item={selectedKpi} open={Boolean(selectedKpi)} onClose={() => setSelectedKpi(null)} />
+      <SoftButton
+        onClick={() => setSaleOpen(true)}
+        variant="gradient"
+        color="success"
+        sx={{
+          position: "fixed",
+          right: { xs: 16, md: 30 },
+          bottom: { xs: 78, md: 30 },
+          zIndex: 35,
+          minWidth: 0,
+          width: 58,
+          height: 58,
+          borderRadius: "50%",
+          p: 0,
+          boxShadow: "0 6px 20px #2e7d3260",
+        }}
+      >
+        <Icon sx={{ fontSize: "28px !important" }}>add_shopping_cart</Icon>
+      </SoftButton>
+      <CreateInvoiceModal
+        open={saleOpen}
+        onClose={() => setSaleOpen(false)}
+        onCreated={() => {
+          setSaleOpen(false);
+          setRefreshKey((value) => value + 1);
+        }}
+      />
+      <QuickCustomerLocation
+        open={customerLocationOpen}
+        onClose={() => setCustomerLocationOpen(false)}
+      />
+      <KpiDetail
+        item={selectedKpi}
+        open={Boolean(selectedKpi)}
+        onClose={() => setSelectedKpi(null)}
+      />
     </SoftBox>
   );
 }
