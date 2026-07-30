@@ -428,7 +428,8 @@ export const InvoiceService = {
     try {
       return await AxiosInstance.get(`/admin/invoices/timeline`, { params });
     } catch (error) {
-      // Giữ tương thích trong lúc backend chưa triển khai timeline chứng từ hợp nhất.
+      // Giữ tương thích với backend cũ chưa có timeline hợp nhất.
+      // Không fallback khi 403 để lỗi phân quyền thật được hiển thị đúng.
       if ([400, 404].includes(error.response?.status)) {
         return await AxiosInstance.get(`/admin/invoices`, { params });
       }
