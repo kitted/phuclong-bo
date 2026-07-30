@@ -9,11 +9,22 @@ import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
 import { DebtPaymentService } from "services/crmService";
 import { toast } from "react-toastify";
+import { debtPaymentToInvoice, printInvoice } from "utils/invoicePrint";
 
 const money = (value) => `${Number(value || 0).toLocaleString("vi-VN")} ₫`;
 const numberValue = (value) => Number(String(value || "").replace(/\D/g, "")) || 0;
 const idOf = (value) => value?.id || value?._id;
-const dateTime = (value) => value ? new Date(value).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
+const dateTime = (value) =>
+  value
+    ? new Date(value).toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+    : "—";
 
 export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = false }) {
   const [form, setForm] = useState({
@@ -25,9 +36,13 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
     invoiceIds: [],
   });
   const [saving, setSaving] = useState(false);
+  const [createdPayment, setCreatedPayment] = useState(null);
+  const [exporting, setExporting] = useState(false);
   useEffect(() => {
-    if (open)
+    if (open) {
       setForm({ cash: "", bank: "", referenceCode: "", note: "", fifo: true, invoiceIds: [] });
+      setCreatedPayment(null);
+    }
   }, [open]);
   const invoices = (customer?.invoices || []).filter(
     (invoice) =>
@@ -58,21 +73,99 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
           amount: numberValue(form.bank),
           referenceCode: form.referenceCode.trim() || undefined,
         });
-      await DebtPaymentService.create(idOf(customer), {
+      const response = await DebtPaymentService.create(idOf(customer), {
         date: new Date().toISOString(),
         payments,
         invoiceIds: form.fifo ? [] : form.invoiceIds,
         note: form.note.trim() || undefined,
       });
+      const payment = response.data?.data || response.data || {};
       toast.success("Đã lập phiếu thu công nợ");
+      setCreatedPayment(payment);
       onCreated();
-      onClose();
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể lập phiếu thu công nợ");
     } finally {
       setSaving(false);
     }
   };
+  const exportCreatedPayment = async () => {
+    try {
+      setExporting(true);
+      const result = await printInvoice(debtPaymentToInvoice(createdPayment, customer));
+      if (result?.downloaded) toast.success("Đã tải ảnh phiếu thu xuống thiết bị");
+    } catch (error) {
+      toast.error(error.message || "Không thể xuất phiếu thu công nợ");
+    } finally {
+      setExporting(false);
+    }
+  };
+  if (createdPayment)
+    return (
+      <Modal open={open} onClose={onClose}>
+        <SoftBox
+          sx={{
+            position: "absolute",
+            top: { xs: mobile ? 0 : "50%", md: "50%" },
+            left: { xs: mobile ? 0 : "50%", md: "50%" },
+            transform: {
+              xs: mobile ? "none" : "translate(-50%, -50%)",
+              md: "translate(-50%, -50%)",
+            },
+            width: { xs: mobile ? "100%" : "94%", md: 560 },
+            height: { xs: mobile ? "100%" : "auto", md: "auto" },
+            bgcolor: "background.paper",
+            borderRadius: { xs: mobile ? 0 : 3, md: 3 },
+            boxShadow: 24,
+            p: { xs: 3, md: 4 },
+          }}
+        >
+          <SoftBox textAlign="center">
+            <SoftTypography variant="h5" fontWeight="bold" color="success">
+              Thanh toán công nợ thành công
+            </SoftTypography>
+            <SoftTypography variant="h6" color="info" mt={1}>
+              {createdPayment.code}
+            </SoftTypography>
+          </SoftBox>
+          <SoftBox mt={3} p={2} bgcolor="#e8f5e9" borderRadius={2}>
+            <Grid container spacing={1}>
+              {[
+                ["Nợ trước khi thu", createdPayment.customerDebtBefore],
+                ["Đã thanh toán", createdPayment.amount],
+                ["Công nợ còn lại", createdPayment.customerDebtAfter],
+              ].map(([label, value]) => (
+                <Grid item xs={12} sm={4} key={label}>
+                  <SoftTypography variant="caption" color="text" display="block">
+                    {label}
+                  </SoftTypography>
+                  <SoftTypography variant="button" fontWeight="bold" display="block">
+                    {money(value)}
+                  </SoftTypography>
+                </Grid>
+              ))}
+            </Grid>
+          </SoftBox>
+          <SoftTypography variant="caption" color="text" display="block" mt={2}>
+            Hóa đơn xuất ra sẽ có dòng hàng hóa “THANH TOÁN CÔNG NỢ”.
+          </SoftTypography>
+          <SoftBox display="flex" gap={1.5} mt={3}>
+            <SoftButton fullWidth variant="outlined" color="secondary" onClick={onClose}>
+              Đóng
+            </SoftButton>
+            <SoftButton
+              fullWidth
+              variant="gradient"
+              color="info"
+              disabled={exporting}
+              onClick={exportCreatedPayment}
+            >
+              {exporting ? "Đang tạo..." : mobile ? "Lưu ảnh hóa đơn" : "Xuất hóa đơn"}
+            </SoftButton>
+          </SoftBox>
+        </SoftBox>
+      </Modal>
+    );
   return (
     <Modal open={open} onClose={onClose}>
       <SoftBox
@@ -171,9 +264,7 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
                         onChange={() => toggleInvoice(id)}
                       />
                     }
-                    label={`${invoice.code} · ${
-                      dateTime(invoice.createdAt || invoice.date)
-                    }`}
+                    label={`${invoice.code} · ${dateTime(invoice.createdAt || invoice.date)}`}
                   />
                   <SoftTypography variant="button" color="error">
                     Còn nợ {money(debt)}
@@ -217,6 +308,7 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
 export function DebtPaymentHistory({ customerId, refreshKey, onChanged }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exportingId, setExportingId] = useState("");
   useEffect(() => {
     if (!customerId) return;
     setLoading(true);
@@ -237,6 +329,20 @@ export function DebtPaymentHistory({ customerId, refreshKey, onChanged }) {
       onChanged();
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể hủy phiếu thu");
+    }
+  };
+  const exportPayment = async (payment) => {
+    const id = idOf(payment);
+    try {
+      setExportingId(String(id));
+      const response = id ? await DebtPaymentService.getById(id) : null;
+      const detail = response?.data?.data || response?.data || payment;
+      const result = await printInvoice(debtPaymentToInvoice(detail));
+      if (result?.downloaded) toast.success("Đã tải ảnh phiếu thu xuống thiết bị");
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message || "Không thể xuất phiếu thu");
+    } finally {
+      setExportingId("");
     }
   };
   if (loading) return <SoftTypography variant="button">Đang tải phiếu thu...</SoftTypography>;
@@ -271,9 +377,7 @@ export function DebtPaymentHistory({ customerId, refreshKey, onChanged }) {
           {items.map((payment) => (
             <tr key={idOf(payment)} style={{ borderBottom: "1px solid #eee" }}>
               <td style={{ padding: 10, fontWeight: 600 }}>{payment.code}</td>
-              <td style={{ padding: 10 }}>
-                {dateTime(payment.createdAt || payment.date)}
-              </td>
+              <td style={{ padding: 10 }}>{dateTime(payment.createdAt || payment.date)}</td>
               <td style={{ padding: 10 }}>{money(payment.amount)}</td>
               <td style={{ padding: 10 }}>
                 {money(payment.customerDebtBefore)} → {money(payment.customerDebtAfter)}
@@ -284,19 +388,33 @@ export function DebtPaymentHistory({ customerId, refreshKey, onChanged }) {
                     {allocation.invoiceCode}: {money(allocation.amount)}
                   </div>
                 ))}
+                {Number(payment.unallocatedAmount || 0) > 0 && (
+                  <div>Công nợ đầu kỳ/import: {money(payment.unallocatedAmount)}</div>
+                )}
               </td>
               <td style={{ padding: 10 }}>{payment.status === "ACTIVE" ? "Đã thu" : "Đã hủy"}</td>
               <td style={{ padding: 10 }}>
-                {payment.status === "ACTIVE" && (
+                <SoftBox display="flex" gap={0.5} flexWrap="wrap">
                   <SoftButton
                     size="small"
                     variant="text"
-                    color="error"
-                    onClick={() => cancel(payment)}
+                    color="info"
+                    disabled={exportingId === String(idOf(payment))}
+                    onClick={() => exportPayment(payment)}
                   >
-                    Hủy phiếu
+                    {exportingId === String(idOf(payment)) ? "Đang xuất..." : "Xuất hóa đơn"}
                   </SoftButton>
-                )}
+                  {payment.status === "ACTIVE" && (
+                    <SoftButton
+                      size="small"
+                      variant="text"
+                      color="error"
+                      onClick={() => cancel(payment)}
+                    >
+                      Hủy phiếu
+                    </SoftButton>
+                  )}
+                </SoftBox>
               </td>
             </tr>
           ))}

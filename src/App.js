@@ -35,7 +35,9 @@ import { authSelector } from "redux/selector";
 import Illustration from "layouts/authentication/sign-in/illustration";
 import { ToastContainer } from "react-toastify";
 import StaffMobileNav from "components/StaffMobileNav";
+import useAutoRefreshUser from "hook/useAutoRefreshUser";
 export default function App() {
+  useAutoRefreshUser();
   const [controller, dispatch] = useSoftUIController();
   const { miniSidenav, direction, layout, openConfigurator, sidenavColor } = controller;
   const [onMouseEnter, setOnMouseEnter] = useState(false);

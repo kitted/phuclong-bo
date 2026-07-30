@@ -64,16 +64,6 @@ function Illustration() {
         const { data: user } = await AuthService.getMe();
         dispatch(updateUser(user));
 
-        // Thiết lập interval tự gọi getMe mỗi 10 phút
-        setInterval(async () => {
-          try {
-            const { data: refreshedUser } = await AuthService.getMe();
-            dispatch(updateUser(refreshedUser));
-          } catch (e) {
-            console.error("Failed to refresh user info:", e);
-          }
-        }, 10 * 60 * 1000); // 10 phút
-
         const role = String(user?.role || result?.role || "").toLowerCase();
         navigate(role === "staff" ? "/staff-home" : "/dashboards");
       }

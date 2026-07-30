@@ -424,6 +424,17 @@ export const InvoiceService = {
   getAll: async (params = {}) => {
     return await AxiosInstance.get(`/admin/invoices`, { params });
   },
+  getTimeline: async (params = {}) => {
+    try {
+      return await AxiosInstance.get(`/admin/invoices/timeline`, { params });
+    } catch (error) {
+      // Giữ tương thích trong lúc backend chưa triển khai timeline chứng từ hợp nhất.
+      if ([400, 404].includes(error.response?.status)) {
+        return await AxiosInstance.get(`/admin/invoices`, { params });
+      }
+      throw error;
+    }
+  },
   getSummary: (params = {}) => AxiosInstance.get(`/admin/invoices/summary`, { params }),
   getById: async (id) => {
     return await AxiosInstance.get(`/admin/invoices/${id}`);
@@ -431,6 +442,7 @@ export const InvoiceService = {
   create: async (payload) => {
     return await AxiosInstance.post(`/admin/invoices`, payload);
   },
+  reverse: (id, payload) => AxiosInstance.post(`/admin/invoices/${id}/reverse`, payload),
   preview: (payload) => AxiosInstance.post(`/admin/invoices/preview`, payload),
   previewGiftPromotions: (payload) =>
     AxiosInstance.post(`/admin/invoices/promotions/preview`, payload),

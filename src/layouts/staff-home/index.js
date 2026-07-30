@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Avatar from "@mui/material/Avatar";
 import Card from "@mui/material/Card";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -19,7 +19,10 @@ import { InvoiceService } from "services/warehouseService";
 import { CreateInvoiceModal } from "layouts/hoa-don";
 import { toast } from "react-toastify";
 import StaffAccountMenu from "components/StaffAccountMenu";
+import NotificationCenter from "components/NotificationCenter";
 import QuickCustomerLocation from "./quick-customer-location";
+
+const CustomerRouteMap = lazy(() => import("./customer-route-map"));
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", {
@@ -217,6 +220,7 @@ export default function StaffHome() {
   const [loading, setLoading] = useState(true);
   const [saleOpen, setSaleOpen] = useState(false);
   const [customerLocationOpen, setCustomerLocationOpen] = useState(false);
+  const [customerMapOpen, setCustomerMapOpen] = useState(false);
   const [selectedKpi, setSelectedKpi] = useState(null);
   const [kpis, setKpis] = useState([]);
   const [overview, setOverview] = useState({});
@@ -312,6 +316,7 @@ export default function StaffHome() {
             <IconButton onClick={() => setSaleOpen(true)} sx={{ bgcolor: "#f0f2f5" }}>
               <Icon>add</Icon>
             </IconButton>
+            <NotificationCenter />
             <StaffAccountMenu />
           </SoftBox>
         </SoftBox>
@@ -358,6 +363,16 @@ export default function StaffHome() {
               sx={{ minHeight: 50, fontSize: 14 }}
             >
               Vị trí & ảnh cửa tiệm
+            </SoftButton>
+            <SoftButton
+              fullWidth
+              color="info"
+              variant="outlined"
+              startIcon={<Icon>map</Icon>}
+              onClick={() => setCustomerMapOpen(true)}
+              sx={{ minHeight: 46, fontSize: 13, mt: 1 }}
+            >
+              Bản đồ & tuyến đường khách hàng
             </SoftButton>
           </SoftBox>
         </Card>
@@ -618,6 +633,11 @@ export default function StaffHome() {
         open={customerLocationOpen}
         onClose={() => setCustomerLocationOpen(false)}
       />
+      {customerMapOpen && (
+        <Suspense fallback={null}>
+          <CustomerRouteMap open={customerMapOpen} onClose={() => setCustomerMapOpen(false)} />
+        </Suspense>
+      )}
       <KpiDetail
         item={selectedKpi}
         open={Boolean(selectedKpi)}

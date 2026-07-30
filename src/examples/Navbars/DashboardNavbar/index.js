@@ -58,6 +58,7 @@ import { timeAgo } from "utils";
 import { authSelector } from "./../../../redux/selector";
 import { logout } from "./../../../redux/slice/authSlice";
 import { formatDate } from "utils";
+import NotificationCenter from "components/NotificationCenter";
 
 function DashboardNavbar({ absolute, light, isMini }) {
   const [navbarType, setNavbarType] = useState();
@@ -216,6 +217,7 @@ function DashboardNavbar({ absolute, light, isMini }) {
         {isMini ? null : (
           <SoftBox sx={(theme) => navbarRow(theme, { isMini })}>
             <SoftBox color={light ? "white" : "inherit"}>
+              <NotificationCenter light={light} />
               <IconButton
                 onClick={handleClick}
                 aria-controls={openUser ? "basic-menu" : undefined}

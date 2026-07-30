@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import Card from "@mui/material/Card";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
@@ -27,6 +29,7 @@ const EMPTY_FORM = {
   phone: "",
   email: "",
   note: "",
+  canViewAllInvoices: false,
 };
 const getId = (employee) => employee?.id || employee?._id;
 
@@ -55,7 +58,16 @@ function EmployeeForm({ open, employeeId, onClose, onSaved }) {
     setLoadingDetail(true);
     EmployeeService.getById(employeeId)
       .then((response) => {
-        if (active) setForm({ ...EMPTY_FORM, ...(response.data?.data || {}) });
+        if (active) {
+          const employee = response.data?.data || {};
+          setForm({
+            ...EMPTY_FORM,
+            ...employee,
+            canViewAllInvoices: Boolean(
+              employee.canViewAllInvoices || employee.permissions?.viewAllInvoices
+            ),
+          });
+        }
       })
       .catch(
         (error) =>
@@ -84,6 +96,7 @@ function EmployeeForm({ open, employeeId, onClose, onSaved }) {
         employeeCode: form.employeeCode.trim() || undefined,
         note: form.note.trim() || undefined,
         role: "staff",
+        canViewAllInvoices: Boolean(form.canViewAllInvoices),
       };
       if (form.password) payload.password = form.password;
       if (employeeId) await EmployeeService.update(employeeId, payload);
@@ -179,6 +192,41 @@ function EmployeeForm({ open, employeeId, onClose, onSaved }) {
                 fullWidth
               />
             </FormGridField>
+            <Grid item xs={12}>
+              <SoftBox
+                p={1.5}
+                borderRadius={2}
+                bgcolor={form.canViewAllInvoices ? "#e8f5e9" : "#f8fafc"}
+                sx={{
+                  border: form.canViewAllInvoices
+                    ? "2px solid #66bb6a"
+                    : "1px solid #dfe3e8",
+                }}
+              >
+                <FormControlLabel
+                  sx={{ m: 0, alignItems: "flex-start" }}
+                  control={
+                    <Checkbox
+                      checked={Boolean(form.canViewAllInvoices)}
+                      onChange={(event) => set("canViewAllInvoices", event.target.checked)}
+                      color="success"
+                      sx={{ pt: 0.25 }}
+                    />
+                  }
+                  label={
+                    <SoftBox>
+                      <SoftTypography variant="button" fontWeight="bold" display="block">
+                        Cho phép xem toàn bộ hóa đơn công ty
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text" display="block">
+                        Chỉ cấp quyền xem hóa đơn của nhân viên khác; không cấp quyền hoàn, sửa hoặc
+                        xóa hóa đơn.
+                      </SoftTypography>
+                    </SoftBox>
+                  }
+                />
+              </SoftBox>
+            </Grid>
           </Grid>
         )}
         <SoftBox display="flex" gap={2} mt={3}>
@@ -362,6 +410,7 @@ export default function NhanVien() {
                       "Tài khoản",
                       "Liên hệ",
                       "Trạng thái",
+                      "Quyền hóa đơn",
                       "Đăng nhập gần nhất",
                       "Ngày tạo",
                       "",
@@ -384,7 +433,7 @@ export default function NhanVien() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: "center", padding: 32 }}>
+                      <td colSpan={8} style={{ textAlign: "center", padding: 32 }}>
                         Đang tải...
                       </td>
                     </tr>
@@ -392,7 +441,7 @@ export default function NhanVien() {
                   {!loading && employees.length === 0 && (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}
                       >
                         Không tìm thấy nhân viên
@@ -421,6 +470,41 @@ export default function NhanVien() {
                           <span style={{ color: "#6B7280" }}>{employee.email || "—"}</span>
                         </td>
                         <td style={{ padding: "10px 12px" }}>{statusBadge(employee.status)}</td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "4px 9px",
+                              borderRadius: 12,
+                              whiteSpace: "nowrap",
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color:
+                                employee.canViewAllInvoices ||
+                                employee.permissions?.viewAllInvoices
+                                  ? "#2E7D32"
+                                  : "#6B7280",
+                              background:
+                                employee.canViewAllInvoices ||
+                                employee.permissions?.viewAllInvoices
+                                  ? "#E8F5E9"
+                                  : "#F3F4F6",
+                            }}
+                          >
+                            <Icon sx={{ fontSize: "15px !important" }}>
+                              {employee.canViewAllInvoices ||
+                              employee.permissions?.viewAllInvoices
+                                ? "visibility"
+                                : "person"}
+                            </Icon>
+                            {employee.canViewAllInvoices ||
+                            employee.permissions?.viewAllInvoices
+                              ? "Toàn công ty"
+                              : "Của bản thân"}
+                          </span>
+                        </td>
                         <td style={{ padding: "10px 12px", fontSize: 13 }}>
                           {employee.lastLoginAt
                             ? new Date(employee.lastLoginAt).toLocaleString("vi-VN")

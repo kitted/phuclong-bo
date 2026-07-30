@@ -6,15 +6,9 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
+import IconButton from "@mui/material/IconButton";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import {
-  CircleMarker,
-  MapContainer,
-  Popup,
-  TileLayer,
-  useMap,
-  useMapEvents,
-} from "react-leaflet";
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
@@ -39,7 +33,11 @@ const storeData = (customer = {}) => {
     location.latitude ?? location.lat ?? customer.storeLatitude ?? customer.latitude
   );
   const longitude = numberOrNull(
-    location.longitude ?? location.lng ?? location.lon ?? customer.storeLongitude ?? customer.longitude
+    location.longitude ??
+      location.lng ??
+      location.lon ??
+      customer.storeLongitude ??
+      customer.longitude
   );
   return {
     latitude,
@@ -123,6 +121,11 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
   const [imageFile, setImageFile] = useState(null);
   const [reviewFile, setReviewFile] = useState(null);
   const [reviewUrl, setReviewUrl] = useState("");
+  const [reviewSource, setReviewSource] = useState("");
+  const [reviewZoomed, setReviewZoomed] = useState(false);
+  const [viewerUrl, setViewerUrl] = useState("");
+  const [viewerZoomed, setViewerZoomed] = useState(false);
+  const [draggingImage, setDraggingImage] = useState(false);
   const [demoLocation, setDemoLocation] = useState(true);
   const [locating, setLocating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -145,6 +148,11 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
     setImageFile(null);
     setReviewFile(null);
     setReviewUrl("");
+    setReviewSource("");
+    setReviewZoomed(false);
+    setViewerUrl("");
+    setViewerZoomed(false);
+    setDraggingImage(false);
     setDemoLocation(!hasLocation);
   }, [customer]);
 
@@ -171,9 +179,7 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
     latitude <= 90 &&
     longitude >= -180 &&
     longitude <= 180;
-  const mapLocation = validCoordinates
-    ? { latitude, longitude }
-    : DEFAULT_LOCATION;
+  const mapLocation = validCoordinates ? { latitude, longitude } : DEFAULT_LOCATION;
 
   const selectLocation = (nextLatitude, nextLongitude, accuracy = null) => {
     setForm((current) => ({
@@ -186,37 +192,37 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
     setDemoLocation(false);
   };
 
-  const getCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      toast.error("Thiết bị không hỗ trợ lấy vị trí");
-      return;
-    }
+  const requestCurrentLocation = () =>
+    new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Thiết bị không hỗ trợ lấy vị trí"));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 30000,
+      });
+    });
+
+  const getCurrentLocation = async () => {
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        selectLocation(
-          position.coords.latitude,
-          position.coords.longitude,
-          position.coords.accuracy
-        );
-        setLocating(false);
-        toast.success("Đã lấy vị trí hiện tại");
-      },
-      (error) => {
-        setLocating(false);
-        toast.error(
-          error.code === 1
-            ? "Bạn chưa cấp quyền truy cập vị trí cho trình duyệt"
-            : "Không thể lấy vị trí hiện tại"
-        );
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
-    );
+    try {
+      const position = await requestCurrentLocation();
+      selectLocation(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
+      toast.success("Đã lấy vị trí hiện tại");
+    } catch (error) {
+      toast.error(
+        error.code === 1
+          ? "Bạn chưa cấp quyền truy cập vị trí cho trình duyệt"
+          : error.message || "Không thể lấy vị trí hiện tại"
+      );
+    } finally {
+      setLocating(false);
+    }
   };
 
-  const reviewImage = (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+  const queueImageForReview = (file, source = "LIBRARY") => {
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       toast.error("Chỉ chấp nhận ảnh JPG, PNG hoặc WebP");
@@ -228,15 +234,100 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
     }
     setReviewFile(file);
     setReviewUrl(URL.createObjectURL(file));
+    setReviewSource(source);
+    setReviewZoomed(false);
+  };
+
+  const reviewImage = (event, source = "LIBRARY") => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    queueImageForReview(file, source);
+  };
+
+  const dropImage = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDraggingImage(false);
+    const file = Array.from(event.dataTransfer?.files || []).find((item) =>
+      item.type.startsWith("image/")
+    );
+    if (!file) {
+      toast.error("Vui lòng thả một file ảnh JPG, PNG hoặc WebP");
+      return;
+    }
+    queueImageForReview(file, "LIBRARY");
   };
 
   const cancelReview = () => {
     setReviewFile(null);
     setReviewUrl("");
+    setReviewSource("");
+    setReviewZoomed(false);
   };
 
-  const useReviewedImage = () => {
+  const useReviewedImage = async () => {
     if (!reviewFile) return;
+    if (reviewSource === "CAMERA") {
+      try {
+        setUploadingImage(true);
+        let position = null;
+        let locationError = null;
+        try {
+          position = await requestCurrentLocation();
+        } catch (error) {
+          locationError = error;
+        }
+
+        const response = await CustomerService.uploadStorefrontImage(
+          customer.id || customer._id,
+          reviewFile
+        );
+        const uploadedCustomer = response.data?.data || response.data || {};
+        const uploadedImage = uploadedCustomer.storefrontImage || {};
+        const uploadedUrl =
+          uploadedImage.url || uploadedImage.secureUrl || uploadedImage.secure_url || reviewUrl;
+        setSavedImageUrl(uploadedUrl);
+        setImageUrl(uploadedUrl);
+        setImageFile(null);
+
+        if (position) {
+          const nextLatitude = Number(position.coords.latitude.toFixed(7));
+          const nextLongitude = Number(position.coords.longitude.toFixed(7));
+          const nextAccuracy = Math.round(position.coords.accuracy || 0);
+          try {
+            await CustomerService.updateStoreProfile(customer.id || customer._id, {
+              latitude: nextLatitude,
+              longitude: nextLongitude,
+              accuracy: nextAccuracy || undefined,
+              note: form.note.trim() || undefined,
+              source: "GPS",
+              capturedAt: new Date().toISOString(),
+            });
+            selectLocation(nextLatitude, nextLongitude, nextAccuracy);
+            toast.success("Đã lưu ảnh và tự động cập nhật vị trí cửa tiệm");
+          } catch (error) {
+            toast.warning(
+              error.response?.data?.message || "Đã lưu ảnh nhưng chưa cập nhật được vị trí cửa tiệm"
+            );
+          }
+        } else {
+          toast.warning(
+            locationError?.code === 1
+              ? "Đã lưu ảnh nhưng trình duyệt chưa được cấp quyền vị trí"
+              : `Đã lưu ảnh nhưng chưa cập nhật được GPS${
+                  locationError?.message ? `: ${locationError.message}` : ""
+                }`
+          );
+        }
+        cancelReview();
+        await onSaved?.();
+      } catch (error) {
+        toast.error(error.response?.data?.message || "Không thể lưu ảnh và vị trí cửa tiệm");
+      } finally {
+        setUploadingImage(false);
+      }
+      return;
+    }
     if (imageUrl?.startsWith("blob:")) URL.revokeObjectURL(imageUrl);
     setImageFile(reviewFile);
     setImageUrl(URL.createObjectURL(reviewFile));
@@ -379,17 +470,69 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
                 display="flex"
                 alignItems="center"
                 justifyContent="center"
-                sx={{ border: "1px solid #dfe7f0" }}
+                role={imageUrl ? "button" : undefined}
+                tabIndex={imageUrl ? 0 : undefined}
+                onClick={() => {
+                  if (imageUrl) {
+                    setViewerUrl(imageUrl);
+                    setViewerZoomed(false);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (imageUrl && (event.key === "Enter" || event.key === " ")) {
+                    event.preventDefault();
+                    setViewerUrl(imageUrl);
+                    setViewerZoomed(false);
+                  }
+                }}
+                sx={{
+                  border: "1px solid #dfe7f0",
+                  position: "relative",
+                  cursor: imageUrl ? "zoom-in" : "default",
+                  "&:focus-visible": {
+                    outline: "3px solid rgba(24, 119, 242, 0.3)",
+                    outlineOffset: 2,
+                  },
+                  "&:hover .storefront-view-overlay": { opacity: 1 },
+                }}
               >
                 {imageUrl ? (
-                  <SoftBox
-                    component="img"
-                    src={imageUrl}
-                    alt={`Bảng hiệu ${customer.name || "cửa tiệm"}`}
-                    width="100%"
-                    height="100%"
-                    sx={{ objectFit: "cover" }}
-                  />
+                  <>
+                    <SoftBox
+                      component="img"
+                      src={imageUrl}
+                      alt={`Bảng hiệu ${customer.name || "cửa tiệm"}`}
+                      width="100%"
+                      height="100%"
+                      sx={{ objectFit: "contain", bgcolor: "#111827" }}
+                    />
+                    <SoftBox
+                      className="storefront-view-overlay"
+                      position="absolute"
+                      left="50%"
+                      bottom={12}
+                      display="flex"
+                      alignItems="center"
+                      gap={0.5}
+                      px={1.25}
+                      py={0.6}
+                      borderRadius={5}
+                      color="#fff"
+                      bgcolor="rgba(17, 24, 39, 0.78)"
+                      sx={{
+                        transform: "translateX(-50%)",
+                        opacity: { xs: 1, md: 0 },
+                        transition: "opacity 160ms ease",
+                        whiteSpace: "nowrap",
+                        pointerEvents: "none",
+                      }}
+                    >
+                      <Icon sx={{ fontSize: 18 }}>zoom_in</Icon>
+                      <SoftTypography variant="caption" fontWeight="bold" color="white">
+                        Xem ảnh lớn
+                      </SoftTypography>
+                    </SoftBox>
+                  </>
                 ) : (
                   <SoftBox textAlign="center" color="#78909c">
                     <Icon sx={{ fontSize: 64 }}>storefront</Icon>
@@ -412,7 +555,7 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     hidden
-                    onChange={reviewImage}
+                    onChange={(event) => reviewImage(event, "LIBRARY")}
                   />
                   <input
                     ref={cameraInputRef}
@@ -420,8 +563,84 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
                     accept="image/jpeg,image/png,image/webp"
                     capture="environment"
                     hidden
-                    onChange={reviewImage}
+                    onChange={(event) => reviewImage(event, "CAMERA")}
                   />
+                  <SoftBox
+                    mt={1.5}
+                    p={{ xs: 1.75, md: 2.25 }}
+                    minHeight={132}
+                    borderRadius={2}
+                    display={{ xs: "none", md: "flex" }}
+                    flexDirection="column"
+                    alignItems="center"
+                    justifyContent="center"
+                    textAlign="center"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => inputRef.current?.click()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        inputRef.current?.click();
+                      }
+                    }}
+                    onDragEnter={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setDraggingImage(true);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.dataTransfer.dropEffect = "copy";
+                      setDraggingImage(true);
+                    }}
+                    onDragLeave={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (!event.currentTarget.contains(event.relatedTarget)) {
+                        setDraggingImage(false);
+                      }
+                    }}
+                    onDrop={dropImage}
+                    sx={{
+                      border: `2px dashed ${draggingImage ? "#1877f2" : "#b8c8dc"}`,
+                      bgcolor: draggingImage ? "#e7f3ff" : "#f8fbff",
+                      cursor: "pointer",
+                      transition: "all 160ms ease",
+                      transform: draggingImage ? "scale(1.01)" : "none",
+                      "&:hover": {
+                        borderColor: "#1877f2",
+                        bgcolor: "#eef6ff",
+                      },
+                      "&:focus-visible": {
+                        outline: "3px solid rgba(24, 119, 242, 0.25)",
+                        outlineOffset: 2,
+                      },
+                    }}
+                  >
+                    <SoftBox
+                      width={48}
+                      height={48}
+                      borderRadius="50%"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      mb={0.75}
+                      bgcolor={draggingImage ? "#1877f2" : "#e7f3ff"}
+                      color={draggingImage ? "#fff" : "#1877f2"}
+                    >
+                      <Icon sx={{ fontSize: 27 }}>
+                        {draggingImage ? "add_photo_alternate" : "cloud_upload"}
+                      </Icon>
+                    </SoftBox>
+                    <SoftTypography variant="button" fontWeight="bold" color="dark">
+                      {draggingImage ? "Thả ảnh vào đây" : "Kéo thả ảnh bảng hiệu vào đây"}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="text" display="block" mt={0.25}>
+                      Hoặc chạm để chọn ảnh từ thiết bị
+                    </SoftTypography>
+                  </SoftBox>
                   <SoftBox
                     display="flex"
                     gap={1}
@@ -444,7 +663,7 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
                       startIcon={<Icon>photo_library</Icon>}
                       onClick={() => inputRef.current?.click()}
                     >
-                      Chọn thư viện
+                      Chọn ảnh
                     </SoftButton>
                   </SoftBox>
                   {imageFile && (
@@ -674,11 +893,92 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
       </Grid>
 
       <Dialog
+        open={Boolean(viewerUrl)}
+        onClose={() => {
+          setViewerUrl("");
+          setViewerZoomed(false);
+        }}
+        fullScreen={isMobile}
+        fullWidth
+        maxWidth="xl"
+        sx={{ zIndex: 1750 }}
+        PaperProps={{
+          sx: {
+            m: { xs: 0, sm: 2 },
+            height: { xs: "100dvh", sm: "calc(100vh - 32px)" },
+            maxHeight: "none",
+            bgcolor: "#0b1220",
+            borderRadius: { xs: 0, sm: 2 },
+            overflow: "hidden",
+          },
+        }}
+      >
+        <DialogTitle sx={{ p: 1.5, color: "#fff", bgcolor: "rgba(11, 18, 32, 0.96)" }}>
+          <SoftBox display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+            <SoftBox minWidth={0}>
+              <SoftTypography variant="h6" fontWeight="bold" color="white" noWrap>
+                Ảnh bảng hiệu cửa tiệm
+              </SoftTypography>
+              <SoftTypography variant="caption" sx={{ color: "#cbd5e1" }}>
+                Chạm vào ảnh để {viewerZoomed ? "thu nhỏ" : "phóng to"}
+              </SoftTypography>
+            </SoftBox>
+            <SoftBox display="flex" gap={0.5}>
+              <IconButton
+                onClick={() => setViewerZoomed((current) => !current)}
+                aria-label={viewerZoomed ? "Thu nhỏ ảnh" : "Phóng to ảnh"}
+                sx={{ color: "#fff", bgcolor: "rgba(255,255,255,0.1)" }}
+              >
+                <Icon>{viewerZoomed ? "zoom_out" : "zoom_in"}</Icon>
+              </IconButton>
+              <IconButton
+                onClick={() => {
+                  setViewerUrl("");
+                  setViewerZoomed(false);
+                }}
+                aria-label="Đóng ảnh"
+                sx={{ color: "#fff", bgcolor: "rgba(255,255,255,0.1)" }}
+              >
+                <Icon>close</Icon>
+              </IconButton>
+            </SoftBox>
+          </SoftBox>
+        </DialogTitle>
+        <DialogContent
+          onClick={() => setViewerZoomed((current) => !current)}
+          sx={{
+            p: "0 !important",
+            overflow: "auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: viewerZoomed ? "zoom-out" : "zoom-in",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          <SoftBox
+            component="img"
+            src={viewerUrl}
+            alt={`Bảng hiệu ${customer.name || "cửa tiệm"}`}
+            width={viewerZoomed ? "auto" : "100%"}
+            height={viewerZoomed ? "auto" : "100%"}
+            minWidth={viewerZoomed ? { xs: "180%", sm: "140%" } : 0}
+            sx={{
+              display: "block",
+              objectFit: "contain",
+              transition: "min-width 180ms ease",
+              userSelect: "none",
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={Boolean(reviewFile && reviewUrl)}
         onClose={cancelReview}
         fullWidth
-        maxWidth="sm"
-        fullScreen={false}
+        maxWidth="lg"
+        fullScreen={isMobile}
         sx={{ zIndex: 1700 }}
         PaperProps={{
           sx: {
@@ -689,18 +989,48 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
         }}
       >
         <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
-          Xem lại ảnh bảng hiệu
+          <SoftBox display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+            <SoftBox>
+              Xem lại ảnh bảng hiệu
+              <SoftTypography variant="caption" color="text" display="block">
+                Chạm vào ảnh hoặc nút kính lúp để phóng to
+              </SoftTypography>
+            </SoftBox>
+            <IconButton
+              onClick={() => setReviewZoomed((current) => !current)}
+              aria-label={reviewZoomed ? "Thu nhỏ ảnh" : "Phóng to ảnh"}
+            >
+              <Icon>{reviewZoomed ? "zoom_out" : "zoom_in"}</Icon>
+            </IconButton>
+          </SoftBox>
         </DialogTitle>
         <DialogContent>
           <SoftBox
-            component="img"
-            src={reviewUrl}
-            alt="Ảnh bảng hiệu đang xem trước"
             width="100%"
-            height={{ xs: 330, sm: 460 }}
+            height={{ xs: "calc(100dvh - 260px)", sm: 560 }}
             borderRadius={2}
-            sx={{ display: "block", objectFit: "contain", bgcolor: "#111827" }}
-          />
+            overflow="auto"
+            bgcolor="#111827"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            onClick={() => setReviewZoomed((current) => !current)}
+            sx={{ cursor: reviewZoomed ? "zoom-out" : "zoom-in" }}
+          >
+            <SoftBox
+              component="img"
+              src={reviewUrl}
+              alt="Ảnh bảng hiệu đang xem trước"
+              width={reviewZoomed ? "auto" : "100%"}
+              height={reviewZoomed ? "auto" : "100%"}
+              minWidth={reviewZoomed ? "160%" : 0}
+              sx={{
+                display: "block",
+                objectFit: "contain",
+                transition: "min-width 180ms ease",
+              }}
+            />
+          </SoftBox>
           <SoftBox
             mt={1.25}
             p={1.25}
@@ -734,12 +1064,7 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
             "& > :not(style) ~ :not(style)": { ml: { xs: 0, sm: 1 } },
           }}
         >
-          <SoftButton
-            color="secondary"
-            variant="outlined"
-            fullWidth
-            onClick={cancelReview}
-          >
+          <SoftButton color="secondary" variant="outlined" fullWidth onClick={cancelReview}>
             Hủy
           </SoftButton>
           <SoftButton
@@ -755,10 +1080,15 @@ export default function CustomerStoreProfile({ customer, readOnly = false, onSav
             color="success"
             variant="gradient"
             fullWidth
+            disabled={uploadingImage}
             startIcon={<Icon>check</Icon>}
             onClick={useReviewedImage}
           >
-            Dùng ảnh này
+            {uploadingImage
+              ? "Đang lưu ảnh và GPS..."
+              : reviewSource === "CAMERA"
+              ? "Dùng ảnh và lưu vị trí"
+              : "Dùng ảnh này"}
           </SoftButton>
         </DialogActions>
       </Dialog>

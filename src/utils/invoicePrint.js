@@ -7,6 +7,19 @@ const escapeHtml = (value) =>
     .replace(/'/g, "&#039;");
 
 const number = (value) => new Intl.NumberFormat("vi-VN").format(Number(value) || 0);
+const titleCaseName = (value = "") =>
+  String(value)
+    .trim()
+    .toLocaleLowerCase("vi-VN")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toLocaleUpperCase("vi-VN")}${part.slice(1)}`)
+    .join(" ");
+const COMPANY_INTRO_LINES = [
+  "Đối tác tin cậy tại miền Tây - Với hơn 10 năm kinh nghiệm phân phối dầu nhớt và phụ tùng",
+  "Cùng hàng trăm đại lý và tiệm sửa xe tại Cần Thơ, Hậu Giang, Vĩnh Long và Đồng Tháp",
+];
+const COMPANY_SLOGAN = "UY TÍN TẠO NÊN THƯƠNG HIỆU";
 const readTriple = (value, full) => {
   const digit = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"];
   const hundred = Math.floor(value / 100);
@@ -37,9 +50,74 @@ export const moneyInWords = (input) => {
     .map((group, index) => ({ group, index }))
     .reverse()
     .filter(({ group }) => group)
-    .map(({ group, index }, position) => `${readTriple(group, position > 0 && group < 100)} ${levels[index]}`.trim())
+    .map(({ group, index }, position) =>
+      `${readTriple(group, position > 0 && group < 100)} ${levels[index]}`.trim()
+    )
     .join(" ");
   return `${text.charAt(0).toUpperCase()}${text.slice(1)} đồng`;
+};
+
+export const debtPaymentToInvoice = (payment = {}, customer = {}) => {
+  const amount = Number(payment.amount || 0);
+  const customerDebtBefore = Number(payment.customerDebtBefore || 0);
+  const customerDebtAfter = Number(
+    payment.customerDebtAfter ?? Math.max(0, customerDebtBefore - amount)
+  );
+  const allocationText = [
+    ...(payment.allocations || []).map(
+      (allocation) => `${allocation.invoiceCode || "Hóa đơn"}: ${number(allocation.amount)} đ`
+    ),
+    Number(payment.unallocatedAmount || 0) > 0
+      ? `Công nợ đầu kỳ/import: ${number(payment.unallocatedAmount)} đ`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+  return {
+    ...payment,
+    documentType: "DEBT_PAYMENT",
+    customerId: {
+      id: payment.customerId || customer.id || customer._id,
+      code: payment.customerCode || customer.code,
+      name: payment.customerName || customer.name,
+      phone: payment.customerPhone || customer.phone,
+      phones: customer.phones,
+      address: payment.customerAddress || customer.address,
+    },
+    customerName: payment.customerName || customer.name,
+    customerPhone: payment.customerPhone || customer.phone,
+    customerAddress: payment.customerAddress || customer.address,
+    salespersonName:
+      payment.collectorName ||
+      payment.createdByName ||
+      customer.collectorName ||
+      customer.salespersonName,
+    items: [
+      {
+        productId: "DEBT_PAYMENT",
+        productName: "THANH TOÁN CÔNG NỢ",
+        unit: "Lần",
+        qty: 1,
+        price: 0,
+        lineTotal: 0,
+        lineType: "SALE",
+        note: allocationText || payment.note || "Phiếu thu công nợ",
+      },
+    ],
+    subtotal: 0,
+    vatAmount: 0,
+    discountAmount: 0,
+    grandTotal: 0,
+    totalAmount: 0,
+    receivedAmount: amount,
+    paidAmount: amount,
+    existingDebtPaidAmount: amount,
+    customerDebtBefore,
+    customerDebtAfter,
+    debtPaymentCode: payment.code,
+    paymentStatus: "PAID",
+  };
 };
 
 const buildInvoiceDocument = (invoice, autoPrint = false) => {
@@ -55,10 +133,7 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
     ...(Array.isArray(invoice.customerPhones) ? invoice.customerPhones : []),
   ].filter(Boolean);
   const customerPhone =
-    customer.phone ||
-    invoice.customerPhone ||
-    [...new Set(phoneValues)].join(", ") ||
-    "";
+    customer.phone || invoice.customerPhone || [...new Set(phoneValues)].join(", ") || "";
   const customerAddress = customer.address || invoice.customerAddress || "";
   const items = Array.isArray(invoice.items) ? invoice.items : [];
   const subtotal = Number(invoice.subtotal ?? invoice.totalAmount ?? 0);
@@ -88,19 +163,27 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
   );
   const occurredAt = new Date(invoice.createdAt || invoice.date || Date.now());
   const totalQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
-  const rows = items.map((item, index) => {
-    const gift = item.lineType === "GIFT";
-    return `<tr class="item-row">
+  const rows = items
+    .map((item, index) => {
+      const gift = item.lineType === "GIFT";
+      return `<tr class="item-row">
       <td>${index + 1}</td>
-      <td class="left product-name">${escapeHtml(item.productName || item.productId?.name || "Sản phẩm")}${gift ? ' <b class="gift">(QUÀ TẶNG)</b>' : ""}</td>
+      <td class="left product-name">${escapeHtml(
+        item.productName || item.productId?.name || "Sản phẩm"
+      )}${gift ? ' <b class="gift">(QUÀ TẶNG)</b>' : ""}</td>
       <td>${escapeHtml(item.unit || item.productId?.unit || "")}</td>
       <td class="numeric">${number(item.qty)}</td>
       <td class="numeric">${number(gift ? 0 : item.price)}</td>
       <td class="numeric">${number(gift ? 0 : item.lineTotal)}</td>
-      <td class="note">${escapeHtml(gift ? item.giftCode || invoice.giftCode || "Quà tặng" : item.note || "")}</td>
+      <td class="note">${escapeHtml(
+        gift ? item.giftCode || invoice.giftCode || "Quà tặng" : item.note || ""
+      )}</td>
     </tr>`;
-  }).join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(invoice.code || "Hóa đơn")}</title><style>
+    })
+    .join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(
+    invoice.code || "Hóa đơn"
+  )}</title><style>
     @page {
       size: A3 portrait;
       margin: 12mm;
@@ -129,6 +212,8 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
       min-height: 396mm;
       margin: 0 auto;
       overflow: visible;
+      display: flex;
+      flex-direction: column;
     }
     .head {
       position: relative;
@@ -149,16 +234,18 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
       padding-top: 1.5mm;
     }
     .company h3 {
-      margin: 0 0 5mm;
+      margin: 0 0 2.5mm;
       font-size: 16pt;
       line-height: 1;
       font-weight: 700;
     }
     .company p {
-      margin: 0 0 2mm;
-      font-size: 10pt;
-      line-height: 1.2;
-      white-space: nowrap;
+      margin: 0;
+      max-width: 190mm;
+      font-size: 9.5pt;
+      line-height: 1.38;
+      text-align: justify;
+      color: #263238;
     }
     .title {
       text-align: center;
@@ -292,9 +379,21 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
     .space {
       height: 22mm;
     }
-    .bank {
-      margin: 33mm 2mm 0;
-      font-size: 12pt;
+    .company-footer {
+      margin: auto auto 0;
+      padding-top: 5mm;
+      max-width: 245mm;
+      border-top: 0.35mm solid #777;
+      text-align: center;
+      font-size: 11pt;
+      line-height: 1.45;
+      page-break-inside: avoid;
+    }
+    .company-footer p {
+      margin: 0.8mm 0;
+    }
+    .company-footer .contact {
+      font-weight: 700;
     }
     @media screen {
       body {
@@ -314,13 +413,24 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
       <img class="logo" src="${escapeHtml(logoUrl)}" alt="Phúc Long"/>
       <div class="company">
         <h3>NPP PHÚC LONG</h3>
-        <p>Địa chỉ: B1/19 LÊ HỒNG PHONG, P. BÌNH THỦY, TP CẦN THƠ - SĐT: 0939890861</p>
-        <p>Tài khoản: Số TK: 101100002653, Ngân hàng: Vietcombank, Chủ TK: Nguyễn Tuấn Vũ</p>
+        <p>
+          ${COMPANY_INTRO_LINES.map((line) => escapeHtml(line)).join("<br>")}
+          <br>Với phương châm <strong>${escapeHtml(COMPANY_SLOGAN)}</strong>
+          <br>Mong muốn đem đến anh em thợ các sản phẩm tốt với giá phù hợp
+        </p>
       </div>
     </div>
     <div class="title">
       <h1>PHIẾU BÁN HÀNG - KIÊM XUẤT KHO</h1>
-      <p><i>Số phiếu: ${escapeHtml(invoice.code || "—")} &nbsp; - &nbsp; Ngày ${occurredAt.toLocaleString("vi-VN", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" })}</i></p>
+      <p><i>Số phiếu: ${escapeHtml(
+        invoice.code || "—"
+      )} &nbsp; - &nbsp; Ngày ${occurredAt.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })}</i></p>
     </div>
     <div class="customer">
       <div>
@@ -329,7 +439,9 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
       </div>
       <div>
         <p>SĐT: ${escapeHtml(customerPhone)}</p>
-        <p>Nhân viên: ${escapeHtml(invoice.salespersonName || invoice.salespersonId?.fullName || "")}</p>
+        <p>Quản Lý Khu Vực: ${escapeHtml(
+          titleCaseName(invoice.salespersonName || invoice.salespersonId?.fullName || "")
+        )}</p>
       </div>
     </div>
     <table class="items-table">
@@ -346,16 +458,34 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
         <col class="price"/><col class="total"/><col class="note"/>
       </colgroup>
       <tbody>
-        <tr><td class="label" colspan="5">T thành tiền</td><td class="amount">${number(subtotal)}</td><td></td></tr>
-        <tr><td class="label" colspan="5">VAT</td><td class="amount">${number(invoice.vatAmount || 0)}</td><td></td></tr>
-        <tr><td class="label" colspan="5">Chiết khấu</td><td class="amount">${number(discount)}</td><td></td></tr>
-        <tr><td class="label" colspan="3">Tổng cộng (1)</td><td class="quantity-total">${number(totalQuantity)}</td><td></td><td class="amount">${number(grandTotal)}</td><td></td></tr>
-        <tr><td class="label" colspan="5">Nợ cũ (2)</td><td class="amount">${number(oldDebt)}</td><td></td></tr>
-        <tr><td class="label" colspan="5">Số tiền thanh toán (3)</td><td class="amount">${number(paid)}</td><td></td></tr>
-        <tr><td class="label" colspan="5">Còn nợ (1 + 2 - 3)</td><td class="amount">${number(remainingDebt)}</td><td></td></tr>
+        <tr><td class="label" colspan="5">Thành tiền</td><td class="amount">${number(
+          subtotal
+        )}</td><td></td></tr>
+        <tr><td class="label" colspan="5">VAT</td><td class="amount">${number(
+          invoice.vatAmount || 0
+        )}</td><td></td></tr>
+        <tr><td class="label" colspan="5">Chiết khấu</td><td class="amount">${number(
+          discount
+        )}</td><td></td></tr>
+        <tr><td class="label" colspan="3">Tổng cộng (1)</td><td class="quantity-total">${number(
+          totalQuantity
+        )}</td><td></td><td class="amount">${number(grandTotal)}</td><td></td></tr>
+        <tr><td class="label" colspan="5">Nợ cũ (2)</td><td class="amount">${number(
+          oldDebt
+        )}</td><td></td></tr>
+        <tr><td class="label" colspan="5">Số tiền thanh toán (3)</td><td class="amount">${number(
+          paid
+        )}</td><td></td></tr>
+        <tr><td class="label" colspan="5">Còn nợ (1 + 2 - 3)</td><td class="amount">${number(
+          remainingDebt
+        )}</td><td></td></tr>
       </tbody>
     </table>
-    ${invoice.giftCode ? `<p class="gift-code"><b>Mã quà tặng:</b> ${escapeHtml(invoice.giftCode)}</p>` : ""}
+    ${
+      invoice.giftCode
+        ? `<p class="gift-code"><b>Mã quà tặng:</b> ${escapeHtml(invoice.giftCode)}</p>`
+        : ""
+    }
     <p class="words">Số tiền bằng chữ: <i>${escapeHtml(moneyInWords(paid))}.</i></p>
     <div class="signatures">
       <div>
@@ -365,13 +495,19 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
         <div class="space"></div>
       </div>
       <div>
-        <div class="signature-date">Ngày ${occurredAt.getDate()} tháng ${occurredAt.getMonth()+1} năm ${occurredAt.getFullYear()}</div>
+        <div class="signature-date">Ngày ${occurredAt.getDate()} tháng ${
+    occurredAt.getMonth() + 1
+  } năm ${occurredAt.getFullYear()}</div>
         <strong>NGƯỜI NHẬN HÀNG</strong>
         <span>(ký, họ tên)</span>
         <div class="space"></div>
       </div>
     </div>
-    <p class="bank">Số TK: ............, Ngân hàng: ............, Chủ TK: ............</p>
+    <div class="company-footer">
+      <p class="contact">NHÀ PHÂN PHỐI PHỤ TÙNG DẦU NHỚT PHÚC LONG</p>
+      <p>Địa chỉ: B1/19 Lê Hồng Phong, P. Bình Thủy, TP. Cần Thơ · SĐT: 0939869861</p>
+      <p>Số TK: 0111000206533 · Ngân hàng: Vietcombank · Chủ TK: Nguyễn Tuấn Vi</p>
+    </div>
   </main>
     ${autoPrint ? "<script>window.onload=()=>setTimeout(()=>window.print(),250);</script>" : ""}
   </body></html>`;
@@ -421,12 +557,7 @@ export async function saveInvoiceImage(invoice) {
   const fileName = invoiceFileName(invoice);
   const file =
     typeof File === "function" ? new File([blob], fileName, { type: "image/png" }) : null;
-  if (
-    file &&
-    navigator.share &&
-    navigator.canShare &&
-    navigator.canShare({ files: [file] })
-  ) {
+  if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
         files: [file],

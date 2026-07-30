@@ -85,7 +85,12 @@ const money = (value = 0) =>
 const date = (value) =>
   value
     ? new Date(value).toLocaleString("vi-VN", {
-        day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
       })
     : "—";
 const todayValue = () => {
@@ -299,11 +304,13 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
       TruckService.getById(getId(truck))
         .then((response) =>
           setProducts(
-            (Array.isArray(unwrap(response)?.inventory) ? unwrap(response).inventory : []).map((item) => ({
-              ...productOf(item),
-              id: productIdOf(item),
-              stock: quantityOf(item),
-            }))
+            (Array.isArray(unwrap(response)?.inventory) ? unwrap(response).inventory : []).map(
+              (item) => ({
+                ...productOf(item),
+                id: productIdOf(item),
+                stock: quantityOf(item),
+              })
+            )
           )
         )
         .catch((error) => toast.error(apiError(error, "Không thể tải tồn xe")))
@@ -314,31 +321,36 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
   useEffect(() => {
     if (!open || !truck || !isLoad) return undefined;
     let active = true;
-    const timer = setTimeout(() => {
-      setLoadingProducts(true);
-      TruckService.getAvailableProducts({
-        search: productSearch.trim() || undefined,
-        page: 1,
-        limit: 20,
-      })
-        .then((response) => {
-          if (!active) return;
-          const nextProducts = listOf(response);
-          setProducts(
-            productSearch.trim()
-              ? nextProducts
-              : [...nextProducts].sort((a, b) =>
-                  String(a.code || a.name || "").localeCompare(
-                    String(b.code || b.name || ""),
-                    "vi",
-                    { numeric: true }
-                  )
-                )
-          );
+    const timer = setTimeout(
+      () => {
+        setLoadingProducts(true);
+        TruckService.getAvailableProducts({
+          search: productSearch.trim() || undefined,
+          page: 1,
+          limit: 20,
         })
-        .catch((error) => active && toast.error(apiError(error, "Không thể tải sản phẩm trong kho")))
-        .finally(() => active && setLoadingProducts(false));
-    }, productSearch ? 300 : 0);
+          .then((response) => {
+            if (!active) return;
+            const nextProducts = listOf(response);
+            setProducts(
+              productSearch.trim()
+                ? nextProducts
+                : [...nextProducts].sort((a, b) =>
+                    String(a.code || a.name || "").localeCompare(
+                      String(b.code || b.name || ""),
+                      "vi",
+                      { numeric: true }
+                    )
+                  )
+            );
+          })
+          .catch(
+            (error) => active && toast.error(apiError(error, "Không thể tải sản phẩm trong kho"))
+          )
+          .finally(() => active && setLoadingProducts(false));
+      },
+      productSearch ? 300 : 0
+    );
     return () => {
       active = false;
       clearTimeout(timer);
@@ -349,7 +361,9 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
     Number(product?.stock ?? product?.warehouseQuantity ?? product?.quantity ?? product?.qty ?? 0);
   const selectedProduct = (item) =>
     item.product ||
-    products.find((product) => String(getId(product) || product.productId) === String(item.productId)) ||
+    products.find(
+      (product) => String(getId(product) || product.productId) === String(item.productId)
+    ) ||
     {};
   const addProduct = (product) => {
     const productId = getId(product) || product?.productId;
@@ -388,10 +402,7 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
         return { ...item, qty: stock > 0 ? Math.min(quantity, stock) : quantity };
       })
     );
-  const selectedTotalQuantity = items.reduce(
-    (sum, item) => sum + Number(item.qty || 0),
-    0
-  );
+  const selectedTotalQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
   const save = async () => {
     const normalized = items.map((item) => ({ productId: item.productId, qty: Number(item.qty) }));
     if (!normalized.length) return toast.error("Vui lòng chọn ít nhất một sản phẩm");
@@ -476,13 +487,7 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
             <Icon>close</Icon>
           </IconButton>
         </SoftBox>
-        <SoftBox
-          mt={1.5}
-          px={1.5}
-          py={1}
-          borderRadius={2}
-          bgcolor={isLoad ? "#e8f5e9" : "#fff8e1"}
-        >
+        <SoftBox mt={1.5} px={1.5} py={1} borderRadius={2} bgcolor={isLoad ? "#e8f5e9" : "#fff8e1"}>
           <SoftTypography
             variant="caption"
             fontWeight="bold"
@@ -529,8 +534,7 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
               product?.name || product?.productName || product?.code || ""
             }
             isOptionEqualToValue={(option, value) =>
-              String(getId(option) || option.productId) ===
-              String(getId(value) || value.productId)
+              String(getId(option) || option.productId) === String(getId(value) || value.productId)
             }
             noOptionsText={
               loadingProducts
@@ -1140,8 +1144,7 @@ function TruckInventoryModal({ truck, onClose }) {
       })
       .then(async (invoices) => {
         const truckInvoices = invoices.filter(
-          (invoice) =>
-            invoice.sourceType === "truck" && sameId(invoice.truckId, getId(truck))
+          (invoice) => invoice.sourceType === "truck" && sameId(invoice.truckId, getId(truck))
         );
         const completed = await Promise.all(
           truckInvoices.map(async (invoice) => {
@@ -1153,18 +1156,30 @@ function TruckInventoryModal({ truck, onClose }) {
             }
           })
         );
+        const truckInventoryValue =
+          detail?.inventory ||
+          detail?.inventoryItems ||
+          detail?.products ||
+          truck?.inventory ||
+          truck?.inventoryItems ||
+          [];
+        const truckInventoryRows = Array.isArray(truckInventoryValue)
+          ? truckInventoryValue
+          : truckInventoryValue?.items || truckInventoryValue?.docs || [];
         const productIds = Array.from(
           new Set(
-            completed.flatMap((invoice) =>
-              (Array.isArray(invoice.items) ? invoice.items : [])
-                .map(
+            [
+              ...completed.flatMap((invoice) =>
+                (Array.isArray(invoice.items) ? invoice.items : []).map(
                   (item) =>
                     getId(item.productId) ||
                     getId(item.product) ||
                     (typeof item.productId === "string" ? item.productId : null)
                 )
-                .filter(Boolean)
-            )
+              ),
+              ...truckInventoryRows.map(productIdOf),
+              ...availableProducts.map(productIdOf),
+            ].filter(Boolean)
           )
         );
         const movementGroups = await Promise.all(
@@ -1206,12 +1221,8 @@ function TruckInventoryModal({ truck, onClose }) {
               getId(item.productId) ||
               getId(item.product) ||
               (typeof item.productId === "string" ? item.productId : null);
-            const giftTypes = [
-              "INVOICE_GIFT_FROM_TRUCK",
-              "PROMOTION_GIFT_FROM_TRUCK",
-            ];
-            const expectedTypes =
-              item.lineType === "GIFT" ? giftTypes : ["TRUCK_SALE"];
+            const giftTypes = ["INVOICE_GIFT_FROM_TRUCK", "PROMOTION_GIFT_FROM_TRUCK"];
+            const expectedTypes = item.lineType === "GIFT" ? giftTypes : ["TRUCK_SALE"];
             const movementIndex = movements.findIndex(
               (movement, index) =>
                 !usedMovements.has(index) &&
@@ -1233,8 +1244,91 @@ function TruckInventoryModal({ truck, onClose }) {
             };
           }),
         }));
+        const productMeta = new Map();
+        const rememberProduct = (item) => {
+          const id = productIdOf(item);
+          if (!id) return;
+          const product = productOf(item);
+          productMeta.set(String(id), {
+            id,
+            name:
+              item?.productName ||
+              item?.name ||
+              product?.name ||
+              product?.productName ||
+              "Sản phẩm",
+            code: item?.productCode || item?.code || product?.code || product?.productCode || "",
+            unit: item?.unit || product?.unit || "",
+          });
+        };
+        truckInventoryRows.forEach(rememberProduct);
+        availableProducts.forEach(rememberProduct);
+        completed.forEach((invoice) =>
+          (Array.isArray(invoice.items) ? invoice.items : []).forEach(rememberProduct)
+        );
+        const reversalGroups = new Map();
+        movements
+          .filter(
+            (movement) =>
+              movement.type === "INVOICE_REVERSAL_TO_TRUCK" &&
+              sameId(movement.destinationLocation?.id, getId(truck))
+          )
+          .forEach((movement) => {
+            const key =
+              movement.reference?.id ||
+              movement.reference?.code ||
+              movement.id ||
+              `${movement.productId}-${movement.createdAt}`;
+            reversalGroups.set(key, [...(reversalGroups.get(key) || []), movement]);
+          });
+        const reversalInvoiceIds = Array.from(reversalGroups.values())
+          .map((group) => group[0]?.reference?.id)
+          .filter(Boolean);
+        const reversalInvoiceRows = await Promise.all(
+          reversalInvoiceIds.map(async (invoiceId) => {
+            try {
+              return unwrap(await InvoiceService.getById(invoiceId));
+            } catch {
+              return null;
+            }
+          })
+        );
+        const reversalInvoiceById = new Map(
+          reversalInvoiceRows.filter(Boolean).map((invoice) => [String(getId(invoice)), invoice])
+        );
+        const reversalEvents = Array.from(reversalGroups.entries()).map(([key, group]) => {
+          const firstMovement = group[0] || {};
+          const originalInvoice = reversalInvoiceById.get(
+            String(firstMovement.reference?.id || "")
+          );
+          const eventDate = group.reduce((latest, movement) => {
+            const movementTime = new Date(movement.createdAt || 0).getTime();
+            return movementTime > latest ? movementTime : latest;
+          }, 0);
+          return {
+            ...(originalInvoice || {}),
+            id: `reversal-${key}`,
+            eventType: "REVERSAL",
+            code: firstMovement.reference?.code || originalInvoice?.reversalCode || "HOÀN HÀNG",
+            invoiceCode: originalInvoice?.code,
+            createdAt: eventDate ? new Date(eventDate).toISOString() : new Date().toISOString(),
+            items: group.map((movement) => {
+              const meta = productMeta.get(String(movement.productId)) || {};
+              return {
+                productId: movement.productId,
+                productName: meta.name || "Sản phẩm",
+                productCode: meta.code || "",
+                unit: meta.unit || "",
+                qty: Math.abs(Number(movement.quantityChange || 0)),
+                truckQuantityBefore: movement.quantityBefore,
+                truckQuantityAfter: movement.quantityAfter,
+                movementType: movement.type,
+              };
+            }),
+          };
+        });
         if (!active) return;
-        const sorted = [...withInventorySnapshots].sort((left, right) => {
+        const sorted = [...withInventorySnapshots, ...reversalEvents].sort((left, right) => {
           const leftTime = new Date(left.createdAt || left.date || 0).getTime();
           const rightTime = new Date(right.createdAt || right.date || 0).getTime();
           return salesSort === "asc" ? leftTime - rightTime : rightTime - leftTime;
@@ -1251,7 +1345,7 @@ function TruckInventoryModal({ truck, onClose }) {
     return () => {
       active = false;
     };
-  }, [truck, detailTab, salesPeriod, salesDate, salesWeek, salesSort]);
+  }, [truck, detail, availableProducts, detailTab, salesPeriod, salesDate, salesWeek, salesSort]);
 
   if (!truck) return null;
 
@@ -1270,7 +1364,15 @@ function TruckInventoryModal({ truck, onClose }) {
   const visibleInventory = inventory.filter((item) => {
     if (!normalizedSearch) return true;
     const product = productOf(item);
-    return [product.name, item.productName, item.name, product.code, item.productCode, item.code, product.barcode]
+    return [
+      product.name,
+      item.productName,
+      item.name,
+      product.code,
+      item.productCode,
+      item.code,
+      product.barcode,
+    ]
       .filter(Boolean)
       .some((value) => String(value).toLocaleLowerCase("vi").includes(normalizedSearch));
   });
@@ -1281,14 +1383,7 @@ function TruckInventoryModal({ truck, onClose }) {
   const availableProductMap = new Map();
   availableProducts.forEach((item) => {
     const product = productOf(item);
-    [
-      productIdOf(item),
-      getId(item),
-      item.productId,
-      product.code,
-      item.productCode,
-      item.code,
-    ]
+    [productIdOf(item), getId(item), item.productId, product.code, item.productCode, item.code]
       .filter((value) => typeof value === "string" || typeof value === "number")
       .forEach((value) => availableProductMap.set(String(value), item));
   });
@@ -1305,9 +1400,7 @@ function TruckInventoryModal({ truck, onClose }) {
     const quantity = quantityOf(item);
     const availableItem =
       availableProductMap.get(String(productIdOf(item) || "")) ||
-      availableProductMap.get(
-        String(product.code || item.productCode || item.code || "")
-      ) ||
+      availableProductMap.get(String(product.code || item.productCode || item.code || "")) ||
       {};
     const availableProduct = productOf(availableItem);
     const sellPrice = Number(
@@ -1333,8 +1426,7 @@ function TruckInventoryModal({ truck, onClose }) {
       product,
       quantity,
       sellPrice,
-      name:
-        product.name || item.productName || item.name || "Sản phẩm không còn tồn tại",
+      name: product.name || item.productName || item.name || "Sản phẩm không còn tồn tại",
       code: product.code || item.productCode || item.code || "—",
       barcode: product.barcode || item.barcode || "",
       unit: product.unit || item.unit || "—",
@@ -1381,9 +1473,7 @@ function TruckInventoryModal({ truck, onClose }) {
                 justifyContent="center"
                 flexShrink={0}
               >
-                <Icon sx={{ color: "#1565c0", fontSize: { xs: 27, md: 31 } }}>
-                  local_shipping
-                </Icon>
+                <Icon sx={{ color: "#1565c0", fontSize: { xs: 27, md: 31 } }}>local_shipping</Icon>
               </SoftBox>
               <SoftBox minWidth={0}>
                 <SoftTypography
@@ -1498,231 +1588,233 @@ function TruckInventoryModal({ truck, onClose }) {
           </Tabs>
 
           <SoftBox display={detailTab === 0 ? "block" : "none"}>
-          <SoftBox
-            display="flex"
-            alignItems={{ xs: "stretch", md: "center" }}
-            justifyContent="space-between"
-            flexDirection={{ xs: "column", md: "row" }}
-            gap={1.25}
-            mb={1.5}
-          >
-            <SoftBox>
-              <SoftTypography variant="h6" fontWeight="bold">
-                Toàn bộ hàng trên xe
-              </SoftTypography>
-              <SoftTypography variant="caption" color="text">
-                {visibleInventory.length} / {inventory.length} loại hàng
-              </SoftTypography>
+            <SoftBox
+              display="flex"
+              alignItems={{ xs: "stretch", md: "center" }}
+              justifyContent="space-between"
+              flexDirection={{ xs: "column", md: "row" }}
+              gap={1.25}
+              mb={1.5}
+            >
+              <SoftBox>
+                <SoftTypography variant="h6" fontWeight="bold">
+                  Toàn bộ hàng trên xe
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text">
+                  {visibleInventory.length} / {inventory.length} loại hàng
+                </SoftTypography>
+              </SoftBox>
+              {inventory.length > 5 && (
+                <SoftBox width={{ xs: "100%", md: 330 }}>
+                  <SoftInput
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Tìm tên, mã hoặc barcode..."
+                    icon={{ component: "search", direction: "left" }}
+                  />
+                </SoftBox>
+              )}
             </SoftBox>
-            {inventory.length > 5 && (
-              <SoftBox width={{ xs: "100%", md: 330 }}>
-                <SoftInput
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Tìm tên, mã hoặc barcode..."
-                  icon={{ component: "search", direction: "left" }}
-                />
+
+            {loading && (
+              <SoftBox py={6} textAlign="center">
+                <Icon sx={{ color: "#1565c0", fontSize: 38, mb: 1 }}>hourglass_top</Icon>
+                <SoftTypography variant="button" color="text" display="block">
+                  Đang tải toàn bộ sản phẩm trên xe...
+                </SoftTypography>
               </SoftBox>
             )}
-          </SoftBox>
 
-          {loading && (
-            <SoftBox py={6} textAlign="center">
-              <Icon sx={{ color: "#1565c0", fontSize: 38, mb: 1 }}>hourglass_top</Icon>
-              <SoftTypography variant="button" color="text" display="block">
-                Đang tải toàn bộ sản phẩm trên xe...
-              </SoftTypography>
-            </SoftBox>
-          )}
-
-          {!loading && !visibleInventory.length && (
-            <SoftBox py={6} textAlign="center" bgcolor="#fff" borderRadius={2}>
-              <Icon sx={{ color: "#b0bec5", fontSize: 46 }}>inventory_2</Icon>
-              <SoftTypography variant="button" color="text" display="block" mt={1}>
-                {inventory.length ? "Không tìm thấy sản phẩm phù hợp" : "Xe hiện không có hàng"}
-              </SoftTypography>
-            </SoftBox>
-          )}
-
-          {!loading && visibleInventory.length > 0 && (
-            <>
-              <SoftBox display={{ xs: "block", md: "none" }}>
-                {visibleInventory.map((item, index) => {
-                  const row = productDetail(item);
-                  return (
-                    <SoftBox
-                      key={`${productIdOf(item)}-${index}`}
-                      bgcolor="#fff"
-                      borderRadius={2.5}
-                      p={1.5}
-                      mb={1}
-                      sx={{ border: "1px solid #e7ebf0" }}
-                    >
-                      <SoftBox display="flex" justifyContent="space-between" gap={1.5}>
-                        <SoftBox display="flex" gap={1.1} minWidth={0}>
-                          <SoftBox
-                            width={32}
-                            height={32}
-                            borderRadius="50%"
-                            bgcolor="#e3f2fd"
-                            color="#1565c0"
-                            display="flex"
-                            alignItems="center"
-                            justifyContent="center"
-                            flexShrink={0}
-                            fontSize={13}
-                            fontWeight={700}
-                        >
-                            <SoftTypography
-                              variant="caption"
-                              fontWeight="bold"
-                              sx={{ color: "#1565c0", lineHeight: 1 }}
-                            >
-                              STT
-                              <br />
-                              {index + 1}
-                            </SoftTypography>
-                          </SoftBox>
-                          <SoftBox minWidth={0}>
-                            <SoftTypography variant="button" fontWeight="bold" display="block">
-                              {row.name}
-                            </SoftTypography>
-                            <SoftTypography variant="caption" color="text" display="block">
-                              {row.code}
-                              {row.barcode ? ` · ${row.barcode}` : ""}
-                            </SoftTypography>
-                          </SoftBox>
-                        </SoftBox>
-                        <SoftBox
-                          minWidth={86}
-                          px={1.25}
-                          py={0.75}
-                          borderRadius={2}
-                          bgcolor="#e8f5e9"
-                          textAlign="center"
-                          flexShrink={0}
-                        >
-                          <SoftTypography
-                            variant="h5"
-                            fontWeight="bold"
-                            sx={{ color: "#2e7d32", lineHeight: 1.1 }}
-                          >
-                            {row.quantity}
-                          </SoftTypography>
-                          <SoftTypography variant="caption" sx={{ color: "#2e7d32" }}>
-                            {row.unit}
-                          </SoftTypography>
-                        </SoftBox>
-                      </SoftBox>
-                      <SoftBox
-                        display="flex"
-                        justifyContent="space-between"
-                        mt={1.25}
-                        pt={1}
-                        sx={{ borderTop: "1px dashed #e0e0e0" }}
-                      >
-                        <SoftTypography variant="caption" color="text">
-                          Giá bán
-                        </SoftTypography>
-                        <SoftTypography variant="button" fontWeight="bold" color="info">
-                          {pricesLoading && !row.sellPrice ? "Đang tải..." : money(row.sellPrice)}
-                        </SoftTypography>
-                      </SoftBox>
-                    </SoftBox>
-                  );
-                })}
+            {!loading && !visibleInventory.length && (
+              <SoftBox py={6} textAlign="center" bgcolor="#fff" borderRadius={2}>
+                <Icon sx={{ color: "#b0bec5", fontSize: 46 }}>inventory_2</Icon>
+                <SoftTypography variant="button" color="text" display="block" mt={1}>
+                  {inventory.length ? "Không tìm thấy sản phẩm phù hợp" : "Xe hiện không có hàng"}
+                </SoftTypography>
               </SoftBox>
+            )}
 
-              <SoftBox
-                display={{ xs: "none", md: "block" }}
-                borderRadius={2}
-                overflow="hidden"
-                sx={{ border: "1px solid #e3e7ed" }}
-              >
-                <SoftBox
-                  component="table"
-                  sx={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}
-                >
-                  <SoftBox component="thead" bgcolor="#f1f5f9">
-                    <SoftBox component="tr">
-                      {[
-                        ["STT", "6%"],
-                        ["Sản phẩm", "31%"],
-                        ["Mã / Barcode", "21%"],
-                        ["Đơn vị", "12%"],
-                        ["Số lượng", "13%"],
-                        ["Giá bán", "17%"],
-                      ].map(([label, width]) => (
-                        <SoftBox
-                          component="th"
-                          key={label}
-                          width={width}
-                          px={1.25}
-                          py={1.35}
-                          textAlign={label === "Sản phẩm" || label === "Mã / Barcode" ? "left" : "center"}
-                          sx={{ borderBottom: "1px solid #dce2e9" }}
-                        >
-                          <SoftTypography variant="caption" fontWeight="bold">
-                            {label}
-                          </SoftTypography>
-                        </SoftBox>
-                      ))}
-                    </SoftBox>
-                  </SoftBox>
-                  <SoftBox component="tbody">
-                    {visibleInventory.map((item, index) => {
-                      const row = productDetail(item);
-                      return (
-                        <SoftBox
-                          component="tr"
-                          key={`${productIdOf(item)}-${index}`}
-                          sx={{ "&:hover": { bgcolor: "#f8fbff" } }}
-                        >
-                          <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
-                            <SoftTypography variant="button">{index + 1}</SoftTypography>
-                          </SoftBox>
-                          <SoftBox component="td" px={1.25} py={1.3}>
-                            <SoftTypography variant="button" fontWeight="bold">
-                              {row.name}
-                            </SoftTypography>
-                          </SoftBox>
-                          <SoftBox component="td" px={1.25} py={1.3}>
-                            <SoftTypography variant="caption" display="block">
-                              {row.code}
-                            </SoftTypography>
-                            {row.barcode && (
-                              <SoftTypography variant="caption" color="text">
-                                {row.barcode}
+            {!loading && visibleInventory.length > 0 && (
+              <>
+                <SoftBox display={{ xs: "block", md: "none" }}>
+                  {visibleInventory.map((item, index) => {
+                    const row = productDetail(item);
+                    return (
+                      <SoftBox
+                        key={`${productIdOf(item)}-${index}`}
+                        bgcolor="#fff"
+                        borderRadius={2.5}
+                        p={1.5}
+                        mb={1}
+                        sx={{ border: "1px solid #e7ebf0" }}
+                      >
+                        <SoftBox display="flex" justifyContent="space-between" gap={1.5}>
+                          <SoftBox display="flex" gap={1.1} minWidth={0}>
+                            <SoftBox
+                              width={32}
+                              height={32}
+                              borderRadius="50%"
+                              bgcolor="#e3f2fd"
+                              color="#1565c0"
+                              display="flex"
+                              alignItems="center"
+                              justifyContent="center"
+                              flexShrink={0}
+                              fontSize={13}
+                              fontWeight={700}
+                            >
+                              <SoftTypography
+                                variant="caption"
+                                fontWeight="bold"
+                                sx={{ color: "#1565c0", lineHeight: 1 }}
+                              >
+                                STT
+                                <br />
+                                {index + 1}
                               </SoftTypography>
-                            )}
+                            </SoftBox>
+                            <SoftBox minWidth={0}>
+                              <SoftTypography variant="button" fontWeight="bold" display="block">
+                                {row.name}
+                              </SoftTypography>
+                              <SoftTypography variant="caption" color="text" display="block">
+                                {row.code}
+                                {row.barcode ? ` · ${row.barcode}` : ""}
+                              </SoftTypography>
+                            </SoftBox>
                           </SoftBox>
-                          <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
-                            <SoftTypography variant="button">{row.unit}</SoftTypography>
-                          </SoftBox>
-                          <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
+                          <SoftBox
+                            minWidth={86}
+                            px={1.25}
+                            py={0.75}
+                            borderRadius={2}
+                            bgcolor="#e8f5e9"
+                            textAlign="center"
+                            flexShrink={0}
+                          >
                             <SoftTypography
-                              variant="h6"
+                              variant="h5"
                               fontWeight="bold"
-                              sx={{ color: "#2e7d32" }}
+                              sx={{ color: "#2e7d32", lineHeight: 1.1 }}
                             >
                               {row.quantity}
                             </SoftTypography>
-                          </SoftBox>
-                          <SoftBox component="td" px={1.25} py={1.3} textAlign="right">
-                            <SoftTypography variant="button" fontWeight="bold" color="info">
-                              {pricesLoading && !row.sellPrice
-                                ? "Đang tải..."
-                                : money(row.sellPrice)}
+                            <SoftTypography variant="caption" sx={{ color: "#2e7d32" }}>
+                              {row.unit}
                             </SoftTypography>
                           </SoftBox>
                         </SoftBox>
-                      );
-                    })}
+                        <SoftBox
+                          display="flex"
+                          justifyContent="space-between"
+                          mt={1.25}
+                          pt={1}
+                          sx={{ borderTop: "1px dashed #e0e0e0" }}
+                        >
+                          <SoftTypography variant="caption" color="text">
+                            Giá bán
+                          </SoftTypography>
+                          <SoftTypography variant="button" fontWeight="bold" color="info">
+                            {pricesLoading && !row.sellPrice ? "Đang tải..." : money(row.sellPrice)}
+                          </SoftTypography>
+                        </SoftBox>
+                      </SoftBox>
+                    );
+                  })}
+                </SoftBox>
+
+                <SoftBox
+                  display={{ xs: "none", md: "block" }}
+                  borderRadius={2}
+                  overflow="hidden"
+                  sx={{ border: "1px solid #e3e7ed" }}
+                >
+                  <SoftBox
+                    component="table"
+                    sx={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}
+                  >
+                    <SoftBox component="thead" bgcolor="#f1f5f9">
+                      <SoftBox component="tr">
+                        {[
+                          ["STT", "6%"],
+                          ["Sản phẩm", "31%"],
+                          ["Mã / Barcode", "21%"],
+                          ["Đơn vị", "12%"],
+                          ["Số lượng", "13%"],
+                          ["Giá bán", "17%"],
+                        ].map(([label, width]) => (
+                          <SoftBox
+                            component="th"
+                            key={label}
+                            width={width}
+                            px={1.25}
+                            py={1.35}
+                            textAlign={
+                              label === "Sản phẩm" || label === "Mã / Barcode" ? "left" : "center"
+                            }
+                            sx={{ borderBottom: "1px solid #dce2e9" }}
+                          >
+                            <SoftTypography variant="caption" fontWeight="bold">
+                              {label}
+                            </SoftTypography>
+                          </SoftBox>
+                        ))}
+                      </SoftBox>
+                    </SoftBox>
+                    <SoftBox component="tbody">
+                      {visibleInventory.map((item, index) => {
+                        const row = productDetail(item);
+                        return (
+                          <SoftBox
+                            component="tr"
+                            key={`${productIdOf(item)}-${index}`}
+                            sx={{ "&:hover": { bgcolor: "#f8fbff" } }}
+                          >
+                            <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
+                              <SoftTypography variant="button">{index + 1}</SoftTypography>
+                            </SoftBox>
+                            <SoftBox component="td" px={1.25} py={1.3}>
+                              <SoftTypography variant="button" fontWeight="bold">
+                                {row.name}
+                              </SoftTypography>
+                            </SoftBox>
+                            <SoftBox component="td" px={1.25} py={1.3}>
+                              <SoftTypography variant="caption" display="block">
+                                {row.code}
+                              </SoftTypography>
+                              {row.barcode && (
+                                <SoftTypography variant="caption" color="text">
+                                  {row.barcode}
+                                </SoftTypography>
+                              )}
+                            </SoftBox>
+                            <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
+                              <SoftTypography variant="button">{row.unit}</SoftTypography>
+                            </SoftBox>
+                            <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
+                              <SoftTypography
+                                variant="h6"
+                                fontWeight="bold"
+                                sx={{ color: "#2e7d32" }}
+                              >
+                                {row.quantity}
+                              </SoftTypography>
+                            </SoftBox>
+                            <SoftBox component="td" px={1.25} py={1.3} textAlign="right">
+                              <SoftTypography variant="button" fontWeight="bold" color="info">
+                                {pricesLoading && !row.sellPrice
+                                  ? "Đang tải..."
+                                  : money(row.sellPrice)}
+                              </SoftTypography>
+                            </SoftBox>
+                          </SoftBox>
+                        );
+                      })}
+                    </SoftBox>
                   </SoftBox>
                 </SoftBox>
-              </SoftBox>
-            </>
-          )}
+              </>
+            )}
           </SoftBox>
 
           {detailTab === 1 && (
@@ -1762,11 +1854,7 @@ function TruckInventoryModal({ truck, onClose }) {
                       }}
                     >
                       <Icon sx={{ fontSize: 20 }}>{icon}</Icon>
-                      <SoftTypography
-                        variant="button"
-                        fontWeight="bold"
-                        sx={{ color: "inherit" }}
-                      >
+                      <SoftTypography variant="button" fontWeight="bold" sx={{ color: "inherit" }}>
                         {label}
                       </SoftTypography>
                     </SoftBox>
@@ -1810,26 +1898,47 @@ function TruckInventoryModal({ truck, onClose }) {
               {!salesLoading && salesInvoices.length > 0 && (
                 <Grid container spacing={1} mb={1.5}>
                   {[
-                    ["Hóa đơn", salesInvoices.length, "receipt_long", "#1565c0", "#e3f2fd"],
+                    ["Sự kiện", salesInvoices.length, "receipt_long", "#1565c0", "#e3f2fd"],
                     [
-                      "Sản phẩm đã trừ",
-                      salesInvoices.reduce(
-                        (sum, invoice) =>
-                          sum +
-                          (Array.isArray(invoice.items)
-                            ? invoice.items.reduce(
-                                (itemSum, item) => itemSum + Number(item.qty || 0),
-                                0
-                              )
-                            : 0),
-                        0
-                      ),
+                      "Đã bán",
+                      salesInvoices
+                        .filter((invoice) => invoice.eventType !== "REVERSAL")
+                        .reduce(
+                          (sum, invoice) =>
+                            sum +
+                            (Array.isArray(invoice.items)
+                              ? invoice.items.reduce(
+                                  (itemSum, item) => itemSum + Number(item.qty || 0),
+                                  0
+                                )
+                              : 0),
+                          0
+                        ),
                       "remove_shopping_cart",
                       "#c62828",
                       "#ffebee",
                     ],
+                    [
+                      "Đã hoàn về xe",
+                      salesInvoices
+                        .filter((invoice) => invoice.eventType === "REVERSAL")
+                        .reduce(
+                          (sum, invoice) =>
+                            sum +
+                            (Array.isArray(invoice.items)
+                              ? invoice.items.reduce(
+                                  (itemSum, item) => itemSum + Number(item.qty || 0),
+                                  0
+                                )
+                              : 0),
+                          0
+                        ),
+                      "restore",
+                      "#2e7d32",
+                      "#e8f5e9",
+                    ],
                   ].map(([label, value, icon, color, background]) => (
-                    <Grid item xs={6} key={label}>
+                    <Grid item xs={4} key={label}>
                       <SoftBox p={1.4} borderRadius={2} bgcolor={background}>
                         <SoftBox display="flex" alignItems="center" gap={0.75}>
                           <Icon sx={{ color, fontSize: 21 }}>{icon}</Icon>
@@ -1867,10 +1976,8 @@ function TruckInventoryModal({ truck, onClose }) {
               {!salesLoading &&
                 salesInvoices.map((invoice) => {
                   const items = Array.isArray(invoice.items) ? invoice.items : [];
-                  const soldQuantity = items.reduce(
-                    (sum, item) => sum + Number(item.qty || 0),
-                    0
-                  );
+                  const isReversal = invoice.eventType === "REVERSAL";
+                  const soldQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
                   return (
                     <SoftBox
                       key={getId(invoice) || invoice.code}
@@ -1887,13 +1994,23 @@ function TruckInventoryModal({ truck, onClose }) {
                         justifyContent="space-between"
                         alignItems="flex-start"
                         gap={1}
-                        bgcolor="#f8fbff"
+                        bgcolor={isReversal ? "#f1f8f3" : "#f8fbff"}
                         sx={{ borderBottom: "1px solid #e5eaf0" }}
                       >
                         <SoftBox minWidth={0}>
                           <SoftTypography variant="button" fontWeight="bold" display="block">
                             {invoice.code || "Hóa đơn"}
                           </SoftTypography>
+                          {isReversal && invoice.invoiceCode && (
+                            <SoftTypography
+                              variant="caption"
+                              fontWeight="bold"
+                              display="block"
+                              sx={{ color: "#2e7d32" }}
+                            >
+                              Hoàn từ hóa đơn {invoice.invoiceCode}
+                            </SoftTypography>
+                          )}
                           <SoftTypography variant="caption" color="text" display="block">
                             {date(invoice.createdAt || invoice.date)}
                           </SoftTypography>
@@ -1904,7 +2021,7 @@ function TruckInventoryModal({ truck, onClose }) {
                         <SoftBox
                           px={1.1}
                           py={0.65}
-                          bgcolor="#ffebee"
+                          bgcolor={isReversal ? "#e8f5e9" : "#ffebee"}
                           borderRadius={2}
                           textAlign="center"
                           flexShrink={0}
@@ -1912,16 +2029,17 @@ function TruckInventoryModal({ truck, onClose }) {
                           <SoftTypography
                             variant="button"
                             fontWeight="bold"
-                            sx={{ color: "#c62828" }}
+                            sx={{ color: isReversal ? "#2e7d32" : "#c62828" }}
                           >
-                            −{soldQuantity}
+                            {isReversal ? "+" : "−"}
+                            {soldQuantity}
                           </SoftTypography>
                           <SoftTypography
                             variant="caption"
                             display="block"
-                            sx={{ color: "#8e1b1b" }}
+                            sx={{ color: isReversal ? "#1b5e20" : "#8e1b1b" }}
                           >
-                            sản phẩm
+                            {isReversal ? "hoàn về xe" : "sản phẩm"}
                           </SoftTypography>
                         </SoftBox>
                       </SoftBox>
@@ -1931,8 +2049,10 @@ function TruckInventoryModal({ truck, onClose }) {
                           const product =
                             (item.productId && typeof item.productId === "object"
                               ? item.productId
-                              : null) || item.product || {};
-                          const isGift = item.lineType === "GIFT";
+                              : null) ||
+                            item.product ||
+                            {};
+                          const isGift = !isReversal && item.lineType === "GIFT";
                           const stockSnapshot = saleInventorySnapshot(item);
                           const unit = item.unit || product.unit || "";
                           return (
@@ -1940,8 +2060,7 @@ function TruckInventoryModal({ truck, onClose }) {
                               key={`${getId(item) || getId(product) || item.productId}-${index}`}
                               py={1.25}
                               sx={{
-                                borderBottom:
-                                  index < items.length - 1 ? "1px dashed #e3e7ed" : 0,
+                                borderBottom: index < items.length - 1 ? "1px dashed #e3e7ed" : 0,
                               }}
                             >
                               <SoftBox
@@ -1955,15 +2074,21 @@ function TruckInventoryModal({ truck, onClose }) {
                                     width={34}
                                     height={34}
                                     borderRadius="50%"
-                                    bgcolor={isGift ? "#fff3e0" : "#e8f5e9"}
-                                    color={isGift ? "#ef6c00" : "#2e7d32"}
+                                    bgcolor={
+                                      isReversal ? "#e8f5e9" : isGift ? "#fff3e0" : "#e8f5e9"
+                                    }
+                                    color={isReversal ? "#2e7d32" : isGift ? "#ef6c00" : "#2e7d32"}
                                     display="flex"
                                     alignItems="center"
                                     justifyContent="center"
                                     flexShrink={0}
                                   >
                                     <Icon sx={{ fontSize: 19 }}>
-                                      {isGift ? "redeem" : "remove_shopping_cart"}
+                                      {isReversal
+                                        ? "restore"
+                                        : isGift
+                                        ? "redeem"
+                                        : "remove_shopping_cart"}
                                     </Icon>
                                   </SoftBox>
                                   <SoftBox minWidth={0}>
@@ -1972,15 +2097,16 @@ function TruckInventoryModal({ truck, onClose }) {
                                       fontWeight="bold"
                                       display="block"
                                     >
-                                      {item.productName ||
-                                        product.name ||
-                                        item.name ||
-                                        "Sản phẩm"}
+                                      {item.productName || product.name || item.name || "Sản phẩm"}
                                     </SoftTypography>
                                     <SoftTypography variant="caption" color="text" display="block">
                                       {[
                                         item.productCode || product.code,
-                                        isGift ? "Quà tặng" : "Hàng bán",
+                                        isReversal
+                                          ? "Hoàn về xe"
+                                          : isGift
+                                          ? "Quà tặng"
+                                          : "Hàng bán",
                                       ]
                                         .filter(Boolean)
                                         .join(" · ")}
@@ -1998,11 +2124,23 @@ function TruckInventoryModal({ truck, onClose }) {
                                 sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
                                 gap={{ xs: 0.75, md: 1 }}
                               >
-                                {[
-                                  ["Trước khi bán", stockSnapshot.before, "#1565c0", "#e3f2fd"],
-                                  ["Đã trừ", stockSnapshot.deducted, "#c62828", "#ffebee"],
-                                  ["Còn lại", stockSnapshot.after, "#2e7d32", "#e8f5e9"],
-                                ].map(([label, value, color, background]) => (
+                                {(isReversal
+                                  ? [
+                                      [
+                                        "Trước khi hoàn",
+                                        stockSnapshot.before,
+                                        "#1565c0",
+                                        "#e3f2fd",
+                                      ],
+                                      ["Đã cộng", stockSnapshot.deducted, "#2e7d32", "#e8f5e9"],
+                                      ["Sau khi hoàn", stockSnapshot.after, "#1b5e20", "#dcedc8"],
+                                    ]
+                                  : [
+                                      ["Trước khi bán", stockSnapshot.before, "#1565c0", "#e3f2fd"],
+                                      ["Đã trừ", stockSnapshot.deducted, "#c62828", "#ffebee"],
+                                      ["Còn lại", stockSnapshot.after, "#2e7d32", "#e8f5e9"],
+                                    ]
+                                ).map(([label, value, color, background]) => (
                                   <SoftBox
                                     key={label}
                                     px={{ xs: 0.75, md: 1.25 }}
@@ -2029,24 +2167,31 @@ function TruckInventoryModal({ truck, onClose }) {
                                     >
                                       {value === null
                                         ? "—"
-                                        : `${label === "Đã trừ" ? "−" : ""}${value}`}
+                                        : `${
+                                            label === "Đã trừ"
+                                              ? "−"
+                                              : label === "Đã cộng"
+                                              ? "+"
+                                              : ""
+                                          }${value}`}
                                     </SoftTypography>
                                   </SoftBox>
                                 ))}
                               </SoftBox>
-                              {stockSnapshot.before === null &&
-                                stockSnapshot.after === null && (
-                                  <SoftTypography
-                                    variant="caption"
-                                    color="text"
-                                    display="block"
-                                    mt={0.6}
-                                    textAlign="right"
-                                    sx={{ fontStyle: "italic" }}
-                                  >
-                                    Hóa đơn cũ chưa có snapshot tồn xe
-                                  </SoftTypography>
-                                )}
+                              {stockSnapshot.before === null && stockSnapshot.after === null && (
+                                <SoftTypography
+                                  variant="caption"
+                                  color="text"
+                                  display="block"
+                                  mt={0.6}
+                                  textAlign="right"
+                                  sx={{ fontStyle: "italic" }}
+                                >
+                                  {isReversal
+                                    ? "Movement hoàn hàng chưa có snapshot tồn xe"
+                                    : "Hóa đơn cũ chưa có snapshot tồn xe"}
+                                </SoftTypography>
+                              )}
                             </SoftBox>
                           );
                         })}
@@ -2151,7 +2296,9 @@ export default function QuanLyXe() {
           setMeta(metaOf(listResponse));
         } else {
           const nextTransfers = listOf(listResponse);
-          setTransfers((current) => (isStaff && transferPage > 1 ? [...current, ...nextTransfers] : nextTransfers));
+          setTransfers((current) =>
+            isStaff && transferPage > 1 ? [...current, ...nextTransfers] : nextTransfers
+          );
           setTransferMeta(metaOf(listResponse));
           setTransferSummary(unwrap(summaryResponse) || {});
         }
@@ -2263,13 +2410,40 @@ export default function QuanLyXe() {
   return (
     <DashboardLayout compactMobile={isStaff}>
       {!isStaff && <DashboardNavbar />}
-      {isStaff && <StaffMobileHeader title="Xe hàng" subtitle="Tồn xe và lịch sử hàng hóa" onRefresh={() => refresh()} />}
-      <SoftBox py={{ xs: isStaff ? 1 : 3, md: 3 }} pb={{ xs: isStaff ? 10 : 3, md: 3 }} sx={{ bgcolor: { xs: isStaff ? "#f0f2f5" : "transparent", md: "transparent" }, minHeight: "100vh" }}>
-        <Grid container spacing={{ xs: isStaff ? 1 : 2, md: 2 }} mb={{ xs: isStaff ? 1 : 3, md: 3 }} px={{ xs: isStaff ? 1 : 0, md: 0 }} sx={{ flexWrap: { xs: isStaff ? "nowrap" : "wrap", md: "wrap" }, overflowX: { xs: "auto", md: "visible" } }}>
+      {isStaff && (
+        <StaffMobileHeader
+          title="Xe hàng"
+          subtitle="Tồn xe và lịch sử hàng hóa"
+          onRefresh={() => refresh()}
+        />
+      )}
+      <SoftBox
+        py={{ xs: isStaff ? 1 : 3, md: 3 }}
+        pb={{ xs: isStaff ? 10 : 3, md: 3 }}
+        sx={{
+          bgcolor: { xs: isStaff ? "#f0f2f5" : "transparent", md: "transparent" },
+          minHeight: "100vh",
+        }}
+      >
+        <Grid
+          container
+          spacing={{ xs: isStaff ? 1 : 2, md: 2 }}
+          mb={{ xs: isStaff ? 1 : 3, md: 3 }}
+          px={{ xs: isStaff ? 1 : 0, md: 0 }}
+          sx={{
+            flexWrap: { xs: isStaff ? "nowrap" : "wrap", md: "wrap" },
+            overflowX: { xs: "auto", md: "visible" },
+          }}
+        >
           {kpis.map(([label, value, icon, color]) => (
             <Grid item xs={isStaff ? 7 : 12} sm={6} lg={3} key={label} sx={{ flexShrink: 0 }}>
               <Card sx={{ boxShadow: { xs: isStaff ? "none" : undefined, md: undefined } }}>
-                <SoftBox p={{ xs: isStaff ? 1.5 : 2.5, md: 2.5 }} display="flex" alignItems="center" gap={1.25}>
+                <SoftBox
+                  p={{ xs: isStaff ? 1.5 : 2.5, md: 2.5 }}
+                  display="flex"
+                  alignItems="center"
+                  gap={1.25}
+                >
                   <Icon sx={{ color }}>{icon}</Icon>
                   <SoftBox>
                     <SoftTypography variant="caption" color="text">
@@ -2284,7 +2458,12 @@ export default function QuanLyXe() {
             </Grid>
           ))}
         </Grid>
-        <Card sx={{ borderRadius: { xs: isStaff ? 0 : undefined, md: undefined }, boxShadow: { xs: isStaff ? "none" : undefined, md: undefined } }}>
+        <Card
+          sx={{
+            borderRadius: { xs: isStaff ? 0 : undefined, md: undefined },
+            boxShadow: { xs: isStaff ? "none" : undefined, md: undefined },
+          }}
+        >
           <SoftBox p={{ xs: isStaff ? 2 : 3, md: 3 }}>
             <SoftBox
               display="flex"
@@ -2301,29 +2480,30 @@ export default function QuanLyXe() {
                   Tồn xe và lịch sử điều chuyển kho
                 </SoftTypography>
               </SoftBox>
-              {!isStaff && (tab === 0 ? (
-                <SoftButton
-                  variant="gradient"
-                  color="info"
-                  startIcon={<Icon>add</Icon>}
-                  onClick={() => {
-                    setEditTruck(null);
-                    setTruckModal(true);
-                  }}
-                >
-                  Thêm xe
-                </SoftButton>
-              ) : (
-                <SoftButton
-                  variant="gradient"
-                  color="success"
-                  startIcon={<Icon>download</Icon>}
-                  disabled={exporting}
-                  onClick={exportTransfers}
-                >
-                  {exporting ? "Đang xuất..." : "Xuất Excel"}
-                </SoftButton>
-              ))}
+              {!isStaff &&
+                (tab === 0 ? (
+                  <SoftButton
+                    variant="gradient"
+                    color="info"
+                    startIcon={<Icon>add</Icon>}
+                    onClick={() => {
+                      setEditTruck(null);
+                      setTruckModal(true);
+                    }}
+                  >
+                    Thêm xe
+                  </SoftButton>
+                ) : (
+                  <SoftButton
+                    variant="gradient"
+                    color="success"
+                    startIcon={<Icon>download</Icon>}
+                    disabled={exporting}
+                    onClick={exportTransfers}
+                  >
+                    {exporting ? "Đang xuất..." : "Xuất Excel"}
+                  </SoftButton>
+                ))}
             </SoftBox>
             <Tabs
               value={tab}
@@ -2348,7 +2528,13 @@ export default function QuanLyXe() {
                 />
               </SoftBox>
               {tab === 0 ? (
-                <FormControl size="small" sx={{ minWidth: 180, display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" } }}>
+                <FormControl
+                  size="small"
+                  sx={{
+                    minWidth: 180,
+                    display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" },
+                  }}
+                >
                   <Select displayEmpty value={status} onChange={(e) => setStatus(e.target.value)}>
                     <MenuItem value="">Mọi trạng thái</MenuItem>
                     <MenuItem value="active">Hoạt động</MenuItem>
@@ -2478,8 +2664,20 @@ export default function QuanLyXe() {
             {tab === 1 && (transfers.length > 0 || !loading) && (
               <TransferTable transfers={transfers} onReverse={reverseTransfer} readOnly={isStaff} />
             )}
-            {isStaff && tab === 0 && <MobileLoadMore loading={loading} hasMore={page < (meta.totalPages || 1)} onLoadMore={() => setPage((value) => value + 1)} />}
-            {isStaff && tab === 1 && <MobileLoadMore loading={loading} hasMore={transferPage < (transferMeta.totalPages || 1)} onLoadMore={() => setTransferPage((value) => value + 1)} />}
+            {isStaff && tab === 0 && (
+              <MobileLoadMore
+                loading={loading}
+                hasMore={page < (meta.totalPages || 1)}
+                onLoadMore={() => setPage((value) => value + 1)}
+              />
+            )}
+            {isStaff && tab === 1 && (
+              <MobileLoadMore
+                loading={loading}
+                hasMore={transferPage < (transferMeta.totalPages || 1)}
+                onLoadMore={() => setTransferPage((value) => value + 1)}
+              />
+            )}
             {!isStaff && tab === 0 && meta.totalPages > 1 && (
               <Pager meta={meta} page={page} setPage={setPage} label="xe" />
             )}
@@ -2658,60 +2856,62 @@ function TruckGrid({
                   </SoftTypography>
                   <Icon sx={{ color: "#1565c0", fontSize: 20 }}>arrow_forward</Icon>
                 </SoftBox>
-                {!readOnly && <SoftBox
-                  display="flex"
-                  gap={0.5}
-                  mt={2}
-                  flexWrap="wrap"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <SoftButton
-                    size="small"
-                    variant="outlined"
-                    color="info"
-                    disabled={
-                      truck.status !== "active" || (!getId(truck.driver) && !truck.driverId)
-                    }
-                    onClick={() => onLoad(truck)}
+                {!readOnly && (
+                  <SoftBox
+                    display="flex"
+                    gap={0.5}
+                    mt={2}
+                    flexWrap="wrap"
+                    onClick={(event) => event.stopPropagation()}
                   >
-                    Xuất hàng
-                  </SoftButton>
-                  <SoftButton
-                    size="small"
-                    variant="outlined"
-                    color="warning"
-                    disabled={!quantity}
-                    onClick={() => onReturn(truck)}
-                  >
-                    Hoàn hàng
-                  </SoftButton>
-                  <SoftButton
-                    size="small"
-                    variant="outlined"
-                    color="success"
-                    disabled={!quantity}
-                    onClick={() => onTransfer(truck)}
-                  >
-                    Chuyển xe
-                  </SoftButton>
-                  <Tooltip title="Sửa">
-                    <IconButton size="small" onClick={() => onEdit(truck)}>
-                      <Icon color="info">edit</Icon>
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={truck.status === "active" ? "Ngừng hoạt động" : "Kích hoạt"}>
-                    <IconButton size="small" onClick={() => onStatus(truck)}>
-                      <Icon sx={{ color: truck.status === "active" ? "#E65100" : "#2E7D32" }}>
-                        {truck.status === "active" ? "pause_circle" : "play_circle"}
-                      </Icon>
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Xóa">
-                    <IconButton size="small" onClick={() => onDelete(truck)}>
-                      <Icon color="error">delete</Icon>
-                    </IconButton>
-                  </Tooltip>
-                </SoftBox>}
+                    <SoftButton
+                      size="small"
+                      variant="outlined"
+                      color="info"
+                      disabled={
+                        truck.status !== "active" || (!getId(truck.driver) && !truck.driverId)
+                      }
+                      onClick={() => onLoad(truck)}
+                    >
+                      Xuất hàng
+                    </SoftButton>
+                    <SoftButton
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                      disabled={!quantity}
+                      onClick={() => onReturn(truck)}
+                    >
+                      Hoàn hàng
+                    </SoftButton>
+                    <SoftButton
+                      size="small"
+                      variant="outlined"
+                      color="success"
+                      disabled={!quantity}
+                      onClick={() => onTransfer(truck)}
+                    >
+                      Chuyển xe
+                    </SoftButton>
+                    <Tooltip title="Sửa">
+                      <IconButton size="small" onClick={() => onEdit(truck)}>
+                        <Icon color="info">edit</Icon>
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={truck.status === "active" ? "Ngừng hoạt động" : "Kích hoạt"}>
+                      <IconButton size="small" onClick={() => onStatus(truck)}>
+                        <Icon sx={{ color: truck.status === "active" ? "#E65100" : "#2E7D32" }}>
+                          {truck.status === "active" ? "pause_circle" : "play_circle"}
+                        </Icon>
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Xóa">
+                      <IconButton size="small" onClick={() => onDelete(truck)}>
+                        <Icon color="error">delete</Icon>
+                      </IconButton>
+                    </Tooltip>
+                  </SoftBox>
+                )}
               </SoftBox>
             </Card>
           </Grid>
@@ -2724,187 +2924,243 @@ function TruckGrid({
 function TransferTable({ transfers, onReverse, readOnly }) {
   return (
     <>
-    {readOnly && <SoftBox display={{ xs: "block", md: "none" }}>
-      {!transfers.length && <SoftTypography variant="button" color="text" display="block" textAlign="center" py={4}>Chưa có phiếu điều chuyển</SoftTypography>}
-      {transfers.map((transfer) => <SoftBox key={getId(transfer)} py={1.75} sx={{ borderBottom: "1px solid #edf0f5" }}>
-        <SoftBox display="flex" justifyContent="space-between" gap={1} mb={0.75}><SoftTypography variant="button" fontWeight="bold">{transfer.code}</SoftTypography><SoftTypography variant="caption" color="text">{date(transfer.date || transfer.createdAt)}</SoftTypography></SoftBox>
-        <SoftTypography variant="caption" fontWeight="bold" display="block">{transfer.type === "LOAD" ? "Xuất hàng lên xe" : transfer.type === "RETURN" ? "Hoàn hàng về kho" : "Chuyển hàng giữa xe"}</SoftTypography>
-        <SoftTypography variant="caption" color="text" display="block">{transfer.type === "TRUCK_TO_TRUCK" ? `${transfer.sourceTruckName || "Xe nguồn"} → ${transfer.destinationTruckName || "Xe nhận"}` : transfer.truckName || transfer.truck?.name || "—"}</SoftTypography>
-        <SoftBox mt={1} p={1.25} borderRadius={2} bgcolor="#f0f2f5">{(transfer.items || []).slice(0, 4).map((item, index) => <SoftBox key={`${item.productId || index}`} display="flex" justifyContent="space-between" py={0.4}><SoftTypography variant="caption">{item.productName || item.name || "Sản phẩm"}</SoftTypography><SoftTypography variant="caption" fontWeight="bold">{quantityOf(item)} {item.unit || ""}</SoftTypography></SoftBox>)}</SoftBox>
-        <SoftBox display="flex" justifyContent="space-between" mt={1}><SoftTypography variant="caption" color="text">Tổng {transfer.totalQuantity || 0} sản phẩm</SoftTypography><SoftTypography variant="button" fontWeight="bold">{money(transfer.totalValue)}</SoftTypography></SoftBox>
-      </SoftBox>)}
-    </SoftBox>}
-    <SoftBox sx={{ overflowX: "auto", display: { xs: readOnly ? "none" : "block", md: "block" } }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ background: "#F8F9FA" }}>
-            {[
-              "Mã phiếu",
-              "Ngày",
-              "Loại",
-              "Xe",
-              "Tài xế",
-              "Hàng hóa",
-              "Tổng SL",
-              "Giá trị",
-              "Người tạo",
-              "Ghi chú",
-              "",
-            ].map((heading) => (
-              <th
-                key={heading}
-                style={{
-                  padding: 12,
-                  textAlign: "left",
-                  fontSize: 12,
-                  color: "#6B7280",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {heading}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
+      {readOnly && (
+        <SoftBox display={{ xs: "block", md: "none" }}>
           {!transfers.length && (
-            <tr>
-              <td colSpan={11} style={{ textAlign: "center", padding: 40, color: "#9E9E9E" }}>
-                Chưa có phiếu điều chuyển
-              </td>
-            </tr>
+            <SoftTypography variant="button" color="text" display="block" textAlign="center" py={4}>
+              Chưa có phiếu điều chuyển
+            </SoftTypography>
           )}
           {transfers.map((transfer) => (
-            <tr key={getId(transfer)} style={{ borderBottom: "1px solid #eee" }}>
-              <td style={{ padding: 12, fontSize: 13, fontWeight: 600 }}>{transfer.code}</td>
-              <td style={{ padding: 12, fontSize: 13, whiteSpace: "nowrap" }}>
-                {date(transfer.date || transfer.createdAt)}
-              </td>
-              <td style={{ padding: 12 }}>
-                <span
-                  style={{
-                    fontSize: 11,
-                    padding: "4px 8px",
-                    borderRadius: 10,
-                    color:
-                      transfer.type === "LOAD"
-                        ? "#1565C0"
-                        : transfer.type === "RETURN"
-                        ? "#E65100"
-                        : "#2E7D32",
-                    background:
-                      transfer.type === "LOAD"
-                        ? "#E3F2FD"
-                        : transfer.type === "RETURN"
-                        ? "#FFF3E0"
-                        : "#E8F5E9",
-                  }}
-                >
-                  {transfer.type === "LOAD"
-                    ? "Xuất lên xe"
-                    : transfer.type === "RETURN"
-                    ? "Hoàn về kho"
-                    : "Chuyển xe → xe"}
-                </span>
-              </td>
-              <td style={{ padding: 12, fontSize: 13 }}>
+            <SoftBox key={getId(transfer)} py={1.75} sx={{ borderBottom: "1px solid #edf0f5" }}>
+              <SoftBox display="flex" justifyContent="space-between" gap={1} mb={0.75}>
+                <SoftTypography variant="button" fontWeight="bold">
+                  {transfer.code}
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text">
+                  {date(transfer.date || transfer.createdAt)}
+                </SoftTypography>
+              </SoftBox>
+              <SoftTypography variant="caption" fontWeight="bold" display="block">
+                {transfer.type === "LOAD"
+                  ? "Xuất hàng lên xe"
+                  : transfer.type === "RETURN"
+                  ? "Hoàn hàng về kho"
+                  : "Chuyển hàng giữa xe"}
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text" display="block">
                 {transfer.type === "TRUCK_TO_TRUCK"
-                  ? `${transfer.sourceTruckName || transfer.sourceTruck?.name || "—"} → ${
-                      transfer.destinationTruckName || transfer.destinationTruck?.name || "—"
+                  ? `${transfer.sourceTruckName || "Xe nguồn"} → ${
+                      transfer.destinationTruckName || "Xe nhận"
                     }`
                   : transfer.truckName || transfer.truck?.name || "—"}
-                <br />
-                <span style={{ color: "#6B7280" }}>
+              </SoftTypography>
+              <SoftBox mt={1} p={1.25} borderRadius={2} bgcolor="#f0f2f5">
+                {(transfer.items || []).slice(0, 4).map((item, index) => (
+                  <SoftBox
+                    key={`${item.productId || index}`}
+                    display="flex"
+                    justifyContent="space-between"
+                    py={0.4}
+                  >
+                    <SoftTypography variant="caption">
+                      {item.productName || item.name || "Sản phẩm"}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" fontWeight="bold">
+                      {quantityOf(item)} {item.unit || ""}
+                    </SoftTypography>
+                  </SoftBox>
+                ))}
+              </SoftBox>
+              <SoftBox display="flex" justifyContent="space-between" mt={1}>
+                <SoftTypography variant="caption" color="text">
+                  Tổng {transfer.totalQuantity || 0} sản phẩm
+                </SoftTypography>
+                <SoftTypography variant="button" fontWeight="bold">
+                  {money(transfer.totalValue)}
+                </SoftTypography>
+              </SoftBox>
+            </SoftBox>
+          ))}
+        </SoftBox>
+      )}
+      <SoftBox
+        sx={{ overflowX: "auto", display: { xs: readOnly ? "none" : "block", md: "block" } }}
+      >
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#F8F9FA" }}>
+              {[
+                "Mã phiếu",
+                "Ngày",
+                "Loại",
+                "Xe",
+                "Tài xế",
+                "Hàng hóa",
+                "Tổng SL",
+                "Giá trị",
+                "Người tạo",
+                "Ghi chú",
+                "",
+              ].map((heading) => (
+                <th
+                  key={heading}
+                  style={{
+                    padding: 12,
+                    textAlign: "left",
+                    fontSize: 12,
+                    color: "#6B7280",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {heading}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {!transfers.length && (
+              <tr>
+                <td colSpan={11} style={{ textAlign: "center", padding: 40, color: "#9E9E9E" }}>
+                  Chưa có phiếu điều chuyển
+                </td>
+              </tr>
+            )}
+            {transfers.map((transfer) => (
+              <tr key={getId(transfer)} style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: 12, fontSize: 13, fontWeight: 600 }}>{transfer.code}</td>
+                <td style={{ padding: 12, fontSize: 13, whiteSpace: "nowrap" }}>
+                  {date(transfer.date || transfer.createdAt)}
+                </td>
+                <td style={{ padding: 12 }}>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: "4px 8px",
+                      borderRadius: 10,
+                      color:
+                        transfer.type === "LOAD"
+                          ? "#1565C0"
+                          : transfer.type === "RETURN"
+                          ? "#E65100"
+                          : "#2E7D32",
+                      background:
+                        transfer.type === "LOAD"
+                          ? "#E3F2FD"
+                          : transfer.type === "RETURN"
+                          ? "#FFF3E0"
+                          : "#E8F5E9",
+                    }}
+                  >
+                    {transfer.type === "LOAD"
+                      ? "Xuất lên xe"
+                      : transfer.type === "RETURN"
+                      ? "Hoàn về kho"
+                      : "Chuyển xe → xe"}
+                  </span>
+                </td>
+                <td style={{ padding: 12, fontSize: 13 }}>
                   {transfer.type === "TRUCK_TO_TRUCK"
-                    ? `${transfer.sourceTruckCode || transfer.sourceTruck?.code || ""} · ${
-                        transfer.sourceTruckLicensePlate || transfer.sourceTruck?.licensePlate || ""
-                      } → ${
-                        transfer.destinationTruckCode || transfer.destinationTruck?.code || ""
-                      } · ${
-                        transfer.destinationTruckLicensePlate ||
-                        transfer.destinationTruck?.licensePlate ||
-                        ""
+                    ? `${transfer.sourceTruckName || transfer.sourceTruck?.name || "—"} → ${
+                        transfer.destinationTruckName || transfer.destinationTruck?.name || "—"
                       }`
-                    : transfer.truck?.code || transfer.truckCode || ""}
-                  {transfer.type !== "TRUCK_TO_TRUCK" &&
-                  (transfer.truck?.licensePlate || transfer.truckLicensePlate)
-                    ? ` · ${transfer.truck?.licensePlate || transfer.truckLicensePlate}`
-                    : ""}
-                </span>
-              </td>
-              <td style={{ padding: 12, fontSize: 13 }}>
-                {transfer.type === "TRUCK_TO_TRUCK"
-                  ? `${transfer.sourceDriverName || transfer.sourceDriver?.fullName || "—"} → ${
-                      transfer.destinationDriverName || transfer.destinationDriver?.fullName || "—"
-                    }`
-                  : transfer.driver?.fullName || transfer.driverName || "—"}
-                <br />
-                <span style={{ color: "#6B7280" }}>
-                  {transfer.driver?.employeeCode || transfer.driverCode || ""}
-                </span>
-              </td>
-              <td style={{ padding: 12, minWidth: 280 }}>
-                {(transfer.items || []).length === 0
-                  ? "—"
-                  : (transfer.items || []).map((item, index) => (
-                      <SoftBox
-                        key={`${item.productId || item.productCode || index}-${index}`}
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        gap={2}
-                        py={0.75}
-                        sx={{
-                          borderBottom:
-                            index < transfer.items.length - 1 ? "1px dashed #E5E7EB" : "none",
-                        }}
-                      >
-                        <SoftBox>
-                          <SoftTypography variant="caption" fontWeight="bold" display="block">
-                            {item.productName || item.name || "Sản phẩm"}
-                          </SoftTypography>
-                          <SoftTypography variant="caption" color="text">
-                            {item.productCode || item.code || "Không có mã"}
-                          </SoftTypography>
-                        </SoftBox>
-                        <span
-                          style={{
-                            whiteSpace: "nowrap",
-                            padding: "3px 8px",
-                            borderRadius: 10,
-                            background: "#F3F4F6",
-                            color: "#374151",
-                            fontSize: 12,
-                            fontWeight: 600,
+                    : transfer.truckName || transfer.truck?.name || "—"}
+                  <br />
+                  <span style={{ color: "#6B7280" }}>
+                    {transfer.type === "TRUCK_TO_TRUCK"
+                      ? `${transfer.sourceTruckCode || transfer.sourceTruck?.code || ""} · ${
+                          transfer.sourceTruckLicensePlate ||
+                          transfer.sourceTruck?.licensePlate ||
+                          ""
+                        } → ${
+                          transfer.destinationTruckCode || transfer.destinationTruck?.code || ""
+                        } · ${
+                          transfer.destinationTruckLicensePlate ||
+                          transfer.destinationTruck?.licensePlate ||
+                          ""
+                        }`
+                      : transfer.truck?.code || transfer.truckCode || ""}
+                    {transfer.type !== "TRUCK_TO_TRUCK" &&
+                    (transfer.truck?.licensePlate || transfer.truckLicensePlate)
+                      ? ` · ${transfer.truck?.licensePlate || transfer.truckLicensePlate}`
+                      : ""}
+                  </span>
+                </td>
+                <td style={{ padding: 12, fontSize: 13 }}>
+                  {transfer.type === "TRUCK_TO_TRUCK"
+                    ? `${transfer.sourceDriverName || transfer.sourceDriver?.fullName || "—"} → ${
+                        transfer.destinationDriverName ||
+                        transfer.destinationDriver?.fullName ||
+                        "—"
+                      }`
+                    : transfer.driver?.fullName || transfer.driverName || "—"}
+                  <br />
+                  <span style={{ color: "#6B7280" }}>
+                    {transfer.driver?.employeeCode || transfer.driverCode || ""}
+                  </span>
+                </td>
+                <td style={{ padding: 12, minWidth: 280 }}>
+                  {(transfer.items || []).length === 0
+                    ? "—"
+                    : (transfer.items || []).map((item, index) => (
+                        <SoftBox
+                          key={`${item.productId || item.productCode || index}-${index}`}
+                          display="flex"
+                          justifyContent="space-between"
+                          alignItems="center"
+                          gap={2}
+                          py={0.75}
+                          sx={{
+                            borderBottom:
+                              index < transfer.items.length - 1 ? "1px dashed #E5E7EB" : "none",
                           }}
                         >
-                          {quantityOf(item)} {item.unit || ""}
-                        </span>
-                      </SoftBox>
-                    ))}
-              </td>
-              <td style={{ padding: 12, fontSize: 13 }}>{transfer.totalQuantity || 0}</td>
-              <td style={{ padding: 12, fontSize: 13, whiteSpace: "nowrap" }}>
-                {money(transfer.totalValue)}
-              </td>
-              <td style={{ padding: 12, fontSize: 13 }}>
-                {transfer.createdBy?.fullName || transfer.createdBy?.username || "—"}
-              </td>
-              <td style={{ padding: 12, fontSize: 13 }}>{transfer.note || "—"}</td>
-              <td style={{ padding: 12 }}>
-                {!readOnly && transfer.type === "TRUCK_TO_TRUCK" && !transfer.reversalOf && (
-                  <Tooltip title="Tạo phiếu chuyển ngược">
-                    <IconButton size="small" onClick={() => onReverse(transfer)}>
-                      <Icon color="warning">swap_horiz</Icon>
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </SoftBox>
+                          <SoftBox>
+                            <SoftTypography variant="caption" fontWeight="bold" display="block">
+                              {item.productName || item.name || "Sản phẩm"}
+                            </SoftTypography>
+                            <SoftTypography variant="caption" color="text">
+                              {item.productCode || item.code || "Không có mã"}
+                            </SoftTypography>
+                          </SoftBox>
+                          <span
+                            style={{
+                              whiteSpace: "nowrap",
+                              padding: "3px 8px",
+                              borderRadius: 10,
+                              background: "#F3F4F6",
+                              color: "#374151",
+                              fontSize: 12,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {quantityOf(item)} {item.unit || ""}
+                          </span>
+                        </SoftBox>
+                      ))}
+                </td>
+                <td style={{ padding: 12, fontSize: 13 }}>{transfer.totalQuantity || 0}</td>
+                <td style={{ padding: 12, fontSize: 13, whiteSpace: "nowrap" }}>
+                  {money(transfer.totalValue)}
+                </td>
+                <td style={{ padding: 12, fontSize: 13 }}>
+                  {transfer.createdBy?.fullName || transfer.createdBy?.username || "—"}
+                </td>
+                <td style={{ padding: 12, fontSize: 13 }}>{transfer.note || "—"}</td>
+                <td style={{ padding: 12 }}>
+                  {!readOnly && transfer.type === "TRUCK_TO_TRUCK" && !transfer.reversalOf && (
+                    <Tooltip title="Tạo phiếu chuyển ngược">
+                      <IconButton size="small" onClick={() => onReverse(transfer)}>
+                        <Icon color="warning">swap_horiz</Icon>
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </SoftBox>
     </>
   );
 }
