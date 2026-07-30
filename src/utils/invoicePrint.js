@@ -63,17 +63,6 @@ export const debtPaymentToInvoice = (payment = {}, customer = {}) => {
   const customerDebtAfter = Number(
     payment.customerDebtAfter ?? Math.max(0, customerDebtBefore - amount)
   );
-  const allocationText = [
-    ...(payment.allocations || []).map(
-      (allocation) => `${allocation.invoiceCode || "Hóa đơn"}: ${number(allocation.amount)} đ`
-    ),
-    Number(payment.unallocatedAmount || 0) > 0
-      ? `Công nợ đầu kỳ/import: ${number(payment.unallocatedAmount)} đ`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("; ");
-
   return {
     ...payment,
     documentType: "DEBT_PAYMENT",
@@ -100,9 +89,9 @@ export const debtPaymentToInvoice = (payment = {}, customer = {}) => {
         unit: "Lần",
         qty: 1,
         price: 0,
-        lineTotal: 0,
+        lineTotal: amount,
         lineType: "SALE",
-        note: allocationText || payment.note || "Phiếu thu công nợ",
+        note: payment.note || "",
       },
     ],
     subtotal: 0,
