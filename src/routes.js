@@ -22,6 +22,7 @@ import NhanVien from "layouts/nhan-vien";
 import AuditLogs from "layouts/audit-logs";
 import StaffHome from "layouts/staff-home";
 import ThuCongNo from "layouts/thu-cong-no";
+import BackupData from "layouts/backup-data";
 
 const routes = [
   {
@@ -164,6 +165,16 @@ const routes = [
     route: "/audit-logs",
     noCollapse: true,
     component: <AuditLogs />,
+    permission: ["admin"],
+  },
+  {
+    type: "collapse",
+    name: "Sao lưu dữ liệu",
+    key: "backup-data",
+    icon: <Document size="12px" />,
+    route: "/backup-data",
+    noCollapse: true,
+    component: <BackupData />,
     permission: ["admin"],
   },
 
