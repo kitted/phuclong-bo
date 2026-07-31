@@ -124,6 +124,7 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
   const customerPhone =
     customer.phone || invoice.customerPhone || [...new Set(phoneValues)].join(", ") || "";
   const customerAddress = customer.address || invoice.customerAddress || "";
+  const invoiceNote = String(invoice.note || invoice.invoiceNote || "").trim();
   const items = Array.isArray(invoice.items) ? invoice.items : [];
   const subtotal = Number(invoice.subtotal ?? invoice.totalAmount ?? 0);
   const discount = Number(invoice.discountAmount || 0);
@@ -345,6 +346,16 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
       margin: 4mm 2mm 0;
       font-size: 11.5pt;
     }
+    .invoice-note {
+      margin: 4mm 2mm 0;
+      padding: 2.5mm 3mm;
+      border: 0.3mm solid #b8aa7c;
+      background: #fff8e1;
+      font-size: 11.5pt;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      page-break-inside: avoid;
+    }
     .words {
       margin: 7mm 2mm 0;
       font-size: 12pt;
@@ -470,6 +481,11 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
         )}</td><td></td></tr>
       </tbody>
     </table>
+    ${
+      invoiceNote
+        ? `<p class="invoice-note"><b>Ghi chú hóa đơn:</b> ${escapeHtml(invoiceNote)}</p>`
+        : ""
+    }
     ${
       invoice.giftCode
         ? `<p class="gift-code"><b>Mã quà tặng:</b> ${escapeHtml(invoice.giftCode)}</p>`

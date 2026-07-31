@@ -392,8 +392,10 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   const [giftSelections, setGiftSelections] = useState({});
   const [appliedGiftPromotion, setAppliedGiftPromotion] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState(null);
   const [exportingInvoice, setExportingInvoice] = useState(false);
+  const formInitializedRef = useRef(false);
   const sourceAutoSelectedRef = useRef(false);
   const sourceCardsRef = useRef(null);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
@@ -416,7 +418,15 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     }
   };
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      formInitializedRef.current = false;
+      return;
+    }
+    // /auth/me được làm mới khi ứng dụng focus và định kỳ. Redux vì vậy có thể
+    // nhận một object user mới dù vẫn là cùng tài khoản. Chỉ khởi tạo form một
+    // lần cho mỗi lần mở để không xóa dữ liệu sale đang nhập.
+    if (formInitializedRef.current) return;
+    formInitializedRef.current = true;
     setCreatedInvoice(null);
     setForm({
       code: "",
@@ -449,6 +459,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     setSelectedGiftPromotion(null);
     setGiftSelections({});
     setAppliedGiftPromotion(null);
+    setReviewOpen(false);
   }, [open, isAdmin, authUser]);
   useEffect(() => {
     if (!open) return undefined;
@@ -851,13 +862,55 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   };
   const updateItem = (index, patch) =>
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
-  const submit = async () => {
+  const validationMessage = () => {
     if (isDebtPaymentOnly) {
       if (!customer || customerMode !== "EXISTING")
-        return toast.error("Thanh toán công nợ bắt buộc chọn khách hàng đã có hồ sơ");
-      if (currentDebt <= 0) return toast.error("Khách hàng hiện không có công nợ");
-      if (paidAmount > currentDebt)
-        return toast.error("Số tiền thanh toán không được vượt công nợ hiện tại");
+        return "Thanh toán công nợ bắt buộc chọn khách hàng đã có hồ sơ";
+      if (currentDebt <= 0) return "Khách hàng hiện không có công nợ";
+      if (paidAmount > currentDebt) return "Số tiền thanh toán không được vượt công nợ hiện tại";
+      return "";
+    }
+    if (!salesperson) return "Vui lòng chọn nhân viên xuất hóa đơn";
+    if (!previewItems.length || previewItems.length !== items.length)
+      return "Vui lòng chọn đầy đủ sản phẩm và số lượng";
+    if (items.some((item) => item.customPriceEnabled && Number(item.customPrice || 0) <= 0))
+      return "Giá bán điều chỉnh phải lớn hơn 0";
+    if (items.some((item) => item.customPriceEnabled && !previewConfirmsItemPrice(item)))
+      return "Backend chưa xác nhận giá bán điều chỉnh. Vui lòng kiểm tra API preview trước khi tạo đơn";
+    if (form.sourceType === "truck" && !truck) return "Vui lòng chọn xe xuất hàng";
+    if (!preview) return previewError || "Chưa tính được giá trị hóa đơn";
+    if (gifts.some((gift) => !gift.product || Number(gift.qty) <= 0))
+      return "Vui lòng chọn đầy đủ sản phẩm quà tặng và số lượng";
+    if (createsUnassignedCustomer && !newCustomer.name.trim())
+      return "Vui lòng nhập tên khách hàng mới";
+    if (form.paymentMode === "DEBT" && !hasCustomerProfile)
+      return "Hóa đơn ghi nợ bắt buộc có hồ sơ khách hàng";
+    if (paysExistingDebt && !customer)
+      return "Vui lòng chọn khách hàng để thanh toán công nợ cũ";
+    if (paysExistingDebt && currentDebt <= 0) return "Khách hàng hiện không có công nợ cũ";
+    if (paidAmount > maximumPaymentAmount)
+      return paysExistingDebt
+        ? "Số tiền thanh toán không được vượt tổng hóa đơn và công nợ cũ"
+        : "Tổng tiền thanh toán không được vượt giá trị hóa đơn";
+    if (!hasCustomerProfile && paidAmount !== grandTotal) return "Khách lẻ phải thanh toán đủ";
+    if (overLimit && !form.allowDebtLimitOverride)
+      return "Hóa đơn vượt hạn mức công nợ của khách hàng";
+    if (overLimit && form.allowDebtLimitOverride && !form.debtOverrideReason.trim())
+      return "Vui lòng nhập lý do vượt hạn mức";
+    return "";
+  };
+  const openReview = () => {
+    const message = validationMessage();
+    if (message) {
+      toast.error(message);
+      return;
+    }
+    setReviewOpen(true);
+  };
+  const submit = async () => {
+    const message = validationMessage();
+    if (message) return toast.error(message);
+    if (isDebtPaymentOnly) {
       const debtPayments = [];
       if (Number(form.cashAmount) > 0)
         debtPayments.push({ method: "CASH", amount: Number(form.cashAmount) });
@@ -877,7 +930,13 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
         });
         const receipt = unwrap(response) || {};
         toast.success(`Đã lập phiếu thu công nợ ${receipt.code || ""}`);
-        setCreatedInvoice(debtPaymentToInvoice(receipt, customer));
+        setReviewOpen(false);
+        setCreatedInvoice(
+          debtPaymentToInvoice(
+            { ...receipt, note: receipt.note ?? (form.note.trim() || undefined) },
+            customer
+          )
+        );
         onCreated();
       } catch (error) {
         toast.error(errorMessage(error, "Không thể thanh toán công nợ"));
@@ -886,41 +945,6 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       }
       return;
     }
-    if (!salesperson) return toast.error("Vui lòng chọn nhân viên xuất hóa đơn");
-    if (!previewItems.length || previewItems.length !== items.length)
-      return toast.error("Vui lòng chọn đầy đủ sản phẩm và số lượng");
-    if (items.some((item) => item.customPriceEnabled && Number(item.customPrice || 0) <= 0))
-      return toast.error("Giá bán điều chỉnh phải lớn hơn 0");
-    if (
-      items.some((item) => item.customPriceEnabled && !previewConfirmsItemPrice(item))
-    )
-      return toast.error(
-        "Backend chưa xác nhận giá bán điều chỉnh. Vui lòng kiểm tra API preview trước khi tạo đơn"
-      );
-    if (form.sourceType === "truck" && !truck) return toast.error("Vui lòng chọn xe xuất hàng");
-    if (!preview) return toast.error(previewError || "Chưa tính được giá trị hóa đơn");
-    if (gifts.some((gift) => !gift.product || Number(gift.qty) <= 0))
-      return toast.error("Vui lòng chọn đầy đủ sản phẩm quà tặng và số lượng");
-    if (createsUnassignedCustomer && !newCustomer.name.trim())
-      return toast.error("Vui lòng nhập tên khách hàng mới");
-    if (form.paymentMode === "DEBT" && !hasCustomerProfile)
-      return toast.error("Hóa đơn ghi nợ bắt buộc có hồ sơ khách hàng");
-    if (paysExistingDebt && !customer)
-      return toast.error("Vui lòng chọn khách hàng để thanh toán công nợ cũ");
-    if (paysExistingDebt && currentDebt <= 0)
-      return toast.error("Khách hàng hiện không có công nợ cũ");
-    if (paidAmount > maximumPaymentAmount)
-      return toast.error(
-        paysExistingDebt
-          ? "Số tiền thanh toán không được vượt tổng hóa đơn và công nợ cũ"
-          : "Tổng tiền thanh toán không được vượt giá trị hóa đơn"
-      );
-    if (!hasCustomerProfile && paidAmount !== grandTotal)
-      return toast.error("Khách lẻ phải thanh toán đủ");
-    if (overLimit && !form.allowDebtLimitOverride)
-      return toast.error("Hóa đơn vượt hạn mức công nợ của khách hàng");
-    if (overLimit && form.allowDebtLimitOverride && !form.debtOverrideReason.trim())
-      return toast.error("Vui lòng nhập lý do vượt hạn mức");
     try {
       setSubmitting(true);
       const payments = [];
@@ -970,11 +994,13 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       );
       setCreatedInvoice({
         ...created,
+        note: created.note ?? (form.note.trim() || undefined),
         customerDebtBefore: created.customerDebtBefore ?? currentDebt,
         customerDebtAfter: created.customerDebtAfter ?? projectedDebt,
         receivedAmount: created.receivedAmount ?? paidAmount,
         existingDebtPaidAmount: created.existingDebtPaidAmount ?? previousDebtPaidAmount,
       });
+      setReviewOpen(false);
       onCreated();
     } catch (error) {
       toast.error(errorMessage(error, "Không thể tạo hóa đơn"));
@@ -982,6 +1008,236 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       setSubmitting(false);
     }
   };
+  const reviewCustomerName = customer
+    ? [customer.code, customer.name].filter(Boolean).join(" · ")
+    : createsUnassignedCustomer
+    ? `Khách mới chưa mã · ${newCustomer.name || "Chưa nhập tên"}`
+    : "Khách lẻ";
+  const reviewSourceName =
+    form.sourceType === "truck"
+      ? [truck?.name || "Xe tải", truck?.licensePlate].filter(Boolean).join(" · ")
+      : "Kho chính";
+  if (reviewOpen)
+    return (
+      <Modal open={open} onClose={() => !submitting && setReviewOpen(false)}>
+        <SoftBox
+          sx={{
+            position: "absolute",
+            top: { xs: 0, md: "50%" },
+            left: { xs: 0, md: "50%" },
+            transform: { xs: "none", md: "translate(-50%, -50%)" },
+            width: { xs: "100%", md: 720 },
+            height: { xs: "100dvh", md: "auto" },
+            maxHeight: { xs: "100dvh", md: "92vh" },
+            display: "flex",
+            flexDirection: "column",
+            bgcolor: "background.paper",
+            borderRadius: { xs: 0, md: 3 },
+            boxShadow: 24,
+            overflow: "hidden",
+          }}
+        >
+          <SoftBox
+            px={{ xs: 2, md: 3 }}
+            py={2}
+            display="flex"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ borderBottom: "1px solid #e5e7eb" }}
+          >
+            <SoftBox>
+              <SoftTypography variant="h5" fontWeight="bold">
+                Kiểm tra lại hóa đơn
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text">
+                Chưa trừ hàng hoặc cập nhật công nợ ở bước này
+              </SoftTypography>
+            </SoftBox>
+            <SoftButton
+              variant="text"
+              color="secondary"
+              iconOnly
+              disabled={submitting}
+              onClick={() => setReviewOpen(false)}
+            >
+              <Icon>close</Icon>
+            </SoftButton>
+          </SoftBox>
+
+          <SoftBox px={{ xs: 2, md: 3 }} py={2} sx={{ overflowY: "auto", flex: 1 }}>
+            <SoftBox
+              p={2}
+              mb={2}
+              borderRadius={2}
+              bgcolor="#f5f8fc"
+              sx={{ border: "1px solid #dbe4f0" }}
+            >
+              {[
+                ["Khách hàng", reviewCustomerName],
+                ["Nhân viên", salesperson?.fullName || salesperson?.username || "—"],
+                ["Nguồn xuất", isDebtPaymentOnly ? "Không xuất hàng" : reviewSourceName],
+                ["Hình thức", paymentModePresentation.label],
+              ].map(([label, value]) => (
+                <SoftBox
+                  key={label}
+                  display="flex"
+                  justifyContent="space-between"
+                  gap={2}
+                  py={0.55}
+                >
+                  <SoftTypography variant="caption" color="text">
+                    {label}
+                  </SoftTypography>
+                  <SoftTypography variant="button" fontWeight="bold" textAlign="right">
+                    {value}
+                  </SoftTypography>
+                </SoftBox>
+              ))}
+            </SoftBox>
+
+            {!isDebtPaymentOnly && (
+              <SoftBox mb={2.5}>
+                <SoftTypography variant="button" fontWeight="bold" display="block" mb={1}>
+                  Hàng hóa ({items.length})
+                </SoftTypography>
+                {items.map((item, index) => {
+                  const unitPrice = effectiveUnitPriceFor(item);
+                  return (
+                    <SoftBox
+                      key={`${getId(item.product) || "item"}-${index}`}
+                      display="grid"
+                      sx={{ gridTemplateColumns: "32px 1fr auto", gap: 1.25 }}
+                      alignItems="center"
+                      py={1.25}
+                      px={1.5}
+                      mb={1}
+                      borderRadius={1.5}
+                      bgcolor="#fff"
+                      border="1px solid #e5e7eb"
+                    >
+                      <SoftBox
+                        width={32}
+                        height={32}
+                        borderRadius="50%"
+                        display="grid"
+                        sx={{ placeItems: "center", bgcolor: "#e3f2fd", color: "#1976d2" }}
+                      >
+                        {index + 1}
+                      </SoftBox>
+                      <SoftBox minWidth={0}>
+                        <SoftTypography variant="button" fontWeight="bold" display="block">
+                          {item.product?.name || "Sản phẩm"}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text">
+                          {money(unitPrice)} × {numberText(item.qty)}
+                          {item.customPriceEnabled ? " · Giá điều chỉnh" : ""}
+                        </SoftTypography>
+                      </SoftBox>
+                      <SoftTypography variant="button" fontWeight="bold">
+                        {money(unitPrice * Number(item.qty || 0))}
+                      </SoftTypography>
+                    </SoftBox>
+                  );
+                })}
+              </SoftBox>
+            )}
+
+            {gifts.length > 0 && (
+              <SoftBox mb={2.5} p={1.5} borderRadius={2} bgcolor="#eef8ff">
+                <SoftTypography variant="button" fontWeight="bold" color="info">
+                  Quà tặng kèm
+                </SoftTypography>
+                {gifts.map((gift, index) => (
+                  <SoftTypography
+                    key={`${getId(gift.product) || "gift"}-${index}`}
+                    variant="caption"
+                    display="block"
+                    mt={0.75}
+                  >
+                    {gift.product?.name || "Sản phẩm quà"} × {numberText(gift.qty)}
+                  </SoftTypography>
+                ))}
+              </SoftBox>
+            )}
+
+            <SoftBox
+              p={2}
+              borderRadius={2}
+              sx={{ border: `2px solid ${paymentModePresentation.color}55` }}
+              bgcolor={paymentModePresentation.background}
+            >
+              {[
+                ["Tổng hóa đơn", grandTotal],
+                ["Nợ cũ", currentDebt],
+                ["Khách thanh toán", paidAmount],
+                ["Còn nợ sau hóa đơn", projectedDebt],
+              ].map(([label, value]) => (
+                <SoftBox
+                  key={label}
+                  display="flex"
+                  justifyContent="space-between"
+                  py={0.6}
+                >
+                  <SoftTypography variant="button">{label}</SoftTypography>
+                  <SoftTypography
+                    variant="button"
+                    fontWeight="bold"
+                    color={label === "Còn nợ sau hóa đơn" && value > 0 ? "error" : "dark"}
+                  >
+                    {money(value)}
+                  </SoftTypography>
+                </SoftBox>
+              ))}
+            </SoftBox>
+
+            <SoftBox mt={2} p={1.5} borderRadius={1.5} bgcolor="#fff8e1">
+              <SoftTypography variant="caption" color="text" display="block">
+                Ghi chú hóa đơn
+              </SoftTypography>
+              <SoftTypography
+                variant="button"
+                fontWeight={form.note.trim() ? "regular" : "light"}
+                sx={{ whiteSpace: "pre-wrap" }}
+              >
+                {form.note.trim() || "Không có ghi chú"}
+              </SoftTypography>
+            </SoftBox>
+          </SoftBox>
+
+          <SoftBox
+            display="flex"
+            gap={1.5}
+            px={{ xs: 2, md: 3 }}
+            py={2}
+            bgcolor="#fff"
+            sx={{ borderTop: "1px solid #e5e7eb" }}
+          >
+            <SoftButton
+              variant="outlined"
+              color="secondary"
+              fullWidth
+              disabled={submitting}
+              onClick={() => setReviewOpen(false)}
+            >
+              Quay lại chỉnh sửa
+            </SoftButton>
+            <SoftButton
+              variant="gradient"
+              color="success"
+              fullWidth
+              disabled={submitting}
+              onClick={submit}
+            >
+              {submitting
+                ? "Đang xử lý..."
+                : isDebtPaymentOnly
+                ? "Xác nhận thu nợ"
+                : "Xác nhận bán hàng"}
+            </SoftButton>
+          </SoftBox>
+        </SoftBox>
+      </Modal>
+    );
   if (createdInvoice)
     return (
       <Modal open={open} onClose={onClose}>
@@ -3104,12 +3360,13 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                 </SoftBox>
                 <SoftButton
                   variant="gradient"
-                  color="success"
+                  color="info"
                   fullWidth
                   disabled={submitting}
-                  onClick={submit}
+                  startIcon={<Icon>fact_check</Icon>}
+                  onClick={openReview}
                 >
-                  {submitting ? "Đang tạo..." : isAdmin ? "Tạo hóa đơn" : "Xác nhận bán hàng"}
+                  Xem lại hóa đơn
                 </SoftButton>
               </SoftBox>
             </SoftBox>
@@ -3148,6 +3405,7 @@ function InvoicePaperView({ invoice }) {
     )
   ).join(", ");
   const customerAddress = customer.address || invoice.customerAddress || "";
+  const invoiceNote = String(invoice.note || invoice.invoiceNote || "").trim();
   const occurredAt = new Date(invoice.createdAt || invoice.date || Date.now());
   const subtotal = Number(invoice.subtotal ?? invoice.totalAmount ?? 0);
   const discount = Number(invoice.discountAmount || 0);
@@ -3435,6 +3693,25 @@ function InvoicePaperView({ invoice }) {
           </table>
         </SoftBox>
       </SoftBox>
+
+      {invoiceNote && (
+        <SoftBox
+          mt={2}
+          p={1.5}
+          bgcolor="#fff8e1"
+          sx={{ border: "1px solid #d7c58f" }}
+        >
+          <SoftTypography
+            component="p"
+            fontFamily="inherit"
+            color="dark"
+            fontSize={{ xs: 13, sm: 15 }}
+            sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
+          >
+            <b>Ghi chú hóa đơn:</b> {invoiceNote}
+          </SoftTypography>
+        </SoftBox>
+      )}
 
       {invoice.giftCode && (
         <SoftTypography component="p" fontFamily="inherit" color="dark" fontSize={14} mt={2}>
