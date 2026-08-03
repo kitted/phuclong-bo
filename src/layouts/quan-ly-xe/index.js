@@ -19,7 +19,7 @@ import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
 import { InvoiceService, TruckService } from "services/warehouseService";
 import InventoryService from "services/inventoryService";
-import { downloadBlob } from "utils/excel";
+import { createExcelFile, downloadBlob } from "utils/excel";
 import { toast } from "react-toastify";
 import { useSelector } from "react-redux";
 import StaffMobileHeader from "components/StaffMobileHeader";
@@ -28,6 +28,20 @@ import CustomerReturnService from "services/customerReturnService";
 
 const EMPTY_TRUCK = { code: "", name: "", licensePlate: "", driverId: "", status: "active" };
 const EMPTY_META = { totalPages: 1, totalItems: 0 };
+const STOCK_CHECK_STATUSES = {
+  MATCHED: { label: "Khớp tồn", color: "#2e7d32", background: "#e8f5e9", icon: "check_circle" },
+  SHORTAGE: { label: "Thiếu hàng", color: "#c62828", background: "#ffebee", icon: "remove_circle" },
+  SURPLUS: { label: "Thừa hàng", color: "#ef6c00", background: "#fff3e0", icon: "add_circle" },
+  NOT_COUNTED: { label: "Chưa kiểm", color: "#607d8b", background: "#eceff1", icon: "pending" },
+  UNKNOWN: { label: "Mã không tồn tại", color: "#8d6e00", background: "#fff8e1", icon: "help" },
+  NOT_ON_TRUCK: {
+    label: "Không có trên xe",
+    color: "#8d6e00",
+    background: "#fff8e1",
+    icon: "warning",
+  },
+  INVALID: { label: "Dữ liệu lỗi", color: "#ad1457", background: "#fce4ec", icon: "error" },
+};
 const getId = (value) => value?.id || value?._id;
 const sameId = (left, right) =>
   Boolean(left && right && String(getId(left) || left) === String(getId(right) || right));
@@ -75,6 +89,13 @@ const apiError = (error, fallback) => {
   const message = error?.response?.data?.message;
   return Array.isArray(message) ? message.join(", ") : message || fallback;
 };
+const downloadApiFile = (response, fallbackName) => {
+  const disposition = response?.headers?.["content-disposition"] || "";
+  const utf8Name = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  const fileName = utf8Name ? decodeURIComponent(utf8Name) : plainName || fallbackName;
+  downloadBlob(response.data, fileName);
+};
 const money = (value = 0) =>
   new Intl.NumberFormat("vi-VN", {
     style: "currency",
@@ -92,6 +113,12 @@ const date = (value) =>
         hour12: false,
       })
     : "—";
+const makeIdempotencyKey = (prefix) => {
+  const uuid = typeof window !== "undefined" ? window.crypto?.randomUUID?.() : "";
+  return `${prefix}-${uuid || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+};
+const backupSourceLabel = (source) =>
+  source === "BEFORE_RESTORE" ? "Trước khi khôi phục" : "Trước khi đồng bộ kiểm hàng";
 function SegmentedTabs({ value, onChange, items, fullWidth = false }) {
   return (
     <SoftBox
@@ -1106,7 +1133,9 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
   );
 }
 
-function TruckInventoryModal({ truck, onClose }) {
+function TruckInventoryModal({ truck, onClose, onChanged }) {
+  const isAdmin =
+    String(useSelector((state) => state.auth?.user?.role) || "").toLowerCase() === "admin";
   const [detail, setDetail] = useState(null);
   const [availableProducts, setAvailableProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1119,6 +1148,34 @@ function TruckInventoryModal({ truck, onClose }) {
   const [salesSort, setSalesSort] = useState("desc");
   const [salesInvoices, setSalesInvoices] = useState([]);
   const [salesLoading, setSalesLoading] = useState(false);
+  const [goodsReport, setGoodsReport] = useState({ summary: {}, data: [] });
+  const [goodsReportLoading, setGoodsReportLoading] = useState(false);
+  const [goodsReportExporting, setGoodsReportExporting] = useState(false);
+  const [stockCheckFile, setStockCheckFile] = useState(null);
+  const [stockCheckResult, setStockCheckResult] = useState(null);
+  const [stockCheckFilter, setStockCheckFilter] = useState("ALL");
+  const [stockCheckDownloading, setStockCheckDownloading] = useState(false);
+  const [stockCheckComparing, setStockCheckComparing] = useState(false);
+  const [stockCheckExporting, setStockCheckExporting] = useState(false);
+  const [stockCheckMode, setStockCheckMode] = useState("DIRECT");
+  const [directCounts, setDirectCounts] = useState({});
+  const [directNotes, setDirectNotes] = useState({});
+  const [directSearch, setDirectSearch] = useState("");
+  const [directFilter, setDirectFilter] = useState("ALL");
+  const [directDraftTruckId, setDirectDraftTruckId] = useState("");
+  const [stockAction, setStockAction] = useState(null);
+  const [stockActionReason, setStockActionReason] = useState("");
+  const [stockActionConfirmation, setStockActionConfirmation] = useState("");
+  const [stockActionAcknowledged, setStockActionAcknowledged] = useState(false);
+  const [stockActionLoading, setStockActionLoading] = useState(false);
+  const [inventoryBackups, setInventoryBackups] = useState([]);
+  const [inventoryBackupMeta, setInventoryBackupMeta] = useState(EMPTY_META);
+  const [inventoryBackupPage, setInventoryBackupPage] = useState(1);
+  const [inventoryBackupReloadKey, setInventoryBackupReloadKey] = useState(0);
+  const [inventoryBackupsLoading, setInventoryBackupsLoading] = useState(false);
+  const [inventoryBackupDetail, setInventoryBackupDetail] = useState(null);
+  const [inventoryBackupDetailLoading, setInventoryBackupDetailLoading] = useState(false);
+  const [inventoryBackupExporting, setInventoryBackupExporting] = useState("");
 
   useEffect(() => {
     if (!truck) return undefined;
@@ -1132,6 +1189,33 @@ function TruckInventoryModal({ truck, onClose }) {
     setSalesWeek(currentWeekValue());
     setSalesSort("desc");
     setSalesInvoices([]);
+    setGoodsReport({ summary: {}, data: [] });
+    setStockCheckFile(null);
+    setStockCheckResult(null);
+    setStockCheckFilter("ALL");
+    setStockCheckMode("DIRECT");
+    setDirectSearch("");
+    setDirectFilter("ALL");
+    setDirectDraftTruckId("");
+    setStockAction(null);
+    setStockActionReason("");
+    setStockActionConfirmation("");
+    setStockActionAcknowledged(false);
+    setInventoryBackups([]);
+    setInventoryBackupMeta(EMPTY_META);
+    setInventoryBackupPage(1);
+    setInventoryBackupDetail(null);
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem(`truck-stock-check-draft-${getId(truck)}`) || "{}"
+      );
+      setDirectCounts(saved.counts && typeof saved.counts === "object" ? saved.counts : {});
+      setDirectNotes(saved.notes && typeof saved.notes === "object" ? saved.notes : {});
+    } catch {
+      setDirectCounts({});
+      setDirectNotes({});
+    }
+    setDirectDraftTruckId(String(getId(truck)));
     setLoading(true);
     setPricesLoading(true);
     TruckService.getById(getId(truck))
@@ -1167,6 +1251,78 @@ function TruckInventoryModal({ truck, onClose }) {
       active = false;
     };
   }, [truck]);
+
+  useEffect(() => {
+    if (!truck || directDraftTruckId !== String(getId(truck))) return;
+    localStorage.setItem(
+      `truck-stock-check-draft-${getId(truck)}`,
+      JSON.stringify({
+        counts: directCounts,
+        notes: directNotes,
+        savedAt: new Date().toISOString(),
+      })
+    );
+  }, [truck, directCounts, directNotes, directDraftTruckId]);
+
+  useEffect(() => {
+    if (!truck || !isAdmin || detailTab !== 2 || stockCheckMode !== "BACKUPS") return undefined;
+    let active = true;
+    setInventoryBackupsLoading(true);
+    TruckService.getInventoryBackups(getId(truck), {
+      page: inventoryBackupPage,
+      limit: 10,
+    })
+      .then((response) => {
+        if (!active) return;
+        setInventoryBackups(listOf(response));
+        const responseMeta = metaOf(response);
+        setInventoryBackupMeta({
+          ...EMPTY_META,
+          ...responseMeta,
+          totalItems: responseMeta.totalItems ?? responseMeta.total ?? 0,
+        });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setInventoryBackups([]);
+        toast.error(apiError(error, "Không thể tải danh sách bản sao tồn xe"));
+      })
+      .finally(() => active && setInventoryBackupsLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [truck, isAdmin, detailTab, stockCheckMode, inventoryBackupPage, inventoryBackupReloadKey]);
+
+  useEffect(() => {
+    if (!truck || detailTab !== 1) return undefined;
+    let active = true;
+    const range =
+      salesPeriod === "DAY"
+        ? { from: salesDate, to: salesDate }
+        : salesPeriod === "WEEK"
+        ? weekRange(salesWeek)
+        : {};
+    setGoodsReportLoading(true);
+    TruckService.getGoodsReport(getId(truck), range)
+      .then((response) => {
+        if (!active) return;
+        const report = unwrap(response) || {};
+        setGoodsReport({
+          ...report,
+          summary: report.summary && typeof report.summary === "object" ? report.summary : {},
+          data: Array.isArray(report.data) ? report.data : [],
+        });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setGoodsReport({ summary: {}, data: [] });
+        toast.error(apiError(error, "Không thể tải tổng hợp hàng hóa trên xe"));
+      })
+      .finally(() => active && setGoodsReportLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [truck, detailTab, salesPeriod, salesDate, salesWeek]);
 
   useEffect(() => {
     if (!truck || detailTab !== 1) return undefined;
@@ -1593,826 +1749,2939 @@ function TruckInventoryModal({ truck, onClose }) {
     (sum, item) => sum + productDetail(item).sellPrice * quantityOf(item),
     0
   );
+  const directStockRows = inventory.map((item, index) => {
+    const product = productDetail(item);
+    const code =
+      product.code === "—"
+        ? ""
+        : String(product.code || "")
+            .trim()
+            .toUpperCase();
+    const key = code || `missing-code-${productIdOf(item) || index}`;
+    const rawActual = Object.prototype.hasOwnProperty.call(directCounts, key)
+      ? directCounts[key]
+      : "";
+    const actualQuantity = rawActual === "" ? null : Number(rawActual);
+    const differenceQuantity =
+      actualQuantity === null || Number.isNaN(actualQuantity)
+        ? null
+        : actualQuantity - product.quantity;
+    return {
+      key,
+      code,
+      name: product.name,
+      barcode: product.barcode,
+      unit: product.unit,
+      systemQuantity: product.quantity,
+      rawActual,
+      actualQuantity,
+      differenceQuantity,
+      note: directNotes[key] || "",
+    };
+  });
+  const directCountedProducts = directStockRows.filter(
+    (item) => item.rawActual !== "" && Number.isInteger(item.actualQuantity)
+  ).length;
+  const directProgressPercent = directStockRows.length
+    ? Math.round((directCountedProducts / directStockRows.length) * 100)
+    : 0;
+  const normalizedDirectSearch = directSearch.trim().toLocaleLowerCase("vi");
+  const visibleDirectStockRows = directStockRows.filter((item) => {
+    const searchMatches =
+      !normalizedDirectSearch ||
+      [item.code, item.name, item.barcode].some((value) =>
+        String(value || "")
+          .toLocaleLowerCase("vi")
+          .includes(normalizedDirectSearch)
+      );
+    if (!searchMatches) return false;
+    if (directFilter === "NOT_COUNTED") return item.rawActual === "";
+    if (directFilter === "COUNTED") return item.rawActual !== "";
+    if (directFilter === "DIFFERENCE") {
+      return item.differenceQuantity !== null && item.differenceQuantity !== 0;
+    }
+    return true;
+  });
+  const selectedSalesRange =
+    salesPeriod === "DAY"
+      ? { from: salesDate, to: salesDate }
+      : salesPeriod === "WEEK"
+      ? weekRange(salesWeek)
+      : {};
+  const salesProductSummary = Array.isArray(goodsReport.data) ? goodsReport.data : [];
+  const salesTotals = {
+    documentCount: 0,
+    soldQuantity: 0,
+    giftQuantity: 0,
+    invoiceReturnQuantity: 0,
+    customerReturnQuantity: 0,
+    inboundQuantity: 0,
+    outboundQuantity: 0,
+    returnReversedQuantity: 0,
+    netQuantity: 0,
+    revenue: 0,
+    ...(goodsReport.summary || {}),
+  };
+  const exportTruckGoods = async () => {
+    if (!salesProductSummary.length) {
+      toast.error("Không có dữ liệu hàng hóa trong khoảng thời gian đã chọn");
+      return;
+    }
+    try {
+      setGoodsReportExporting(true);
+      const response = await TruckService.exportGoodsReport(getId(truck), selectedSalesRange);
+      downloadApiFile(
+        response,
+        `hang-hoa-${currentTruck.code || "xe"}-${selectedSalesRange.from || "tat-ca"}-${
+          selectedSalesRange.to || "tat-ca"
+        }.xlsx`
+      );
+      toast.success("Đã xuất tổng hợp hàng hóa trên xe");
+    } catch (error) {
+      toast.error(apiError(error, "Không thể xuất file Excel"));
+    } finally {
+      setGoodsReportExporting(false);
+    }
+  };
+  const downloadStockCheckTemplate = async () => {
+    try {
+      setStockCheckDownloading(true);
+      const response = await TruckService.downloadStockCheckTemplate(getId(truck));
+      downloadApiFile(response, `kiem-hang-${currentTruck.code || "xe"}.xlsx`);
+      toast.success("Đã tải file mẫu kiểm hàng");
+    } catch (error) {
+      toast.error(apiError(error, "Không thể tải file mẫu kiểm hàng"));
+    } finally {
+      setStockCheckDownloading(false);
+    }
+  };
+  const selectStockCheckFile = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!String(file.name).toLowerCase().endsWith(".xlsx")) {
+      toast.error("Chỉ hỗ trợ file Excel định dạng .xlsx");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File Excel không được vượt quá 10MB");
+      return;
+    }
+    setStockCheckFile(file);
+    setStockCheckResult(null);
+    setStockCheckFilter("ALL");
+  };
+  const runStockCheckComparison = async (file) => {
+    try {
+      setStockCheckComparing(true);
+      const response = await TruckService.compareStockCheck(getId(truck), file);
+      const result = unwrap(response) || {};
+      setStockCheckResult({
+        ...result,
+        summary: result.summary && typeof result.summary === "object" ? result.summary : {},
+        items: Array.isArray(result.items) ? result.items : [],
+      });
+      setStockCheckFilter("ALL");
+      toast.success("Đã đối chiếu số lượng thực tế với tồn trên app");
+    } catch (error) {
+      toast.error(apiError(error, "Không thể đối chiếu file kiểm hàng"));
+    } finally {
+      setStockCheckComparing(false);
+    }
+  };
+  const compareStockCheck = () => {
+    if (!stockCheckFile) {
+      toast.error("Vui lòng chọn file Excel đã điền số lượng thực tế");
+      return;
+    }
+    runStockCheckComparison(stockCheckFile);
+  };
+  const compareDirectStockCheck = () => {
+    if (!directCountedProducts) {
+      toast.error("Vui lòng nhập số lượng thực tế của ít nhất một sản phẩm");
+      return;
+    }
+    const rows = directStockRows.map((item, index) => ({
+      STT: index + 1,
+      "MÃ SẢN PHẨM": item.code,
+      "TÊN SẢN PHẨM": item.name,
+      "ĐƠN VỊ": item.unit,
+      "SỐ LƯỢNG TRÊN APP": item.systemQuantity,
+      "SỐ LƯỢNG THỰC TẾ": item.rawActual === "" ? "" : Number(item.rawActual),
+      "GHI CHÚ": item.note,
+    }));
+    const file = createExcelFile(
+      rows,
+      `kiem-hang-truc-tiep-${currentTruck.code || "xe"}.xlsx`,
+      "Kiểm hàng xe"
+    );
+    runStockCheckComparison(file);
+  };
+  const clearDirectStockCheck = () => {
+    if (
+      directCountedProducts &&
+      !window.confirm("Xóa toàn bộ số lượng thực tế và ghi chú đang nhập?")
+    )
+      return;
+    setDirectCounts({});
+    setDirectNotes({});
+    setStockCheckResult(null);
+    localStorage.removeItem(`truck-stock-check-draft-${getId(truck)}`);
+  };
+  const exportStockCheckResult = async () => {
+    if (!stockCheckResult?.comparisonId) return;
+    try {
+      setStockCheckExporting(true);
+      const response = await TruckService.exportStockCheck(stockCheckResult.comparisonId);
+      downloadApiFile(response, `ket-qua-kiem-hang-${currentTruck.code || "xe"}.xlsx`);
+      toast.success("Đã tải kết quả đối chiếu");
+    } catch (error) {
+      toast.error(apiError(error, "Không thể xuất kết quả đối chiếu"));
+    } finally {
+      setStockCheckExporting(false);
+    }
+  };
+  const refreshTruckInventory = async () => {
+    const response = await TruckService.getById(getId(truck));
+    setDetail(unwrap(response) || truck);
+    onChanged?.();
+  };
+  const resetStockAction = () => {
+    setStockAction(null);
+    setStockActionReason("");
+    setStockActionConfirmation("");
+    setStockActionAcknowledged(false);
+  };
+  const openStockSyncPreview = async () => {
+    if (!stockCheckResult?.comparisonId) return;
+    try {
+      setStockActionLoading(true);
+      const response = await TruckService.previewStockCheckSync(stockCheckResult.comparisonId);
+      setStockAction({
+        type: "SYNC",
+        preview: unwrap(response) || {},
+        idempotencyKey: makeIdempotencyKey("stock-sync"),
+      });
+      setStockActionReason("");
+      setStockActionConfirmation("");
+      setStockActionAcknowledged(false);
+    } catch (error) {
+      toast.error(apiError(error, "Không thể kiểm tra điều kiện đồng bộ"));
+    } finally {
+      setStockActionLoading(false);
+    }
+  };
+  const openBackupDetail = async (backup) => {
+    try {
+      setInventoryBackupDetailLoading(true);
+      const response = await TruckService.getInventoryBackup(getId(backup));
+      setInventoryBackupDetail(unwrap(response) || backup);
+    } catch (error) {
+      toast.error(apiError(error, "Không thể tải chi tiết bản sao"));
+    } finally {
+      setInventoryBackupDetailLoading(false);
+    }
+  };
+  const exportInventoryBackup = async (backup) => {
+    const backupId = getId(backup);
+    try {
+      setInventoryBackupExporting(String(backupId));
+      const response = await TruckService.exportInventoryBackup(backupId);
+      downloadApiFile(response, `${backup.code || "backup-ton-xe"}.xlsx`);
+      toast.success("Đã tải file bản sao tồn xe");
+    } catch (error) {
+      toast.error(apiError(error, "Không thể xuất bản sao tồn xe"));
+    } finally {
+      setInventoryBackupExporting("");
+    }
+  };
+  const openRestorePreview = async (backup) => {
+    try {
+      setStockActionLoading(true);
+      const response = await TruckService.previewInventoryRestore(getId(backup));
+      setStockAction({
+        type: "RESTORE",
+        backup,
+        preview: unwrap(response) || {},
+        idempotencyKey: makeIdempotencyKey("restore"),
+      });
+      setStockActionReason("");
+      setStockActionConfirmation("");
+      setStockActionAcknowledged(false);
+    } catch (error) {
+      toast.error(apiError(error, "Không thể kiểm tra điều kiện khôi phục"));
+    } finally {
+      setStockActionLoading(false);
+    }
+  };
+  const submitStockAction = async () => {
+    if (!stockAction) return;
+    const isRestore = stockAction.type === "RESTORE";
+    const requiredConfirmation = isRestore ? "KHOI PHUC TON XE" : "DONG BO TON XE";
+    if (!stockActionReason.trim()) {
+      toast.error("Vui lòng nhập lý do thực hiện");
+      return;
+    }
+    if (stockActionConfirmation.trim() !== requiredConfirmation) {
+      toast.error(`Vui lòng nhập chính xác ${requiredConfirmation}`);
+      return;
+    }
+    try {
+      setStockActionLoading(true);
+      const payload = {
+        reason: stockActionReason.trim(),
+        confirmation: requiredConfirmation,
+        idempotencyKey:
+          stockAction.idempotencyKey || makeIdempotencyKey(isRestore ? "restore" : "stock-sync"),
+      };
+      if (isRestore) {
+        await TruckService.restoreInventoryBackup(getId(stockAction.backup), payload);
+      } else {
+        await TruckService.syncStockCheck(stockCheckResult.comparisonId, payload);
+        localStorage.removeItem(`truck-stock-check-draft-${getId(truck)}`);
+        setDirectCounts({});
+        setDirectNotes({});
+      }
+      await refreshTruckInventory();
+      setInventoryBackupPage(1);
+      setInventoryBackups([]);
+      setInventoryBackupReloadKey((value) => value + 1);
+      setStockCheckResult(null);
+      resetStockAction();
+      setStockCheckMode("BACKUPS");
+      toast.success(
+        isRestore ? "Đã khôi phục tồn xe từ bản sao" : "Đã đồng bộ số lượng thực tế lên xe"
+      );
+    } catch (error) {
+      const payload = error?.response?.data;
+      const changedProducts = payload?.changedProducts || payload?.message?.changedProducts;
+      if (Array.isArray(changedProducts) && changedProducts.length) {
+        toast.error(`Tồn xe đã thay đổi ở ${changedProducts.length} sản phẩm. Hãy kiểm hàng lại.`);
+      } else {
+        toast.error(
+          apiError(error, isRestore ? "Không thể khôi phục tồn xe" : "Không thể đồng bộ tồn xe")
+        );
+      }
+    } finally {
+      setStockActionLoading(false);
+    }
+  };
+  const stockCheckItems = Array.isArray(stockCheckResult?.items) ? stockCheckResult.items : [];
+  const visibleStockCheckItems = stockCheckItems.filter(
+    (item) => stockCheckFilter === "ALL" || item.status === stockCheckFilter
+  );
 
   return (
-    <Modal open onClose={onClose}>
-      <SoftBox
-        sx={{
-          position: "absolute",
-          top: { xs: 0, md: "50%" },
-          left: { xs: 0, md: "50%" },
-          transform: { xs: "none", md: "translate(-50%, -50%)" },
-          width: { xs: "100%", md: "min(1100px, 94vw)" },
-          height: { xs: "100dvh", md: "auto" },
-          maxHeight: { md: "92vh" },
-          bgcolor: "#fff",
-          borderRadius: { xs: 0, md: 3 },
-          boxShadow: 24,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
+    <>
+      <Modal open onClose={onClose}>
         <SoftBox
-          px={{ xs: 2, md: 3 }}
-          py={{ xs: 1.75, md: 2.25 }}
-          sx={{ borderBottom: "1px solid #e9ecef", flexShrink: 0 }}
+          sx={{
+            position: "absolute",
+            top: { xs: 0, md: "50%" },
+            left: { xs: 0, md: "50%" },
+            transform: { xs: "none", md: "translate(-50%, -50%)" },
+            width: { xs: "100%", md: "min(1100px, 94vw)" },
+            height: { xs: "100dvh", md: "auto" },
+            maxHeight: { md: "92vh" },
+            bgcolor: "#fff",
+            borderRadius: { xs: 0, md: 3 },
+            boxShadow: 24,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+          }}
         >
-          <SoftBox display="flex" alignItems="flex-start" justifyContent="space-between" gap={2}>
-            <SoftBox display="flex" alignItems="center" gap={1.5} minWidth={0}>
-              <SoftBox
-                width={{ xs: 44, md: 50 }}
-                height={{ xs: 44, md: 50 }}
-                borderRadius={2}
-                bgcolor="#e3f2fd"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                flexShrink={0}
-              >
-                <Icon sx={{ color: "#1565c0", fontSize: { xs: 27, md: 31 } }}>local_shipping</Icon>
-              </SoftBox>
-              <SoftBox minWidth={0}>
-                <SoftTypography
-                  variant="h5"
-                  fontWeight="bold"
-                  sx={{ fontSize: { xs: "1.1rem", md: "1.35rem" } }}
-                >
-                  {currentTruck.name || "Chi tiết xe"}
-                </SoftTypography>
-                <SoftTypography variant="caption" color="text" display="block">
-                  {currentTruck.code || "—"} · {currentTruck.licensePlate || "Chưa có biển số"}
-                </SoftTypography>
-              </SoftBox>
-            </SoftBox>
-            <IconButton
-              aria-label="Đóng chi tiết xe"
-              onClick={onClose}
-              sx={{ bgcolor: "#f0f2f5", flexShrink: 0 }}
-            >
-              <Icon>close</Icon>
-            </IconButton>
-          </SoftBox>
-        </SoftBox>
-
-        <SoftBox
-          px={{ xs: 1.5, md: 3 }}
-          py={{ xs: 1.5, md: 2.5 }}
-          sx={{ overflowY: "auto", flex: 1, bgcolor: { xs: "#f5f7fa", md: "#fff" } }}
-        >
-          <Grid container spacing={{ xs: 1, md: 1.5 }} mb={2}>
-            {[
-              ["Loại hàng", inventory.length, "category", "#1565c0", "#e3f2fd"],
-              ["Tổng số lượng", totalQuantity, "inventory_2", "#2e7d32", "#e8f5e9"],
-              ["Giá trị theo giá bán", money(totalSellingValue), "payments", "#7b1fa2", "#f3e5f5"],
-            ].map(([label, value, icon, color, background]) => (
-              <Grid item xs={label === "Giá trị theo giá bán" ? 12 : 6} md={4} key={label}>
+          <SoftBox
+            px={{ xs: 2, md: 3 }}
+            py={{ xs: 1.75, md: 2.25 }}
+            sx={{ borderBottom: "1px solid #e9ecef", flexShrink: 0 }}
+          >
+            <SoftBox display="flex" alignItems="flex-start" justifyContent="space-between" gap={2}>
+              <SoftBox display="flex" alignItems="center" gap={1.5} minWidth={0}>
                 <SoftBox
-                  p={{ xs: 1.4, md: 1.75 }}
-                  borderRadius={2.5}
-                  bgcolor={background}
-                  height="100%"
+                  width={{ xs: 44, md: 50 }}
+                  height={{ xs: 44, md: 50 }}
+                  borderRadius={2}
+                  bgcolor="#e3f2fd"
                   display="flex"
                   alignItems="center"
-                  gap={1.25}
+                  justifyContent="center"
+                  flexShrink={0}
                 >
-                  <Icon sx={{ color, fontSize: { xs: 24, md: 28 } }}>{icon}</Icon>
-                  <SoftBox minWidth={0}>
-                    <SoftTypography variant="caption" color="text" display="block">
-                      {label}
-                    </SoftTypography>
-                    <SoftTypography
-                      variant="h6"
-                      fontWeight="bold"
-                      sx={{ color, fontSize: { xs: "1rem", md: "1.15rem" } }}
-                    >
-                      {value ?? 0}
-                    </SoftTypography>
-                  </SoftBox>
+                  <Icon sx={{ color: "#1565c0", fontSize: { xs: 27, md: 31 } }}>
+                    local_shipping
+                  </Icon>
                 </SoftBox>
-              </Grid>
-            ))}
-          </Grid>
-
-          <SoftBox
-            mb={2}
-            px={{ xs: 1.5, md: 2 }}
-            py={1.25}
-            borderRadius={2}
-            bgcolor="#fff"
-            sx={{ border: "1px solid #e9ecef" }}
-          >
-            <Grid container spacing={1}>
-              <Grid item xs={12} md={7}>
-                <SoftTypography variant="caption" color="text">
-                  Tài xế
-                </SoftTypography>
-                <SoftTypography variant="button" fontWeight="bold" display="block">
-                  {driverName}
-                </SoftTypography>
-              </Grid>
-              <Grid item xs={12} md={5}>
-                <SoftTypography variant="caption" color="text">
-                  Điện thoại
-                </SoftTypography>
-                <SoftTypography variant="button" fontWeight="bold" display="block">
-                  {driverPhone}
-                </SoftTypography>
-              </Grid>
-            </Grid>
+                <SoftBox minWidth={0}>
+                  <SoftTypography
+                    variant="h5"
+                    fontWeight="bold"
+                    sx={{ fontSize: { xs: "1.1rem", md: "1.35rem" } }}
+                  >
+                    {currentTruck.name || "Chi tiết xe"}
+                  </SoftTypography>
+                  <SoftTypography variant="caption" color="text" display="block">
+                    {currentTruck.code || "—"} · {currentTruck.licensePlate || "Chưa có biển số"}
+                  </SoftTypography>
+                </SoftBox>
+              </SoftBox>
+              <IconButton
+                aria-label="Đóng chi tiết xe"
+                onClick={onClose}
+                sx={{ bgcolor: "#f0f2f5", flexShrink: 0 }}
+              >
+                <Icon>close</Icon>
+              </IconButton>
+            </SoftBox>
           </SoftBox>
 
-          <SegmentedTabs
-            value={detailTab}
-            onChange={setDetailTab}
-            fullWidth
-            items={[
-              { icon: "inventory_2", label: "Hàng hiện có" },
-              { icon: "receipt_long", label: "Lịch sử bán / hoàn" },
-            ]}
-          />
+          <SoftBox
+            px={{ xs: 1.5, md: 3 }}
+            py={{ xs: 1.5, md: 2.5 }}
+            sx={{ overflowY: "auto", flex: 1, bgcolor: { xs: "#f5f7fa", md: "#fff" } }}
+          >
+            <Grid container spacing={{ xs: 1, md: 1.5 }} mb={2}>
+              {[
+                ["Loại hàng", inventory.length, "category", "#1565c0", "#e3f2fd"],
+                ["Tổng số lượng", totalQuantity, "inventory_2", "#2e7d32", "#e8f5e9"],
+                [
+                  "Giá trị theo giá bán",
+                  money(totalSellingValue),
+                  "payments",
+                  "#7b1fa2",
+                  "#f3e5f5",
+                ],
+              ].map(([label, value, icon, color, background]) => (
+                <Grid item xs={label === "Giá trị theo giá bán" ? 12 : 6} md={4} key={label}>
+                  <SoftBox
+                    p={{ xs: 1.4, md: 1.75 }}
+                    borderRadius={2.5}
+                    bgcolor={background}
+                    height="100%"
+                    display="flex"
+                    alignItems="center"
+                    gap={1.25}
+                  >
+                    <Icon sx={{ color, fontSize: { xs: 24, md: 28 } }}>{icon}</Icon>
+                    <SoftBox minWidth={0}>
+                      <SoftTypography variant="caption" color="text" display="block">
+                        {label}
+                      </SoftTypography>
+                      <SoftTypography
+                        variant="h6"
+                        fontWeight="bold"
+                        sx={{ color, fontSize: { xs: "1rem", md: "1.15rem" } }}
+                      >
+                        {value ?? 0}
+                      </SoftTypography>
+                    </SoftBox>
+                  </SoftBox>
+                </Grid>
+              ))}
+            </Grid>
 
-          <SoftBox display={detailTab === 0 ? "block" : "none"}>
             <SoftBox
-              display="flex"
-              alignItems={{ xs: "stretch", md: "center" }}
-              justifyContent="space-between"
-              flexDirection={{ xs: "column", md: "row" }}
-              gap={1.25}
-              mb={1.5}
+              mb={2}
+              px={{ xs: 1.5, md: 2 }}
+              py={1.25}
+              borderRadius={2}
+              bgcolor="#fff"
+              sx={{ border: "1px solid #e9ecef" }}
             >
-              <SoftBox>
-                <SoftTypography variant="h6" fontWeight="bold">
-                  Toàn bộ hàng trên xe
-                </SoftTypography>
-                <SoftTypography variant="caption" color="text">
-                  {visibleInventory.length} / {inventory.length} loại hàng
-                </SoftTypography>
-              </SoftBox>
-              {inventory.length > 5 && (
-                <SoftBox width={{ xs: "100%", md: 330 }}>
-                  <SoftInput
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Tìm tên, mã hoặc barcode..."
-                    icon={{ component: "search", direction: "left" }}
-                  />
-                </SoftBox>
-              )}
+              <Grid container spacing={1}>
+                <Grid item xs={12} md={7}>
+                  <SoftTypography variant="caption" color="text">
+                    Tài xế
+                  </SoftTypography>
+                  <SoftTypography variant="button" fontWeight="bold" display="block">
+                    {driverName}
+                  </SoftTypography>
+                </Grid>
+                <Grid item xs={12} md={5}>
+                  <SoftTypography variant="caption" color="text">
+                    Điện thoại
+                  </SoftTypography>
+                  <SoftTypography variant="button" fontWeight="bold" display="block">
+                    {driverPhone}
+                  </SoftTypography>
+                </Grid>
+              </Grid>
             </SoftBox>
 
-            {loading && (
-              <SoftBox py={6} textAlign="center">
-                <Icon sx={{ color: "#1565c0", fontSize: 38, mb: 1 }}>hourglass_top</Icon>
-                <SoftTypography variant="button" color="text" display="block">
-                  Đang tải toàn bộ sản phẩm trên xe...
-                </SoftTypography>
-              </SoftBox>
-            )}
+            <SegmentedTabs
+              value={detailTab}
+              onChange={setDetailTab}
+              fullWidth
+              items={[
+                { icon: "inventory_2", label: "Hàng hiện có" },
+                { icon: "receipt_long", label: "Lịch sử bán / hoàn" },
+                { icon: "fact_check", label: "Kiểm hàng Excel" },
+              ]}
+            />
 
-            {!loading && !visibleInventory.length && (
-              <SoftBox py={6} textAlign="center" bgcolor="#fff" borderRadius={2}>
-                <Icon sx={{ color: "#b0bec5", fontSize: 46 }}>inventory_2</Icon>
-                <SoftTypography variant="button" color="text" display="block" mt={1}>
-                  {inventory.length ? "Không tìm thấy sản phẩm phù hợp" : "Xe hiện không có hàng"}
-                </SoftTypography>
+            <SoftBox display={detailTab === 0 ? "block" : "none"}>
+              <SoftBox
+                display="flex"
+                alignItems={{ xs: "stretch", md: "center" }}
+                justifyContent="space-between"
+                flexDirection={{ xs: "column", md: "row" }}
+                gap={1.25}
+                mb={1.5}
+              >
+                <SoftBox>
+                  <SoftTypography variant="h6" fontWeight="bold">
+                    Toàn bộ hàng trên xe
+                  </SoftTypography>
+                  <SoftTypography variant="caption" color="text">
+                    {visibleInventory.length} / {inventory.length} loại hàng
+                  </SoftTypography>
+                </SoftBox>
+                {inventory.length > 5 && (
+                  <SoftBox width={{ xs: "100%", md: 330 }}>
+                    <SoftInput
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Tìm tên, mã hoặc barcode..."
+                      icon={{ component: "search", direction: "left" }}
+                    />
+                  </SoftBox>
+                )}
               </SoftBox>
-            )}
 
-            {!loading && visibleInventory.length > 0 && (
-              <>
-                <SoftBox display={{ xs: "block", md: "none" }}>
-                  {visibleInventory.map((item, index) => {
-                    const row = productDetail(item);
-                    return (
-                      <SoftBox
-                        key={`${productIdOf(item)}-${index}`}
-                        bgcolor="#fff"
-                        borderRadius={2.5}
-                        p={1.5}
-                        mb={1}
-                        sx={{ border: "1px solid #e7ebf0" }}
-                      >
-                        <SoftBox display="flex" justifyContent="space-between" gap={1.5}>
-                          <SoftBox display="flex" gap={1.1} minWidth={0}>
+              {loading && (
+                <SoftBox py={6} textAlign="center">
+                  <Icon sx={{ color: "#1565c0", fontSize: 38, mb: 1 }}>hourglass_top</Icon>
+                  <SoftTypography variant="button" color="text" display="block">
+                    Đang tải toàn bộ sản phẩm trên xe...
+                  </SoftTypography>
+                </SoftBox>
+              )}
+
+              {!loading && !visibleInventory.length && (
+                <SoftBox py={6} textAlign="center" bgcolor="#fff" borderRadius={2}>
+                  <Icon sx={{ color: "#b0bec5", fontSize: 46 }}>inventory_2</Icon>
+                  <SoftTypography variant="button" color="text" display="block" mt={1}>
+                    {inventory.length ? "Không tìm thấy sản phẩm phù hợp" : "Xe hiện không có hàng"}
+                  </SoftTypography>
+                </SoftBox>
+              )}
+
+              {!loading && visibleInventory.length > 0 && (
+                <>
+                  <SoftBox display={{ xs: "block", md: "none" }}>
+                    {visibleInventory.map((item, index) => {
+                      const row = productDetail(item);
+                      return (
+                        <SoftBox
+                          key={`${productIdOf(item)}-${index}`}
+                          bgcolor="#fff"
+                          borderRadius={2.5}
+                          p={1.5}
+                          mb={1}
+                          sx={{ border: "1px solid #e7ebf0" }}
+                        >
+                          <SoftBox display="flex" justifyContent="space-between" gap={1.5}>
+                            <SoftBox display="flex" gap={1.1} minWidth={0}>
+                              <SoftBox
+                                width={32}
+                                height={32}
+                                borderRadius="50%"
+                                bgcolor="#e3f2fd"
+                                color="#1565c0"
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="center"
+                                flexShrink={0}
+                                fontSize={13}
+                                fontWeight={700}
+                              >
+                                <SoftTypography
+                                  variant="caption"
+                                  fontWeight="bold"
+                                  sx={{ color: "#1565c0", lineHeight: 1 }}
+                                >
+                                  STT
+                                  <br />
+                                  {index + 1}
+                                </SoftTypography>
+                              </SoftBox>
+                              <SoftBox minWidth={0}>
+                                <SoftTypography variant="button" fontWeight="bold" display="block">
+                                  {row.name}
+                                </SoftTypography>
+                                <SoftTypography variant="caption" color="text" display="block">
+                                  {row.code}
+                                  {row.barcode ? ` · ${row.barcode}` : ""}
+                                </SoftTypography>
+                              </SoftBox>
+                            </SoftBox>
                             <SoftBox
-                              width={32}
-                              height={32}
-                              borderRadius="50%"
-                              bgcolor="#e3f2fd"
-                              color="#1565c0"
-                              display="flex"
-                              alignItems="center"
-                              justifyContent="center"
+                              minWidth={86}
+                              px={1.25}
+                              py={0.75}
+                              borderRadius={2}
+                              bgcolor="#e8f5e9"
+                              textAlign="center"
                               flexShrink={0}
-                              fontSize={13}
-                              fontWeight={700}
                             >
                               <SoftTypography
-                                variant="caption"
+                                variant="h5"
                                 fontWeight="bold"
-                                sx={{ color: "#1565c0", lineHeight: 1 }}
+                                sx={{ color: "#2e7d32", lineHeight: 1.1 }}
                               >
-                                STT
-                                <br />
-                                {index + 1}
+                                {row.quantity}
                               </SoftTypography>
-                            </SoftBox>
-                            <SoftBox minWidth={0}>
-                              <SoftTypography variant="button" fontWeight="bold" display="block">
-                                {row.name}
-                              </SoftTypography>
-                              <SoftTypography variant="caption" color="text" display="block">
-                                {row.code}
-                                {row.barcode ? ` · ${row.barcode}` : ""}
+                              <SoftTypography variant="caption" sx={{ color: "#2e7d32" }}>
+                                {row.unit}
                               </SoftTypography>
                             </SoftBox>
                           </SoftBox>
                           <SoftBox
-                            minWidth={86}
-                            px={1.25}
-                            py={0.75}
-                            borderRadius={2}
-                            bgcolor="#e8f5e9"
-                            textAlign="center"
-                            flexShrink={0}
+                            display="flex"
+                            justifyContent="space-between"
+                            mt={1.25}
+                            pt={1}
+                            sx={{ borderTop: "1px dashed #e0e0e0" }}
                           >
-                            <SoftTypography
-                              variant="h5"
-                              fontWeight="bold"
-                              sx={{ color: "#2e7d32", lineHeight: 1.1 }}
-                            >
-                              {row.quantity}
+                            <SoftTypography variant="caption" color="text">
+                              Giá bán
                             </SoftTypography>
-                            <SoftTypography variant="caption" sx={{ color: "#2e7d32" }}>
-                              {row.unit}
+                            <SoftTypography variant="button" fontWeight="bold" color="info">
+                              {pricesLoading && !row.sellPrice
+                                ? "Đang tải..."
+                                : money(row.sellPrice)}
                             </SoftTypography>
                           </SoftBox>
                         </SoftBox>
-                        <SoftBox
-                          display="flex"
-                          justifyContent="space-between"
-                          mt={1.25}
-                          pt={1}
-                          sx={{ borderTop: "1px dashed #e0e0e0" }}
-                        >
-                          <SoftTypography variant="caption" color="text">
-                            Giá bán
-                          </SoftTypography>
-                          <SoftTypography variant="button" fontWeight="bold" color="info">
-                            {pricesLoading && !row.sellPrice ? "Đang tải..." : money(row.sellPrice)}
-                          </SoftTypography>
+                      );
+                    })}
+                  </SoftBox>
+
+                  <SoftBox
+                    display={{ xs: "none", md: "block" }}
+                    borderRadius={2}
+                    overflow="hidden"
+                    sx={{ border: "1px solid #e3e7ed" }}
+                  >
+                    <SoftBox
+                      component="table"
+                      sx={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}
+                    >
+                      <SoftBox component="thead" bgcolor="#f1f5f9">
+                        <SoftBox component="tr">
+                          {[
+                            ["STT", "6%"],
+                            ["Sản phẩm", "31%"],
+                            ["Mã / Barcode", "21%"],
+                            ["Đơn vị", "12%"],
+                            ["Số lượng", "13%"],
+                            ["Giá bán", "17%"],
+                          ].map(([label, width]) => (
+                            <SoftBox
+                              component="th"
+                              key={label}
+                              width={width}
+                              px={1.25}
+                              py={1.35}
+                              textAlign={
+                                label === "Sản phẩm" || label === "Mã / Barcode" ? "left" : "center"
+                              }
+                              sx={{ borderBottom: "1px solid #dce2e9" }}
+                            >
+                              <SoftTypography variant="caption" fontWeight="bold">
+                                {label}
+                              </SoftTypography>
+                            </SoftBox>
+                          ))}
                         </SoftBox>
+                      </SoftBox>
+                      <SoftBox component="tbody">
+                        {visibleInventory.map((item, index) => {
+                          const row = productDetail(item);
+                          return (
+                            <SoftBox
+                              component="tr"
+                              key={`${productIdOf(item)}-${index}`}
+                              sx={{ "&:hover": { bgcolor: "#f8fbff" } }}
+                            >
+                              <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
+                                <SoftTypography variant="button">{index + 1}</SoftTypography>
+                              </SoftBox>
+                              <SoftBox component="td" px={1.25} py={1.3}>
+                                <SoftTypography variant="button" fontWeight="bold">
+                                  {row.name}
+                                </SoftTypography>
+                              </SoftBox>
+                              <SoftBox component="td" px={1.25} py={1.3}>
+                                <SoftTypography variant="caption" display="block">
+                                  {row.code}
+                                </SoftTypography>
+                                {row.barcode && (
+                                  <SoftTypography variant="caption" color="text">
+                                    {row.barcode}
+                                  </SoftTypography>
+                                )}
+                              </SoftBox>
+                              <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
+                                <SoftTypography variant="button">{row.unit}</SoftTypography>
+                              </SoftBox>
+                              <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
+                                <SoftTypography
+                                  variant="h6"
+                                  fontWeight="bold"
+                                  sx={{ color: "#2e7d32" }}
+                                >
+                                  {row.quantity}
+                                </SoftTypography>
+                              </SoftBox>
+                              <SoftBox component="td" px={1.25} py={1.3} textAlign="right">
+                                <SoftTypography variant="button" fontWeight="bold" color="info">
+                                  {pricesLoading && !row.sellPrice
+                                    ? "Đang tải..."
+                                    : money(row.sellPrice)}
+                                </SoftTypography>
+                              </SoftBox>
+                            </SoftBox>
+                          );
+                        })}
+                      </SoftBox>
+                    </SoftBox>
+                  </SoftBox>
+                </>
+              )}
+            </SoftBox>
+
+            {detailTab === 1 && (
+              <SoftBox>
+                <SoftBox
+                  display="flex"
+                  gap={1}
+                  pb={1}
+                  sx={{ overflowX: "auto", scrollbarWidth: "none" }}
+                >
+                  {[
+                    ["DAY", "Theo ngày", "today"],
+                    ["WEEK", "Theo tuần", "date_range"],
+                    ["ALL", "Tất cả", "history"],
+                  ].map(([value, label, icon]) => {
+                    const selected = salesPeriod === value;
+                    return (
+                      <SoftBox
+                        component="button"
+                        type="button"
+                        key={value}
+                        onClick={() => setSalesPeriod(value)}
+                        px={1.5}
+                        py={1}
+                        minWidth={112}
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        gap={0.75}
+                        sx={{
+                          border: `2px solid ${selected ? "#1976d2" : "#dce2e9"}`,
+                          borderRadius: 2,
+                          bgcolor: selected ? "#e3f2fd" : "#fff",
+                          color: selected ? "#0d47a1" : "#5f6b7a",
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <Icon sx={{ fontSize: 20 }}>{icon}</Icon>
+                        <SoftTypography
+                          variant="button"
+                          fontWeight="bold"
+                          sx={{ color: "inherit" }}
+                        >
+                          {label}
+                        </SoftTypography>
                       </SoftBox>
                     );
                   })}
                 </SoftBox>
 
-                <SoftBox
-                  display={{ xs: "none", md: "block" }}
-                  borderRadius={2}
-                  overflow="hidden"
-                  sx={{ border: "1px solid #e3e7ed" }}
-                >
-                  <SoftBox
-                    component="table"
-                    sx={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}
-                  >
-                    <SoftBox component="thead" bgcolor="#f1f5f9">
-                      <SoftBox component="tr">
-                        {[
-                          ["STT", "6%"],
-                          ["Sản phẩm", "31%"],
-                          ["Mã / Barcode", "21%"],
-                          ["Đơn vị", "12%"],
-                          ["Số lượng", "13%"],
-                          ["Giá bán", "17%"],
-                        ].map(([label, width]) => (
-                          <SoftBox
-                            component="th"
-                            key={label}
-                            width={width}
-                            px={1.25}
-                            py={1.35}
-                            textAlign={
-                              label === "Sản phẩm" || label === "Mã / Barcode" ? "left" : "center"
-                            }
-                            sx={{ borderBottom: "1px solid #dce2e9" }}
-                          >
-                            <SoftTypography variant="caption" fontWeight="bold">
+                <Grid container spacing={1.25} mt={0.25} mb={2}>
+                  {salesPeriod === "DAY" && (
+                    <Grid item xs={12} sm={6}>
+                      <SoftInput
+                        type="date"
+                        value={salesDate}
+                        onChange={(event) => setSalesDate(event.target.value)}
+                      />
+                    </Grid>
+                  )}
+                  {salesPeriod === "WEEK" && (
+                    <Grid item xs={12} sm={6}>
+                      <SoftInput
+                        type="week"
+                        value={salesWeek}
+                        onChange={(event) => setSalesWeek(event.target.value)}
+                      />
+                    </Grid>
+                  )}
+                  <Grid item xs={12} sm={salesPeriod === "ALL" ? 12 : 6}>
+                    <FormControl fullWidth size="small">
+                      <Select
+                        value={salesSort}
+                        onChange={(event) => setSalesSort(event.target.value)}
+                        sx={{ bgcolor: "#fff", minHeight: 40 }}
+                      >
+                        <MenuItem value="desc">Mới nhất trước</MenuItem>
+                        <MenuItem value="asc">Cũ nhất trước</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+
+                {!goodsReportLoading && salesProductSummary.length > 0 && (
+                  <Grid container spacing={1} mb={1.5}>
+                    {[
+                      ["Chứng từ", salesTotals.documentCount, "receipt_long", "#1565c0", "#e3f2fd"],
+                      [
+                        "Đã bán",
+                        salesTotals.soldQuantity,
+                        "remove_shopping_cart",
+                        "#c62828",
+                        "#ffebee",
+                      ],
+                      ["Quà tặng", salesTotals.giftQuantity, "redeem", "#ef6c00", "#fff3e0"],
+                      ["Hoàn về xe", salesTotals.inboundQuantity, "restore", "#2e7d32", "#e8f5e9"],
+                      [
+                        "Biến động ròng",
+                        salesTotals.netQuantity > 0
+                          ? `+${salesTotals.netQuantity}`
+                          : salesTotals.netQuantity,
+                        "swap_vert",
+                        salesTotals.netQuantity > 0 ? "#2e7d32" : "#c62828",
+                        salesTotals.netQuantity > 0 ? "#e8f5e9" : "#ffebee",
+                      ],
+                      ["Doanh thu", money(salesTotals.revenue), "payments", "#7b1fa2", "#f3e5f5"],
+                    ].map(([label, value, icon, color, background]) => (
+                      <Grid item xs={6} sm={4} md={2} key={label}>
+                        <SoftBox p={1.4} borderRadius={2} bgcolor={background}>
+                          <SoftBox display="flex" alignItems="center" gap={0.75}>
+                            <Icon sx={{ color, fontSize: 21 }}>{icon}</Icon>
+                            <SoftTypography variant="caption" color="text">
                               {label}
                             </SoftTypography>
+                          </SoftBox>
+                          <SoftTypography variant="h6" fontWeight="bold" sx={{ color }}>
+                            {value}
+                          </SoftTypography>
+                        </SoftBox>
+                      </Grid>
+                    ))}
+                  </Grid>
+                )}
+
+                {!goodsReportLoading && salesProductSummary.length > 0 && (
+                  <SoftBox
+                    mb={2}
+                    bgcolor="#fff"
+                    borderRadius={2.5}
+                    overflow="hidden"
+                    sx={{ border: "1px solid #dfe5ec" }}
+                  >
+                    <SoftBox
+                      px={{ xs: 1.5, md: 2 }}
+                      py={1.35}
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="space-between"
+                      gap={1}
+                      bgcolor="#f8fbff"
+                      sx={{ borderBottom: "1px solid #e5eaf0" }}
+                    >
+                      <SoftBox minWidth={0}>
+                        <SoftTypography variant="button" fontWeight="bold" display="block">
+                          Tổng hợp hàng hóa trong kỳ
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text" display="block">
+                          {salesProductSummary.length} mặt hàng ·{" "}
+                          {selectedSalesRange.from || "Tất cả"}
+                          {selectedSalesRange.to ? ` đến ${selectedSalesRange.to}` : ""}
+                        </SoftTypography>
+                      </SoftBox>
+                      <SoftButton
+                        size="small"
+                        variant="gradient"
+                        color="success"
+                        startIcon={<Icon>file_download</Icon>}
+                        disabled={goodsReportExporting}
+                        onClick={exportTruckGoods}
+                        sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
+                      >
+                        {goodsReportExporting ? "Đang xuất..." : "Xuất Excel"}
+                      </SoftButton>
+                    </SoftBox>
+
+                    <SoftBox display={{ xs: "block", md: "none" }} p={1.25}>
+                      {salesProductSummary.map((item, index) => (
+                        <SoftBox
+                          key={`${item.productId || item.code || item.name}-${index}`}
+                          p={1.25}
+                          mb={1}
+                          borderRadius={2}
+                          bgcolor="#f8fafc"
+                          sx={{ border: "1px solid #e3e8ef" }}
+                        >
+                          <SoftBox display="flex" justifyContent="space-between" gap={1}>
+                            <SoftBox minWidth={0}>
+                              <SoftTypography variant="button" fontWeight="bold" display="block">
+                                {index + 1}. {item.name}
+                              </SoftTypography>
+                              <SoftTypography variant="caption" color="text">
+                                {[item.code, item.unit, `${item.documentCount} chứng từ`]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </SoftTypography>
+                            </SoftBox>
+                            <SoftBox
+                              px={1}
+                              py={0.45}
+                              height="fit-content"
+                              borderRadius={1.5}
+                              bgcolor={item.netQuantity > 0 ? "#e8f5e9" : "#ffebee"}
+                              flexShrink={0}
+                            >
+                              <SoftTypography
+                                variant="caption"
+                                fontWeight="bold"
+                                sx={{ color: item.netQuantity > 0 ? "#2e7d32" : "#c62828" }}
+                              >
+                                Ròng {item.netQuantity > 0 ? "+" : ""}
+                                {item.netQuantity}
+                              </SoftTypography>
+                            </SoftBox>
+                          </SoftBox>
+                          <SoftBox
+                            mt={1}
+                            display="grid"
+                            gap={0.75}
+                            sx={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
+                          >
+                            {[
+                              ["Tồn đầu", item.openingQuantity ?? "—", "#1565c0", "#e3f2fd"],
+                              ["Đã bán", item.soldQuantity, "#c62828", "#ffebee"],
+                              ["Quà tặng", item.giftQuantity, "#ef6c00", "#fff3e0"],
+                              ["Hoàn về", item.inboundQuantity, "#2e7d32", "#e8f5e9"],
+                              ["Đảo hoàn", item.returnReversedQuantity, "#ad1457", "#fce4ec"],
+                              ["Tồn cuối", item.closingQuantity ?? "—", "#1b5e20", "#dcedc8"],
+                            ].map(([label, value, color, background]) => (
+                              <SoftBox key={label} p={0.85} borderRadius={1.5} bgcolor={background}>
+                                <SoftTypography variant="caption" sx={{ color }} display="block">
+                                  {label}
+                                </SoftTypography>
+                                <SoftTypography variant="button" fontWeight="bold" sx={{ color }}>
+                                  {value}
+                                </SoftTypography>
+                              </SoftBox>
+                            ))}
+                          </SoftBox>
+                          <SoftBox display="flex" justifyContent="space-between" mt={1}>
+                            <SoftTypography variant="caption" color="text">
+                              Doanh thu hàng bán
+                            </SoftTypography>
+                            <SoftTypography variant="button" fontWeight="bold" color="info">
+                              {money(item.revenue)}
+                            </SoftTypography>
+                          </SoftBox>
+                        </SoftBox>
+                      ))}
+                    </SoftBox>
+
+                    <SoftBox display={{ xs: "none", md: "block" }} sx={{ overflowX: "auto" }}>
+                      <SoftBox
+                        component="table"
+                        sx={{ width: "100%", minWidth: 1050, borderCollapse: "collapse" }}
+                      >
+                        <SoftBox component="thead" bgcolor="#f1f5f9">
+                          <SoftBox component="tr">
+                            {[
+                              "STT",
+                              "Sản phẩm",
+                              "Tồn đầu",
+                              "Đã bán",
+                              "Quà tặng",
+                              "Hoàn về xe",
+                              "Đảo hoàn",
+                              "Biến động",
+                              "Tồn cuối",
+                              "Doanh thu",
+                            ].map((label) => (
+                              <SoftBox
+                                component="th"
+                                key={label}
+                                px={1.15}
+                                py={1.2}
+                                textAlign={label === "Sản phẩm" ? "left" : "right"}
+                                sx={{ borderBottom: "1px solid #dce2e9", whiteSpace: "nowrap" }}
+                              >
+                                <SoftTypography variant="caption" fontWeight="bold">
+                                  {label}
+                                </SoftTypography>
+                              </SoftBox>
+                            ))}
+                          </SoftBox>
+                        </SoftBox>
+                        <SoftBox component="tbody">
+                          {salesProductSummary.map((item, index) => (
+                            <SoftBox
+                              component="tr"
+                              key={`${item.productId || item.code || item.name}-${index}`}
+                              sx={{ borderBottom: "1px solid #edf0f3" }}
+                            >
+                              <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
+                                <SoftTypography variant="caption">{index + 1}</SoftTypography>
+                              </SoftBox>
+                              <SoftBox component="td" px={1.15} py={1.15} minWidth={220}>
+                                <SoftTypography variant="button" fontWeight="bold" display="block">
+                                  {item.name}
+                                </SoftTypography>
+                                <SoftTypography variant="caption" color="text">
+                                  {[item.code, item.unit, `${item.documentCount} chứng từ`]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </SoftTypography>
+                              </SoftBox>
+                              {[
+                                item.openingQuantity ?? "—",
+                                item.soldQuantity,
+                                item.giftQuantity,
+                                item.inboundQuantity,
+                                item.returnReversedQuantity,
+                              ].map((value, valueIndex) => (
+                                <SoftBox
+                                  component="td"
+                                  key={`${item.name}-${valueIndex}`}
+                                  px={1.15}
+                                  py={1.15}
+                                  textAlign="right"
+                                >
+                                  <SoftTypography variant="button">{value}</SoftTypography>
+                                </SoftBox>
+                              ))}
+                              <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
+                                <SoftTypography
+                                  variant="button"
+                                  fontWeight="bold"
+                                  sx={{ color: item.netQuantity > 0 ? "#2e7d32" : "#c62828" }}
+                                >
+                                  {item.netQuantity > 0 ? "+" : ""}
+                                  {item.netQuantity}
+                                </SoftTypography>
+                              </SoftBox>
+                              <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
+                                <SoftTypography variant="button" fontWeight="bold">
+                                  {item.closingQuantity ?? "—"}
+                                </SoftTypography>
+                              </SoftBox>
+                              <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
+                                <SoftTypography variant="button" fontWeight="bold" color="info">
+                                  {money(item.revenue)}
+                                </SoftTypography>
+                              </SoftBox>
+                            </SoftBox>
+                          ))}
+                        </SoftBox>
+                      </SoftBox>
+                    </SoftBox>
+                  </SoftBox>
+                )}
+
+                {salesLoading && (
+                  <SoftBox py={6} textAlign="center">
+                    <Icon sx={{ color: "#1565c0", fontSize: 38 }}>hourglass_top</Icon>
+                    <SoftTypography variant="button" color="text" display="block" mt={1}>
+                      Đang tải lịch sử hàng hóa trên xe...
+                    </SoftTypography>
+                  </SoftBox>
+                )}
+
+                {!salesLoading && !salesInvoices.length && (
+                  <SoftBox py={6} textAlign="center" bgcolor="#fff" borderRadius={2}>
+                    <Icon sx={{ color: "#b0bec5", fontSize: 46 }}>receipt_long</Icon>
+                    <SoftTypography variant="button" color="text" display="block" mt={1}>
+                      Không có hoạt động bán hoặc hoàn hàng trong khoảng thời gian này
+                    </SoftTypography>
+                  </SoftBox>
+                )}
+
+                {!salesLoading &&
+                  salesInvoices.map((invoice) => {
+                    const items = Array.isArray(invoice.items) ? invoice.items : [];
+                    const isInvoiceReversal = invoice.eventType === "REVERSAL";
+                    const isCustomerReturn = invoice.eventType === "CUSTOMER_RETURN";
+                    const isCustomerReturnReversal =
+                      invoice.eventType === "CUSTOMER_RETURN_REVERSAL";
+                    const isInbound = isInvoiceReversal || isCustomerReturn;
+                    const soldQuantity = items.reduce(
+                      (sum, item) => sum + Number(item.qty || 0),
+                      0
+                    );
+                    return (
+                      <SoftBox
+                        key={getId(invoice) || invoice.code}
+                        bgcolor="#fff"
+                        borderRadius={2.5}
+                        mb={1.25}
+                        overflow="hidden"
+                        sx={{ border: "1px solid #dfe5ec" }}
+                      >
+                        <SoftBox
+                          px={{ xs: 1.5, md: 2 }}
+                          py={1.35}
+                          display="flex"
+                          justifyContent="space-between"
+                          alignItems="flex-start"
+                          gap={1}
+                          bgcolor={
+                            isInbound ? "#f1f8f3" : isCustomerReturnReversal ? "#fff3f3" : "#f8fbff"
+                          }
+                          sx={{ borderBottom: "1px solid #e5eaf0" }}
+                        >
+                          <SoftBox minWidth={0}>
+                            <SoftTypography variant="button" fontWeight="bold" display="block">
+                              {invoice.code || "Hóa đơn"}
+                            </SoftTypography>
+                            {isInvoiceReversal && invoice.invoiceCode && (
+                              <SoftTypography
+                                variant="caption"
+                                fontWeight="bold"
+                                display="block"
+                                sx={{ color: "#2e7d32" }}
+                              >
+                                Hoàn từ hóa đơn {invoice.invoiceCode}
+                              </SoftTypography>
+                            )}
+                            {isCustomerReturn && (
+                              <SoftTypography
+                                variant="caption"
+                                fontWeight="bold"
+                                display="block"
+                                sx={{ color: "#2e7d32" }}
+                              >
+                                Khách hoàn hàng về xe
+                                {invoice.status === "REVERSED" ? " · Phiếu đã đảo" : ""}
+                              </SoftTypography>
+                            )}
+                            {isCustomerReturnReversal && (
+                              <SoftTypography
+                                variant="caption"
+                                fontWeight="bold"
+                                display="block"
+                                sx={{ color: "#c62828" }}
+                              >
+                                Đảo phiếu hoàn hàng · Hàng được trừ lại khỏi xe
+                              </SoftTypography>
+                            )}
+                            <SoftTypography variant="caption" color="text" display="block">
+                              {date(invoice.createdAt || invoice.date)}
+                            </SoftTypography>
+                            <SoftTypography variant="caption" color="text" display="block" noWrap>
+                              {invoiceCustomerLabel(invoice)}
+                            </SoftTypography>
+                          </SoftBox>
+                          <SoftBox
+                            px={1.1}
+                            py={0.65}
+                            bgcolor={isInbound ? "#e8f5e9" : "#ffebee"}
+                            borderRadius={2}
+                            textAlign="center"
+                            flexShrink={0}
+                          >
+                            <SoftTypography
+                              variant="button"
+                              fontWeight="bold"
+                              sx={{ color: isInbound ? "#2e7d32" : "#c62828" }}
+                            >
+                              {isInbound ? "+" : "−"}
+                              {soldQuantity}
+                            </SoftTypography>
+                            <SoftTypography
+                              variant="caption"
+                              display="block"
+                              sx={{ color: isInbound ? "#1b5e20" : "#8e1b1b" }}
+                            >
+                              {isInbound
+                                ? "hoàn về xe"
+                                : isCustomerReturnReversal
+                                ? "đảo hoàn hàng"
+                                : "sản phẩm"}
+                            </SoftTypography>
+                          </SoftBox>
+                        </SoftBox>
+
+                        <SoftBox px={{ xs: 1.5, md: 2 }} py={0.5}>
+                          {items.map((item, index) => {
+                            const product =
+                              (item.productId && typeof item.productId === "object"
+                                ? item.productId
+                                : null) ||
+                              item.product ||
+                              {};
+                            const isGift = !isInbound && item.lineType === "GIFT";
+                            const stockSnapshot = saleInventorySnapshot(item);
+                            const unit = item.unit || product.unit || "";
+                            return (
+                              <SoftBox
+                                key={`${getId(item) || getId(product) || item.productId}-${index}`}
+                                py={1.25}
+                                sx={{
+                                  borderBottom: index < items.length - 1 ? "1px dashed #e3e7ed" : 0,
+                                }}
+                              >
+                                <SoftBox
+                                  display="flex"
+                                  alignItems="center"
+                                  justifyContent="space-between"
+                                  gap={1}
+                                >
+                                  <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                                    <SoftBox
+                                      width={34}
+                                      height={34}
+                                      borderRadius="50%"
+                                      bgcolor={
+                                        isInbound ? "#e8f5e9" : isGift ? "#fff3e0" : "#e8f5e9"
+                                      }
+                                      color={isInbound ? "#2e7d32" : isGift ? "#ef6c00" : "#2e7d32"}
+                                      display="flex"
+                                      alignItems="center"
+                                      justifyContent="center"
+                                      flexShrink={0}
+                                    >
+                                      <Icon sx={{ fontSize: 19 }}>
+                                        {isInbound
+                                          ? "restore"
+                                          : isCustomerReturnReversal
+                                          ? "undo"
+                                          : isGift
+                                          ? "redeem"
+                                          : "remove_shopping_cart"}
+                                      </Icon>
+                                    </SoftBox>
+                                    <SoftBox minWidth={0}>
+                                      <SoftTypography
+                                        variant="button"
+                                        fontWeight="bold"
+                                        display="block"
+                                      >
+                                        {item.productName ||
+                                          product.name ||
+                                          item.name ||
+                                          "Sản phẩm"}
+                                      </SoftTypography>
+                                      <SoftTypography
+                                        variant="caption"
+                                        color="text"
+                                        display="block"
+                                      >
+                                        {[
+                                          item.productCode || product.code,
+                                          isCustomerReturn
+                                            ? item.unclassified
+                                              ? "Hàng hoàn chờ phân loại"
+                                              : "Khách hoàn về xe"
+                                            : isInvoiceReversal
+                                            ? "Hoàn hóa đơn về xe"
+                                            : isCustomerReturnReversal
+                                            ? "Đảo phiếu hoàn"
+                                            : isGift
+                                            ? "Quà tặng"
+                                            : "Hàng bán",
+                                        ]
+                                          .filter(Boolean)
+                                          .join(" · ")}
+                                      </SoftTypography>
+                                    </SoftBox>
+                                  </SoftBox>
+                                  <SoftTypography variant="caption" color="text" flexShrink={0}>
+                                    {unit}
+                                  </SoftTypography>
+                                </SoftBox>
+
+                                <SoftBox
+                                  mt={1.1}
+                                  display="grid"
+                                  sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+                                  gap={{ xs: 0.75, md: 1 }}
+                                >
+                                  {(isInbound
+                                    ? [
+                                        [
+                                          "Trước khi hoàn",
+                                          stockSnapshot.before,
+                                          "#1565c0",
+                                          "#e3f2fd",
+                                        ],
+                                        ["Đã cộng", stockSnapshot.deducted, "#2e7d32", "#e8f5e9"],
+                                        ["Sau khi hoàn", stockSnapshot.after, "#1b5e20", "#dcedc8"],
+                                      ]
+                                    : isCustomerReturnReversal
+                                    ? [
+                                        [
+                                          "Trước khi đảo",
+                                          stockSnapshot.before,
+                                          "#1565c0",
+                                          "#e3f2fd",
+                                        ],
+                                        ["Đã trừ", stockSnapshot.deducted, "#c62828", "#ffebee"],
+                                        ["Sau khi đảo", stockSnapshot.after, "#2e7d32", "#e8f5e9"],
+                                      ]
+                                    : [
+                                        [
+                                          "Trước khi bán",
+                                          stockSnapshot.before,
+                                          "#1565c0",
+                                          "#e3f2fd",
+                                        ],
+                                        ["Đã trừ", stockSnapshot.deducted, "#c62828", "#ffebee"],
+                                        ["Còn lại", stockSnapshot.after, "#2e7d32", "#e8f5e9"],
+                                      ]
+                                  ).map(([label, value, color, background]) => (
+                                    <SoftBox
+                                      key={label}
+                                      px={{ xs: 0.75, md: 1.25 }}
+                                      py={0.85}
+                                      borderRadius={1.75}
+                                      bgcolor={background}
+                                      textAlign="center"
+                                    >
+                                      <SoftTypography
+                                        variant="caption"
+                                        display="block"
+                                        sx={{
+                                          color,
+                                          fontSize: { xs: 10, sm: 12 },
+                                          lineHeight: 1.2,
+                                        }}
+                                      >
+                                        {label}
+                                      </SoftTypography>
+                                      <SoftTypography
+                                        variant="button"
+                                        fontWeight="bold"
+                                        sx={{ color, fontSize: { xs: 14, sm: 16 } }}
+                                      >
+                                        {value === null
+                                          ? "—"
+                                          : `${
+                                              label === "Đã trừ"
+                                                ? "−"
+                                                : label === "Đã cộng"
+                                                ? "+"
+                                                : ""
+                                            }${value}`}
+                                      </SoftTypography>
+                                    </SoftBox>
+                                  ))}
+                                </SoftBox>
+                                {stockSnapshot.before === null && stockSnapshot.after === null && (
+                                  <SoftTypography
+                                    variant="caption"
+                                    color="text"
+                                    display="block"
+                                    mt={0.6}
+                                    textAlign="right"
+                                    sx={{ fontStyle: "italic" }}
+                                  >
+                                    {item.unclassified
+                                      ? "Hàng ngoài danh mục đã được lưu tại khu vực chờ phân loại trên xe"
+                                      : isInbound
+                                      ? "Movement hoàn hàng chưa có snapshot tồn xe"
+                                      : isCustomerReturnReversal
+                                      ? "Movement đảo phiếu hoàn chưa có snapshot tồn xe"
+                                      : "Hóa đơn cũ chưa có snapshot tồn xe"}
+                                  </SoftTypography>
+                                )}
+                              </SoftBox>
+                            );
+                          })}
+                          {!items.length && (
+                            <SoftTypography
+                              variant="caption"
+                              color="text"
+                              display="block"
+                              py={1.5}
+                              textAlign="center"
+                            >
+                              API danh sách chưa trả chi tiết sản phẩm của hóa đơn này
+                            </SoftTypography>
+                          )}
+                        </SoftBox>
+                      </SoftBox>
+                    );
+                  })}
+              </SoftBox>
+            )}
+
+            {detailTab === 2 && (
+              <SoftBox>
+                <SoftBox
+                  display="grid"
+                  gap={1}
+                  mb={1.5}
+                  sx={{
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      sm: `repeat(${isAdmin ? 3 : 2}, minmax(0, 1fr))`,
+                    },
+                  }}
+                >
+                  {[
+                    ["DIRECT", "Nhập trực tiếp", "touch_app", "Đếm và nhập ngay trên thiết bị"],
+                    ["EXCEL", "Dùng file Excel", "table_view", "Tải mẫu và đối chiếu bằng file"],
+                    ...(isAdmin
+                      ? [
+                          [
+                            "BACKUPS",
+                            "Bản sao tồn xe",
+                            "restore",
+                            "Xem và khôi phục bản sao đã lưu",
+                          ],
+                        ]
+                      : []),
+                  ].map(([value, label, icon, description]) => {
+                    const active = stockCheckMode === value;
+                    return (
+                      <SoftBox
+                        component="button"
+                        type="button"
+                        key={value}
+                        onClick={() => {
+                          setStockCheckMode(value);
+                          setStockCheckResult(null);
+                          if (value === "BACKUPS") setInventoryBackupPage(1);
+                        }}
+                        p={{ xs: 1.2, sm: 1.5 }}
+                        textAlign="left"
+                        sx={{
+                          border: active ? "2px solid #1976d2" : "1px solid #dce2e9",
+                          borderRadius: 2.25,
+                          bgcolor: active ? "#e7f3ff" : "#fff",
+                          color: active ? "#0d47a1" : "#52606d",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <SoftBox display="flex" alignItems="center" gap={0.8}>
+                          <Icon sx={{ fontSize: 22 }}>{icon}</Icon>
+                          <SoftTypography
+                            variant="button"
+                            fontWeight="bold"
+                            sx={{ color: "inherit" }}
+                          >
+                            {label}
+                          </SoftTypography>
+                        </SoftBox>
+                        <SoftTypography
+                          variant="caption"
+                          color="text"
+                          display={{ xs: "none", sm: "block" }}
+                          mt={0.4}
+                        >
+                          {description}
+                        </SoftTypography>
+                      </SoftBox>
+                    );
+                  })}
+                </SoftBox>
+
+                {stockCheckMode === "EXCEL" && (
+                  <>
+                    <SoftBox
+                      p={{ xs: 1.5, md: 2 }}
+                      mb={1.5}
+                      borderRadius={2.5}
+                      bgcolor="#f8fbff"
+                      sx={{ border: "1px solid #d9e8f7" }}
+                    >
+                      <SoftBox display="flex" alignItems="flex-start" gap={1.25}>
+                        <SoftBox
+                          width={42}
+                          height={42}
+                          borderRadius={2}
+                          bgcolor="#e3f2fd"
+                          color="#1565c0"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                          flexShrink={0}
+                        >
+                          <Icon>fact_check</Icon>
+                        </SoftBox>
+                        <SoftBox>
+                          <SoftTypography variant="button" fontWeight="bold" display="block">
+                            Đối chiếu tồn xe bằng Excel
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text" display="block">
+                            1. Tải file mẫu · 2. Nhập số lượng thực tế · 3. Tải lại để kiểm tra
+                          </SoftTypography>
+                          <SoftTypography variant="caption" fontWeight="bold" color="info">
+                            Chức năng chỉ đối chiếu, không thay đổi tồn hàng trên app.
+                          </SoftTypography>
+                        </SoftBox>
+                      </SoftBox>
+                    </SoftBox>
+
+                    <Grid container spacing={1.25} mb={2}>
+                      <Grid item xs={12} md={4}>
+                        <SoftButton
+                          fullWidth
+                          variant="outlined"
+                          color="info"
+                          startIcon={<Icon>download</Icon>}
+                          disabled={stockCheckDownloading}
+                          onClick={downloadStockCheckTemplate}
+                          sx={{ minHeight: 48 }}
+                        >
+                          {stockCheckDownloading ? "Đang tải..." : "1. Tải file mẫu"}
+                        </SoftButton>
+                      </Grid>
+                      <Grid item xs={12} md={4}>
+                        <SoftButton
+                          component="label"
+                          fullWidth
+                          variant={stockCheckFile ? "gradient" : "outlined"}
+                          color={stockCheckFile ? "success" : "secondary"}
+                          startIcon={<Icon>{stockCheckFile ? "check_circle" : "upload_file"}</Icon>}
+                          sx={{ minHeight: 48 }}
+                        >
+                          {stockCheckFile ? "Đã chọn file" : "2. Chọn file Excel"}
+                          <input
+                            type="file"
+                            hidden
+                            accept=".xlsx"
+                            onChange={selectStockCheckFile}
+                          />
+                        </SoftButton>
+                      </Grid>
+                      <Grid item xs={12} md={4}>
+                        <SoftButton
+                          fullWidth
+                          variant="gradient"
+                          color="success"
+                          startIcon={<Icon>rule</Icon>}
+                          disabled={!stockCheckFile || stockCheckComparing}
+                          onClick={compareStockCheck}
+                          sx={{ minHeight: 48 }}
+                        >
+                          {stockCheckComparing ? "Đang đối chiếu..." : "3. Đối chiếu số lượng"}
+                        </SoftButton>
+                      </Grid>
+                    </Grid>
+
+                    {stockCheckFile && (
+                      <SoftBox
+                        mb={2}
+                        px={1.5}
+                        py={1.1}
+                        borderRadius={2}
+                        bgcolor="#fff"
+                        display="flex"
+                        alignItems="center"
+                        gap={1}
+                        sx={{ border: "1px solid #dfe5ec" }}
+                      >
+                        <Icon sx={{ color: "#2e7d32" }}>description</Icon>
+                        <SoftBox flex={1} minWidth={0}>
+                          <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
+                            {stockCheckFile.name}
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text">
+                            {(stockCheckFile.size / 1024).toFixed(1)} KB
+                          </SoftTypography>
+                        </SoftBox>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setStockCheckFile(null);
+                            setStockCheckResult(null);
+                          }}
+                        >
+                          <Icon color="error">close</Icon>
+                        </IconButton>
+                      </SoftBox>
+                    )}
+                  </>
+                )}
+
+                {stockCheckMode === "DIRECT" && !stockCheckResult && (
+                  <SoftBox mb={2}>
+                    <SoftBox
+                      p={{ xs: 1.35, md: 1.75 }}
+                      mb={1.25}
+                      borderRadius={2.5}
+                      bgcolor="#f8fbff"
+                      sx={{ border: "1px solid #d9e8f7" }}
+                    >
+                      <SoftBox
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        gap={1}
+                      >
+                        <SoftBox minWidth={0}>
+                          <SoftTypography variant="button" fontWeight="bold" display="block">
+                            Tiến độ kiểm hàng
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text">
+                            Đã nhập {directCountedProducts}/{directStockRows.length} sản phẩm · Tự
+                            lưu trên thiết bị
+                          </SoftTypography>
+                        </SoftBox>
+                        <SoftTypography variant="h5" fontWeight="bold" color="info">
+                          {directProgressPercent}%
+                        </SoftTypography>
+                      </SoftBox>
+                      <SoftBox
+                        mt={1}
+                        height={8}
+                        borderRadius={5}
+                        bgcolor="#dbe7f3"
+                        overflow="hidden"
+                      >
+                        <SoftBox
+                          height="100%"
+                          borderRadius={5}
+                          bgcolor="#1976d2"
+                          sx={{
+                            width: `${directProgressPercent}%`,
+                            transition: "width .2s ease",
+                          }}
+                        />
+                      </SoftBox>
+                    </SoftBox>
+
+                    <SoftBox
+                      display="flex"
+                      gap={1}
+                      mb={1.25}
+                      alignItems={{ xs: "stretch", md: "center" }}
+                      flexDirection={{ xs: "column", md: "row" }}
+                    >
+                      <SoftBox flex={1}>
+                        <SoftInput
+                          value={directSearch}
+                          onChange={(event) => setDirectSearch(event.target.value)}
+                          placeholder="Tìm tên, mã hoặc barcode..."
+                          icon={{ component: "search", direction: "left" }}
+                        />
+                      </SoftBox>
+                      <SoftBox display="flex" gap={0.75} overflow="auto">
+                        {[
+                          ["ALL", "Tất cả"],
+                          ["NOT_COUNTED", "Chưa kiểm"],
+                          ["COUNTED", "Đã kiểm"],
+                          ["DIFFERENCE", "Có lệch"],
+                        ].map(([value, label]) => (
+                          <SoftBox
+                            component="button"
+                            type="button"
+                            key={value}
+                            onClick={() => setDirectFilter(value)}
+                            px={1.15}
+                            py={0.8}
+                            minWidth="max-content"
+                            sx={{
+                              border:
+                                directFilter === value ? "2px solid #1976d2" : "1px solid #dce2e9",
+                              borderRadius: 2,
+                              bgcolor: directFilter === value ? "#e3f2fd" : "#fff",
+                              color: directFilter === value ? "#0d47a1" : "#5f6b7a",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {label}
                           </SoftBox>
                         ))}
                       </SoftBox>
                     </SoftBox>
-                    <SoftBox component="tbody">
-                      {visibleInventory.map((item, index) => {
-                        const row = productDetail(item);
+
+                    <SoftBox display="flex" gap={1} mb={1.25} flexWrap="wrap">
+                      <SoftButton
+                        size="small"
+                        variant="outlined"
+                        color="success"
+                        startIcon={<Icon>done_all</Icon>}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              "Điền số lượng thực tế bằng đúng tồn trên app cho tất cả sản phẩm chưa kiểm?"
+                            )
+                          )
+                            return;
+                          setDirectCounts((current) => ({
+                            ...directStockRows.reduce(
+                              (result, item) => ({
+                                ...result,
+                                [item.key]:
+                                  current[item.key] === undefined || current[item.key] === ""
+                                    ? item.systemQuantity
+                                    : current[item.key],
+                              }),
+                              {}
+                            ),
+                          }));
+                        }}
+                      >
+                        Đánh dấu phần còn lại là khớp
+                      </SoftButton>
+                      <SoftButton
+                        size="small"
+                        variant="text"
+                        color="error"
+                        startIcon={<Icon>delete_sweep</Icon>}
+                        onClick={clearDirectStockCheck}
+                      >
+                        Xóa bản nháp
+                      </SoftButton>
+                    </SoftBox>
+
+                    <SoftBox
+                      display="grid"
+                      gap={1.15}
+                      sx={{ gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" } }}
+                    >
+                      {visibleDirectStockRows.map((item, index) => {
+                        const counted = item.rawActual !== "";
+                        const difference = item.differenceQuantity;
+                        const matched = counted && difference === 0;
                         return (
                           <SoftBox
-                            component="tr"
-                            key={`${productIdOf(item)}-${index}`}
-                            sx={{ "&:hover": { bgcolor: "#f8fbff" } }}
+                            key={item.key}
+                            p={{ xs: 1.35, sm: 1.5 }}
+                            borderRadius={2.5}
+                            bgcolor={matched ? "#f1f8f3" : counted ? "#fff8f1" : "#fff"}
+                            sx={{
+                              border: matched
+                                ? "2px solid #81c784"
+                                : counted
+                                ? "2px solid #ffb74d"
+                                : "1px solid #dfe5ec",
+                            }}
                           >
-                            <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
-                              <SoftTypography variant="button">{index + 1}</SoftTypography>
-                            </SoftBox>
-                            <SoftBox component="td" px={1.25} py={1.3}>
-                              <SoftTypography variant="button" fontWeight="bold">
-                                {row.name}
-                              </SoftTypography>
-                            </SoftBox>
-                            <SoftBox component="td" px={1.25} py={1.3}>
-                              <SoftTypography variant="caption" display="block">
-                                {row.code}
-                              </SoftTypography>
-                              {row.barcode && (
-                                <SoftTypography variant="caption" color="text">
-                                  {row.barcode}
+                            <SoftBox display="flex" justifyContent="space-between" gap={1}>
+                              <SoftBox minWidth={0}>
+                                <SoftTypography variant="button" fontWeight="bold" display="block">
+                                  {item.name}
                                 </SoftTypography>
-                              )}
+                                <SoftTypography variant="caption" color="text">
+                                  {[item.code, item.barcode, item.unit].filter(Boolean).join(" · ")}
+                                </SoftTypography>
+                              </SoftBox>
+                              <SoftBox textAlign="right" flexShrink={0}>
+                                <SoftTypography variant="caption" color="text" display="block">
+                                  Trên app
+                                </SoftTypography>
+                                <SoftTypography variant="h6" fontWeight="bold" color="info">
+                                  {item.systemQuantity}
+                                </SoftTypography>
+                              </SoftBox>
                             </SoftBox>
-                            <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
-                              <SoftTypography variant="button">{row.unit}</SoftTypography>
-                            </SoftBox>
-                            <SoftBox component="td" px={1.25} py={1.3} textAlign="center">
-                              <SoftTypography
-                                variant="h6"
-                                fontWeight="bold"
-                                sx={{ color: "#2e7d32" }}
+
+                            <SoftBox
+                              mt={1.15}
+                              display="flex"
+                              alignItems="center"
+                              justifyContent="center"
+                              gap={{ xs: 0.75, sm: 1 }}
+                            >
+                              <IconButton
+                                disabled={!counted || Number(item.rawActual) <= 0}
+                                onClick={() =>
+                                  setDirectCounts((current) => ({
+                                    ...current,
+                                    [item.key]: Math.max(0, Number(item.rawActual || 0) - 1),
+                                  }))
+                                }
+                                sx={{ border: "1px solid #cfd8e3", width: 44, height: 44 }}
                               >
-                                {row.quantity}
-                              </SoftTypography>
+                                <Icon>remove</Icon>
+                              </IconButton>
+                              <SoftBox width={110}>
+                                <SoftInput
+                                  type="number"
+                                  value={item.rawActual}
+                                  placeholder="Thực tế"
+                                  inputProps={{
+                                    min: 0,
+                                    step: 1,
+                                    inputMode: "numeric",
+                                    style: { textAlign: "center", fontWeight: 800, fontSize: 18 },
+                                  }}
+                                  onChange={(event) => {
+                                    const value = event.target.value;
+                                    if (value === "" || /^\d+$/.test(value)) {
+                                      setDirectCounts((current) => ({
+                                        ...current,
+                                        [item.key]: value === "" ? "" : Number(value),
+                                      }));
+                                    }
+                                  }}
+                                />
+                              </SoftBox>
+                              <IconButton
+                                onClick={() =>
+                                  setDirectCounts((current) => ({
+                                    ...current,
+                                    [item.key]: Number(item.rawActual || 0) + 1,
+                                  }))
+                                }
+                                sx={{
+                                  border: "1px solid #90caf9",
+                                  bgcolor: "#e3f2fd",
+                                  width: 44,
+                                  height: 44,
+                                }}
+                              >
+                                <Icon color="info">add</Icon>
+                              </IconButton>
+                              <SoftButton
+                                size="small"
+                                variant={matched ? "gradient" : "outlined"}
+                                color="success"
+                                onClick={() =>
+                                  setDirectCounts((current) => ({
+                                    ...current,
+                                    [item.key]: item.systemQuantity,
+                                  }))
+                                }
+                                sx={{ minWidth: 60, height: 44 }}
+                              >
+                                Khớp
+                              </SoftButton>
                             </SoftBox>
-                            <SoftBox component="td" px={1.25} py={1.3} textAlign="right">
-                              <SoftTypography variant="button" fontWeight="bold" color="info">
-                                {pricesLoading && !row.sellPrice
-                                  ? "Đang tải..."
-                                  : money(row.sellPrice)}
-                              </SoftTypography>
+
+                            {counted && (
+                              <SoftBox
+                                mt={1}
+                                px={1}
+                                py={0.7}
+                                borderRadius={1.5}
+                                bgcolor={
+                                  matched ? "#e8f5e9" : difference < 0 ? "#ffebee" : "#fff3e0"
+                                }
+                                textAlign="center"
+                              >
+                                <SoftTypography
+                                  variant="caption"
+                                  fontWeight="bold"
+                                  sx={{
+                                    color: matched
+                                      ? "#2e7d32"
+                                      : difference < 0
+                                      ? "#c62828"
+                                      : "#ef6c00",
+                                  }}
+                                >
+                                  {matched
+                                    ? "Khớp với tồn trên app"
+                                    : difference < 0
+                                    ? `Thiếu ${Math.abs(difference)}`
+                                    : `Thừa ${difference}`}
+                                </SoftTypography>
+                              </SoftBox>
+                            )}
+
+                            <SoftBox mt={1}>
+                              <SoftInput
+                                value={item.note}
+                                onChange={(event) =>
+                                  setDirectNotes((current) => ({
+                                    ...current,
+                                    [item.key]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Ghi chú sản phẩm (nếu có)..."
+                              />
                             </SoftBox>
                           </SoftBox>
                         );
                       })}
                     </SoftBox>
-                  </SoftBox>
-                </SoftBox>
-              </>
-            )}
-          </SoftBox>
 
-          {detailTab === 1 && (
-            <SoftBox>
-              <SoftBox
-                display="flex"
-                gap={1}
-                pb={1}
-                sx={{ overflowX: "auto", scrollbarWidth: "none" }}
-              >
-                {[
-                  ["DAY", "Theo ngày", "today"],
-                  ["WEEK", "Theo tuần", "date_range"],
-                  ["ALL", "Tất cả", "history"],
-                ].map(([value, label, icon]) => {
-                  const selected = salesPeriod === value;
-                  return (
-                    <SoftBox
-                      component="button"
-                      type="button"
-                      key={value}
-                      onClick={() => setSalesPeriod(value)}
-                      px={1.5}
-                      py={1}
-                      minWidth={112}
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      gap={0.75}
-                      sx={{
-                        border: `2px solid ${selected ? "#1976d2" : "#dce2e9"}`,
-                        borderRadius: 2,
-                        bgcolor: selected ? "#e3f2fd" : "#fff",
-                        color: selected ? "#0d47a1" : "#5f6b7a",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      <Icon sx={{ fontSize: 20 }}>{icon}</Icon>
-                      <SoftTypography variant="button" fontWeight="bold" sx={{ color: "inherit" }}>
-                        {label}
-                      </SoftTypography>
-                    </SoftBox>
-                  );
-                })}
-              </SoftBox>
-
-              <Grid container spacing={1.25} mt={0.25} mb={2}>
-                {salesPeriod === "DAY" && (
-                  <Grid item xs={12} sm={6}>
-                    <SoftInput
-                      type="date"
-                      value={salesDate}
-                      onChange={(event) => setSalesDate(event.target.value)}
-                    />
-                  </Grid>
-                )}
-                {salesPeriod === "WEEK" && (
-                  <Grid item xs={12} sm={6}>
-                    <SoftInput
-                      type="week"
-                      value={salesWeek}
-                      onChange={(event) => setSalesWeek(event.target.value)}
-                    />
-                  </Grid>
-                )}
-                <Grid item xs={12} sm={salesPeriod === "ALL" ? 12 : 6}>
-                  <FormControl fullWidth size="small">
-                    <Select
-                      value={salesSort}
-                      onChange={(event) => setSalesSort(event.target.value)}
-                      sx={{ bgcolor: "#fff", minHeight: 40 }}
-                    >
-                      <MenuItem value="desc">Mới nhất trước</MenuItem>
-                      <MenuItem value="asc">Cũ nhất trước</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </Grid>
-
-              {!salesLoading && salesInvoices.length > 0 && (
-                <Grid container spacing={1} mb={1.5}>
-                  {[
-                    ["Sự kiện", salesInvoices.length, "receipt_long", "#1565c0", "#e3f2fd"],
-                    [
-                      "Đã bán",
-                      salesInvoices
-                        .filter(
-                          (invoice) =>
-                            !["REVERSAL", "CUSTOMER_RETURN", "CUSTOMER_RETURN_REVERSAL"].includes(
-                              invoice.eventType
-                            )
-                        )
-                        .reduce(
-                          (sum, invoice) =>
-                            sum +
-                            (Array.isArray(invoice.items)
-                              ? invoice.items.reduce(
-                                  (itemSum, item) => itemSum + Number(item.qty || 0),
-                                  0
-                                )
-                              : 0),
-                          0
-                        ),
-                      "remove_shopping_cart",
-                      "#c62828",
-                      "#ffebee",
-                    ],
-                    [
-                      "Đã hoàn về xe",
-                      salesInvoices
-                        .filter((invoice) =>
-                          ["REVERSAL", "CUSTOMER_RETURN"].includes(invoice.eventType)
-                        )
-                        .reduce(
-                          (sum, invoice) =>
-                            sum +
-                            (Array.isArray(invoice.items)
-                              ? invoice.items.reduce(
-                                  (itemSum, item) => itemSum + Number(item.qty || 0),
-                                  0
-                                )
-                              : 0),
-                          0
-                        ),
-                      "restore",
-                      "#2e7d32",
-                      "#e8f5e9",
-                    ],
-                  ].map(([label, value, icon, color, background]) => (
-                    <Grid item xs={4} key={label}>
-                      <SoftBox p={1.4} borderRadius={2} bgcolor={background}>
-                        <SoftBox display="flex" alignItems="center" gap={0.75}>
-                          <Icon sx={{ color, fontSize: 21 }}>{icon}</Icon>
-                          <SoftTypography variant="caption" color="text">
-                            {label}
-                          </SoftTypography>
-                        </SoftBox>
-                        <SoftTypography variant="h6" fontWeight="bold" sx={{ color }}>
-                          {value}
+                    {!visibleDirectStockRows.length && (
+                      <SoftBox py={4} textAlign="center" bgcolor="#fff" borderRadius={2}>
+                        <SoftTypography variant="button" color="text">
+                          Không có sản phẩm phù hợp
                         </SoftTypography>
                       </SoftBox>
-                    </Grid>
-                  ))}
-                </Grid>
-              )}
+                    )}
 
-              {salesLoading && (
-                <SoftBox py={6} textAlign="center">
-                  <Icon sx={{ color: "#1565c0", fontSize: 38 }}>hourglass_top</Icon>
-                  <SoftTypography variant="button" color="text" display="block" mt={1}>
-                    Đang tải lịch sử hàng hóa trên xe...
-                  </SoftTypography>
-                </SoftBox>
-              )}
-
-              {!salesLoading && !salesInvoices.length && (
-                <SoftBox py={6} textAlign="center" bgcolor="#fff" borderRadius={2}>
-                  <Icon sx={{ color: "#b0bec5", fontSize: 46 }}>receipt_long</Icon>
-                  <SoftTypography variant="button" color="text" display="block" mt={1}>
-                    Không có hoạt động bán hoặc hoàn hàng trong khoảng thời gian này
-                  </SoftTypography>
-                </SoftBox>
-              )}
-
-              {!salesLoading &&
-                salesInvoices.map((invoice) => {
-                  const items = Array.isArray(invoice.items) ? invoice.items : [];
-                  const isInvoiceReversal = invoice.eventType === "REVERSAL";
-                  const isCustomerReturn = invoice.eventType === "CUSTOMER_RETURN";
-                  const isCustomerReturnReversal = invoice.eventType === "CUSTOMER_RETURN_REVERSAL";
-                  const isInbound = isInvoiceReversal || isCustomerReturn;
-                  const soldQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
-                  return (
                     <SoftBox
-                      key={getId(invoice) || invoice.code}
+                      position="sticky"
+                      bottom={-20}
+                      mt={1.5}
+                      mx={{ xs: -1.5, md: -3 }}
+                      px={{ xs: 1.5, md: 3 }}
+                      py={1.25}
                       bgcolor="#fff"
-                      borderRadius={2.5}
-                      mb={1.25}
-                      overflow="hidden"
-                      sx={{ border: "1px solid #dfe5ec" }}
+                      zIndex={3}
+                      sx={{
+                        borderTop: "1px solid #dfe5ec",
+                        boxShadow: "0 -6px 18px rgba(0,0,0,.06)",
+                      }}
                     >
-                      <SoftBox
-                        px={{ xs: 1.5, md: 2 }}
-                        py={1.35}
-                        display="flex"
-                        justifyContent="space-between"
-                        alignItems="flex-start"
-                        gap={1}
-                        bgcolor={
-                          isInbound ? "#f1f8f3" : isCustomerReturnReversal ? "#fff3f3" : "#f8fbff"
-                        }
-                        sx={{ borderBottom: "1px solid #e5eaf0" }}
+                      <SoftButton
+                        fullWidth
+                        variant="gradient"
+                        color="success"
+                        startIcon={<Icon>fact_check</Icon>}
+                        disabled={!directCountedProducts || stockCheckComparing}
+                        onClick={compareDirectStockCheck}
+                        sx={{ minHeight: 48 }}
                       >
-                        <SoftBox minWidth={0}>
+                        {stockCheckComparing
+                          ? "Đang đối chiếu..."
+                          : `Xem kết quả (${directCountedProducts}/${directStockRows.length})`}
+                      </SoftButton>
+                    </SoftBox>
+                  </SoftBox>
+                )}
+
+                {stockCheckMode === "EXCEL" && !stockCheckResult && !stockCheckComparing && (
+                  <SoftBox py={5} px={2} textAlign="center" bgcolor="#fff" borderRadius={2.5}>
+                    <Icon sx={{ color: "#b0bec5", fontSize: 48 }}>inventory</Icon>
+                    <SoftTypography variant="button" fontWeight="bold" display="block" mt={1}>
+                      Chưa có kết quả đối chiếu
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="text">
+                      Hãy tải file mẫu, nhập cột SỐ LƯỢNG THỰC TẾ rồi chọn file để kiểm tra.
+                    </SoftTypography>
+                  </SoftBox>
+                )}
+
+                {stockCheckMode === "BACKUPS" && isAdmin && (
+                  <SoftBox>
+                    <SoftBox
+                      p={{ xs: 1.35, md: 1.75 }}
+                      mb={1.5}
+                      borderRadius={2.5}
+                      bgcolor="#fff8e1"
+                      sx={{ border: "1px solid #ffe0a3" }}
+                    >
+                      <SoftBox display="flex" alignItems="flex-start" gap={1}>
+                        <Icon sx={{ color: "#ef6c00" }}>verified_user</Icon>
+                        <SoftBox>
                           <SoftTypography variant="button" fontWeight="bold" display="block">
-                            {invoice.code || "Hóa đơn"}
+                            Bản sao an toàn lưu trong hệ thống
                           </SoftTypography>
-                          {isInvoiceReversal && invoice.invoiceCode && (
-                            <SoftTypography
-                              variant="caption"
-                              fontWeight="bold"
-                              display="block"
-                              sx={{ color: "#2e7d32" }}
-                            >
-                              Hoàn từ hóa đơn {invoice.invoiceCode}
-                            </SoftTypography>
-                          )}
-                          {isCustomerReturn && (
-                            <SoftTypography
-                              variant="caption"
-                              fontWeight="bold"
-                              display="block"
-                              sx={{ color: "#2e7d32" }}
-                            >
-                              Khách hoàn hàng về xe
-                              {invoice.status === "REVERSED" ? " · Phiếu đã đảo" : ""}
-                            </SoftTypography>
-                          )}
-                          {isCustomerReturnReversal && (
-                            <SoftTypography
-                              variant="caption"
-                              fontWeight="bold"
-                              display="block"
-                              sx={{ color: "#c62828" }}
-                            >
-                              Đảo phiếu hoàn hàng · Hàng được trừ lại khỏi xe
-                            </SoftTypography>
-                          )}
                           <SoftTypography variant="caption" color="text" display="block">
-                            {date(invoice.createdAt || invoice.date)}
-                          </SoftTypography>
-                          <SoftTypography variant="caption" color="text" display="block" noWrap>
-                            {invoiceCustomerLabel(invoice)}
-                          </SoftTypography>
-                        </SoftBox>
-                        <SoftBox
-                          px={1.1}
-                          py={0.65}
-                          bgcolor={isInbound ? "#e8f5e9" : "#ffebee"}
-                          borderRadius={2}
-                          textAlign="center"
-                          flexShrink={0}
-                        >
-                          <SoftTypography
-                            variant="button"
-                            fontWeight="bold"
-                            sx={{ color: isInbound ? "#2e7d32" : "#c62828" }}
-                          >
-                            {isInbound ? "+" : "−"}
-                            {soldQuantity}
-                          </SoftTypography>
-                          <SoftTypography
-                            variant="caption"
-                            display="block"
-                            sx={{ color: isInbound ? "#1b5e20" : "#8e1b1b" }}
-                          >
-                            {isInbound
-                              ? "hoàn về xe"
-                              : isCustomerReturnReversal
-                              ? "đảo hoàn hàng"
-                              : "sản phẩm"}
+                            Mỗi lần đồng bộ hoặc khôi phục, backend tự lưu tồn xe trước khi thay
+                            đổi. Khôi phục sẽ thay toàn bộ tồn hiện tại bằng số lượng trong bản sao
+                            đã chọn.
                           </SoftTypography>
                         </SoftBox>
                       </SoftBox>
+                    </SoftBox>
 
-                      <SoftBox px={{ xs: 1.5, md: 2 }} py={0.5}>
-                        {items.map((item, index) => {
-                          const product =
-                            (item.productId && typeof item.productId === "object"
-                              ? item.productId
-                              : null) ||
-                            item.product ||
-                            {};
-                          const isGift = !isInbound && item.lineType === "GIFT";
-                          const stockSnapshot = saleInventorySnapshot(item);
-                          const unit = item.unit || product.unit || "";
-                          return (
-                            <SoftBox
-                              key={`${getId(item) || getId(product) || item.productId}-${index}`}
-                              py={1.25}
-                              sx={{
-                                borderBottom: index < items.length - 1 ? "1px dashed #e3e7ed" : 0,
-                              }}
-                            >
+                    {inventoryBackupsLoading && !inventoryBackups.length ? (
+                      <SoftBox py={5} textAlign="center">
+                        <SoftTypography variant="button" color="text">
+                          Đang tải danh sách bản sao...
+                        </SoftTypography>
+                      </SoftBox>
+                    ) : (
+                      inventoryBackups.map((backup) => (
+                        <SoftBox
+                          key={getId(backup)}
+                          p={{ xs: 1.25, md: 1.6 }}
+                          mb={1}
+                          borderRadius={2.25}
+                          bgcolor="#fff"
+                          sx={{ border: "1px solid #dfe5ec" }}
+                        >
+                          <SoftBox
+                            display="flex"
+                            justifyContent="space-between"
+                            alignItems={{ xs: "flex-start", md: "center" }}
+                            flexDirection={{ xs: "column", md: "row" }}
+                            gap={1}
+                          >
+                            <SoftBox minWidth={0}>
                               <SoftBox
                                 display="flex"
+                                gap={0.75}
                                 alignItems="center"
-                                justifyContent="space-between"
-                                gap={1}
+                                flexWrap="wrap"
                               >
-                                <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
-                                  <SoftBox
-                                    width={34}
-                                    height={34}
-                                    borderRadius="50%"
-                                    bgcolor={isInbound ? "#e8f5e9" : isGift ? "#fff3e0" : "#e8f5e9"}
-                                    color={isInbound ? "#2e7d32" : isGift ? "#ef6c00" : "#2e7d32"}
-                                    display="flex"
-                                    alignItems="center"
-                                    justifyContent="center"
-                                    flexShrink={0}
-                                  >
-                                    <Icon sx={{ fontSize: 19 }}>
-                                      {isInbound
-                                        ? "restore"
-                                        : isCustomerReturnReversal
-                                        ? "undo"
-                                        : isGift
-                                        ? "redeem"
-                                        : "remove_shopping_cart"}
-                                    </Icon>
-                                  </SoftBox>
-                                  <SoftBox minWidth={0}>
-                                    <SoftTypography
-                                      variant="button"
-                                      fontWeight="bold"
-                                      display="block"
-                                    >
-                                      {item.productName || product.name || item.name || "Sản phẩm"}
-                                    </SoftTypography>
-                                    <SoftTypography variant="caption" color="text" display="block">
-                                      {[
-                                        item.productCode || product.code,
-                                        isCustomerReturn
-                                          ? item.unclassified
-                                            ? "Hàng hoàn chờ phân loại"
-                                            : "Khách hoàn về xe"
-                                          : isInvoiceReversal
-                                          ? "Hoàn hóa đơn về xe"
-                                          : isCustomerReturnReversal
-                                          ? "Đảo phiếu hoàn"
-                                          : isGift
-                                          ? "Quà tặng"
-                                          : "Hàng bán",
-                                      ]
-                                        .filter(Boolean)
-                                        .join(" · ")}
-                                    </SoftTypography>
-                                  </SoftBox>
-                                </SoftBox>
-                                <SoftTypography variant="caption" color="text" flexShrink={0}>
-                                  {unit}
+                                <SoftTypography variant="button" fontWeight="bold">
+                                  {backup.code || "Bản sao tồn xe"}
                                 </SoftTypography>
-                              </SoftBox>
-
-                              <SoftBox
-                                mt={1.1}
-                                display="grid"
-                                sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
-                                gap={{ xs: 0.75, md: 1 }}
-                              >
-                                {(isInbound
-                                  ? [
-                                      [
-                                        "Trước khi hoàn",
-                                        stockSnapshot.before,
-                                        "#1565c0",
-                                        "#e3f2fd",
-                                      ],
-                                      ["Đã cộng", stockSnapshot.deducted, "#2e7d32", "#e8f5e9"],
-                                      ["Sau khi hoàn", stockSnapshot.after, "#1b5e20", "#dcedc8"],
-                                    ]
-                                  : isCustomerReturnReversal
-                                  ? [
-                                      ["Trước khi đảo", stockSnapshot.before, "#1565c0", "#e3f2fd"],
-                                      ["Đã trừ", stockSnapshot.deducted, "#c62828", "#ffebee"],
-                                      ["Sau khi đảo", stockSnapshot.after, "#2e7d32", "#e8f5e9"],
-                                    ]
-                                  : [
-                                      ["Trước khi bán", stockSnapshot.before, "#1565c0", "#e3f2fd"],
-                                      ["Đã trừ", stockSnapshot.deducted, "#c62828", "#ffebee"],
-                                      ["Còn lại", stockSnapshot.after, "#2e7d32", "#e8f5e9"],
-                                    ]
-                                ).map(([label, value, color, background]) => (
+                                <SoftBox
+                                  component="span"
+                                  px={0.8}
+                                  py={0.3}
+                                  borderRadius={1.5}
+                                  bgcolor={
+                                    backup.sourceType === "BEFORE_RESTORE" ? "#fce4ec" : "#e3f2fd"
+                                  }
+                                >
+                                  <SoftTypography
+                                    component="span"
+                                    variant="caption"
+                                    fontWeight="bold"
+                                    sx={{
+                                      color:
+                                        backup.sourceType === "BEFORE_RESTORE"
+                                          ? "#ad1457"
+                                          : "#1565c0",
+                                    }}
+                                  >
+                                    {backupSourceLabel(backup.sourceType)}
+                                  </SoftTypography>
+                                </SoftBox>
+                                {backup.restoredAt && (
                                   <SoftBox
-                                    key={label}
-                                    px={{ xs: 0.75, md: 1.25 }}
-                                    py={0.85}
-                                    borderRadius={1.75}
-                                    bgcolor={background}
-                                    textAlign="center"
+                                    component="span"
+                                    px={0.8}
+                                    py={0.3}
+                                    borderRadius={1.5}
+                                    bgcolor="#e8f5e9"
                                   >
                                     <SoftTypography
+                                      component="span"
                                       variant="caption"
-                                      display="block"
-                                      sx={{
-                                        color,
-                                        fontSize: { xs: 10, sm: 12 },
-                                        lineHeight: 1.2,
-                                      }}
-                                    >
-                                      {label}
-                                    </SoftTypography>
-                                    <SoftTypography
-                                      variant="button"
                                       fontWeight="bold"
-                                      sx={{ color, fontSize: { xs: 14, sm: 16 } }}
+                                      color="success"
                                     >
-                                      {value === null
-                                        ? "—"
-                                        : `${
-                                            label === "Đã trừ"
-                                              ? "−"
-                                              : label === "Đã cộng"
-                                              ? "+"
-                                              : ""
-                                          }${value}`}
+                                      Đã khôi phục
                                     </SoftTypography>
                                   </SoftBox>
-                                ))}
+                                )}
                               </SoftBox>
-                              {stockSnapshot.before === null && stockSnapshot.after === null && (
-                                <SoftTypography
-                                  variant="caption"
-                                  color="text"
-                                  display="block"
-                                  mt={0.6}
-                                  textAlign="right"
-                                  sx={{ fontStyle: "italic" }}
-                                >
-                                  {item.unclassified
-                                    ? "Hàng ngoài danh mục đã được lưu tại khu vực chờ phân loại trên xe"
-                                    : isInbound
-                                    ? "Movement hoàn hàng chưa có snapshot tồn xe"
-                                    : isCustomerReturnReversal
-                                    ? "Movement đảo phiếu hoàn chưa có snapshot tồn xe"
-                                    : "Hóa đơn cũ chưa có snapshot tồn xe"}
+                              <SoftTypography
+                                variant="caption"
+                                color="text"
+                                display="block"
+                                mt={0.25}
+                              >
+                                {date(backup.createdAt)} · Người tạo: {backup.createdByName || "—"}
+                              </SoftTypography>
+                              {backup.reason && (
+                                <SoftTypography variant="caption" color="text" display="block">
+                                  Lý do: {backup.reason}
                                 </SoftTypography>
                               )}
                             </SoftBox>
-                          );
-                        })}
-                        {!items.length && (
-                          <SoftTypography
-                            variant="caption"
-                            color="text"
-                            display="block"
-                            py={1.5}
-                            textAlign="center"
+                            <SoftBox
+                              display="flex"
+                              gap={0.65}
+                              flexWrap="wrap"
+                              width={{ xs: "100%", md: "auto" }}
+                            >
+                              <SoftButton
+                                size="small"
+                                variant="outlined"
+                                color="info"
+                                startIcon={<Icon>visibility</Icon>}
+                                disabled={inventoryBackupDetailLoading}
+                                onClick={() => openBackupDetail(backup)}
+                                sx={{ flex: { xs: 1, md: "none" } }}
+                              >
+                                Chi tiết
+                              </SoftButton>
+                              <SoftButton
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                                startIcon={<Icon>download</Icon>}
+                                disabled={inventoryBackupExporting === String(getId(backup))}
+                                onClick={() => exportInventoryBackup(backup)}
+                                sx={{ flex: { xs: 1, md: "none" } }}
+                              >
+                                Excel
+                              </SoftButton>
+                              <SoftButton
+                                size="small"
+                                variant="gradient"
+                                color="warning"
+                                startIcon={<Icon>restore</Icon>}
+                                disabled={Boolean(backup.restoredAt) || stockActionLoading}
+                                onClick={() => openRestorePreview(backup)}
+                                sx={{ flex: { xs: "1 0 100%", md: "none" } }}
+                              >
+                                {backup.restoredAt ? "Đã khôi phục" : "Khôi phục bản sao"}
+                              </SoftButton>
+                            </SoftBox>
+                          </SoftBox>
+                          <SoftBox
+                            mt={1}
+                            display="grid"
+                            gap={0.75}
+                            sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
                           >
-                            API danh sách chưa trả chi tiết sản phẩm của hóa đơn này
-                          </SoftTypography>
+                            {[
+                              ["Loại hàng", backup.totalProducts || 0],
+                              ["Tổng số lượng", backup.totalQuantity || 0],
+                              ["Giá trị bán", money(backup.totalSellValue || 0)],
+                            ].map(([label, value]) => (
+                              <SoftBox key={label} p={0.8} borderRadius={1.5} bgcolor="#f5f7fa">
+                                <SoftTypography variant="caption" color="text" display="block">
+                                  {label}
+                                </SoftTypography>
+                                <SoftTypography variant="button" fontWeight="bold">
+                                  {value}
+                                </SoftTypography>
+                              </SoftBox>
+                            ))}
+                          </SoftBox>
+                        </SoftBox>
+                      ))
+                    )}
+
+                    {!inventoryBackupsLoading && !inventoryBackups.length && (
+                      <SoftBox py={5} textAlign="center" bgcolor="#fff" borderRadius={2.5}>
+                        <Icon sx={{ color: "#b0bec5", fontSize: 46 }}>restore_page</Icon>
+                        <SoftTypography
+                          variant="button"
+                          fontWeight="bold"
+                          display="block"
+                          mt={0.75}
+                        >
+                          Chưa có bản sao tồn xe
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text">
+                          Bản sao đầu tiên sẽ được tạo tự động khi admin đồng bộ kết quả kiểm hàng.
+                        </SoftTypography>
+                      </SoftBox>
+                    )}
+
+                    {(inventoryBackupMeta.totalPages || 1) > 1 && (
+                      <SoftBox display="flex" justifyContent="center" mt={1.5}>
+                        <Pagination
+                          page={inventoryBackupPage}
+                          count={inventoryBackupMeta.totalPages || 1}
+                          onChange={(_, value) => setInventoryBackupPage(value)}
+                          color="primary"
+                          size="small"
+                        />
+                      </SoftBox>
+                    )}
+                  </SoftBox>
+                )}
+
+                {stockCheckResult && (
+                  <>
+                    <SoftBox
+                      mb={1.5}
+                      display="flex"
+                      justifyContent="space-between"
+                      alignItems={{ xs: "stretch", sm: "center" }}
+                      flexDirection={{ xs: "column", sm: "row" }}
+                      gap={1}
+                    >
+                      <SoftBox>
+                        <SoftTypography variant="button" fontWeight="bold" display="block">
+                          Kết quả đối chiếu
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text">
+                          {date(stockCheckResult.comparedAt)} · {stockCheckResult.items.length} dòng
+                        </SoftTypography>
+                      </SoftBox>
+                      <SoftBox display="flex" gap={0.75} flexWrap="wrap">
+                        {stockCheckMode === "DIRECT" && (
+                          <SoftButton
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                            startIcon={<Icon>edit</Icon>}
+                            onClick={() => setStockCheckResult(null)}
+                          >
+                            Kiểm lại số lượng
+                          </SoftButton>
                         )}
+                        {isAdmin && (
+                          <SoftButton
+                            size="small"
+                            variant="gradient"
+                            color="warning"
+                            startIcon={<Icon>sync</Icon>}
+                            disabled={stockActionLoading || !stockCheckResult.comparisonId}
+                            onClick={openStockSyncPreview}
+                          >
+                            {stockActionLoading ? "Đang kiểm tra..." : "Đồng bộ tồn xe"}
+                          </SoftButton>
+                        )}
+                        <SoftButton
+                          size="small"
+                          variant="gradient"
+                          color="info"
+                          startIcon={<Icon>file_download</Icon>}
+                          disabled={stockCheckExporting}
+                          onClick={exportStockCheckResult}
+                        >
+                          {stockCheckExporting ? "Đang xuất..." : "Xuất kết quả Excel"}
+                        </SoftButton>
                       </SoftBox>
                     </SoftBox>
-                  );
-                })}
-            </SoftBox>
+
+                    <Grid container spacing={1} mb={1.5}>
+                      {[
+                        [
+                          "Đã kiểm",
+                          `${stockCheckResult.summary.countedProducts || 0}/${
+                            stockCheckResult.summary.totalProducts || 0
+                          }`,
+                          "fact_check",
+                          "#1565c0",
+                          "#e3f2fd",
+                        ],
+                        [
+                          "Khớp",
+                          stockCheckResult.summary.matchedProducts || 0,
+                          "check_circle",
+                          "#2e7d32",
+                          "#e8f5e9",
+                        ],
+                        [
+                          "Thiếu",
+                          `${stockCheckResult.summary.shortageProducts || 0} SP · −${
+                            stockCheckResult.summary.totalShortageQuantity || 0
+                          }`,
+                          "remove_circle",
+                          "#c62828",
+                          "#ffebee",
+                        ],
+                        [
+                          "Thừa",
+                          `${stockCheckResult.summary.surplusProducts || 0} SP · +${
+                            stockCheckResult.summary.totalSurplusQuantity || 0
+                          }`,
+                          "add_circle",
+                          "#ef6c00",
+                          "#fff3e0",
+                        ],
+                        [
+                          "Chưa kiểm",
+                          stockCheckResult.summary.notCountedProducts || 0,
+                          "pending",
+                          "#607d8b",
+                          "#eceff1",
+                        ],
+                        [
+                          "Cần xem lại",
+                          Number(stockCheckResult.summary.unknownProducts || 0) +
+                            Number(stockCheckResult.summary.notOnTruckProducts || 0) +
+                            Number(stockCheckResult.summary.invalidRows || 0),
+                          "warning",
+                          "#8d6e00",
+                          "#fff8e1",
+                        ],
+                      ].map(([label, value, icon, color, background]) => (
+                        <Grid item xs={6} sm={4} md={2} key={label}>
+                          <SoftBox p={1.25} height="100%" borderRadius={2} bgcolor={background}>
+                            <SoftBox display="flex" alignItems="center" gap={0.6}>
+                              <Icon sx={{ color, fontSize: 19 }}>{icon}</Icon>
+                              <SoftTypography variant="caption" color="text">
+                                {label}
+                              </SoftTypography>
+                            </SoftBox>
+                            <SoftTypography variant="h6" fontWeight="bold" sx={{ color }}>
+                              {value}
+                            </SoftTypography>
+                          </SoftBox>
+                        </Grid>
+                      ))}
+                    </Grid>
+
+                    <SoftBox
+                      display="flex"
+                      gap={0.75}
+                      mb={1.5}
+                      pb={0.5}
+                      sx={{ overflowX: "auto", scrollbarWidth: "none" }}
+                    >
+                      {[
+                        ["ALL", "Tất cả"],
+                        ...Object.entries(STOCK_CHECK_STATUSES).map(([value, meta]) => [
+                          value,
+                          meta.label,
+                        ]),
+                      ].map(([value, label]) => {
+                        const active = stockCheckFilter === value;
+                        const count =
+                          value === "ALL"
+                            ? stockCheckItems.length
+                            : stockCheckItems.filter((item) => item.status === value).length;
+                        return (
+                          <SoftBox
+                            component="button"
+                            type="button"
+                            key={value}
+                            onClick={() => setStockCheckFilter(value)}
+                            px={1.25}
+                            py={0.8}
+                            minWidth="max-content"
+                            sx={{
+                              border: active ? "2px solid #1976d2" : "1px solid #dce2e9",
+                              borderRadius: 2,
+                              bgcolor: active ? "#e3f2fd" : "#fff",
+                              color: active ? "#0d47a1" : "#5f6b7a",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {label} ({count})
+                          </SoftBox>
+                        );
+                      })}
+                    </SoftBox>
+
+                    <SoftBox display={{ xs: "block", md: "none" }}>
+                      {visibleStockCheckItems.map((item, index) => {
+                        const status =
+                          STOCK_CHECK_STATUSES[item.status] || STOCK_CHECK_STATUSES.INVALID;
+                        return (
+                          <SoftBox
+                            key={`${item.productCode}-${item.rowNumber || index}`}
+                            p={1.35}
+                            mb={1}
+                            bgcolor="#fff"
+                            borderRadius={2.25}
+                            sx={{ border: `1px solid ${status.color}35` }}
+                          >
+                            <SoftBox display="flex" justifyContent="space-between" gap={1}>
+                              <SoftBox minWidth={0}>
+                                <SoftTypography variant="button" fontWeight="bold" display="block">
+                                  {item.productName || "Sản phẩm chưa xác định"}
+                                </SoftTypography>
+                                <SoftTypography variant="caption" color="text">
+                                  {[item.productCode, item.unit].filter(Boolean).join(" · ")}
+                                </SoftTypography>
+                              </SoftBox>
+                              <SoftBox
+                                px={0.9}
+                                py={0.4}
+                                height="fit-content"
+                                borderRadius={1.5}
+                                bgcolor={status.background}
+                                flexShrink={0}
+                              >
+                                <SoftTypography
+                                  variant="caption"
+                                  fontWeight="bold"
+                                  sx={{ color: status.color }}
+                                >
+                                  {status.label}
+                                </SoftTypography>
+                              </SoftBox>
+                            </SoftBox>
+                            <SoftBox
+                              mt={1}
+                              display="grid"
+                              gap={0.75}
+                              sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+                            >
+                              {[
+                                ["Trên app", item.systemQuantity],
+                                ["Thực tế", item.actualQuantity],
+                                ["Chênh lệch", item.differenceQuantity],
+                              ].map(([label, value]) => (
+                                <SoftBox key={label} p={0.8} borderRadius={1.5} bgcolor="#f5f7fa">
+                                  <SoftTypography variant="caption" color="text" display="block">
+                                    {label}
+                                  </SoftTypography>
+                                  <SoftTypography variant="button" fontWeight="bold">
+                                    {value === undefined || value === null
+                                      ? "—"
+                                      : `${label === "Chênh lệch" && value > 0 ? "+" : ""}${value}`}
+                                  </SoftTypography>
+                                </SoftBox>
+                              ))}
+                            </SoftBox>
+                            {item.note && (
+                              <SoftTypography variant="caption" color="text" display="block" mt={1}>
+                                Ghi chú: {item.note}
+                              </SoftTypography>
+                            )}
+                          </SoftBox>
+                        );
+                      })}
+                    </SoftBox>
+
+                    <SoftBox
+                      display={{ xs: "none", md: "block" }}
+                      bgcolor="#fff"
+                      borderRadius={2}
+                      sx={{ overflowX: "auto", border: "1px solid #dfe5ec" }}
+                    >
+                      <SoftBox
+                        component="table"
+                        sx={{ width: "100%", minWidth: 900, borderCollapse: "collapse" }}
+                      >
+                        <SoftBox component="thead" bgcolor="#f1f5f9">
+                          <SoftBox component="tr">
+                            {[
+                              "STT",
+                              "Sản phẩm",
+                              "Trên app",
+                              "Thực tế",
+                              "Chênh lệch",
+                              "Trạng thái",
+                              "Ghi chú",
+                            ].map((label) => (
+                              <SoftBox
+                                component="th"
+                                key={label}
+                                px={1.2}
+                                py={1.2}
+                                textAlign={
+                                  label === "Sản phẩm" || label === "Ghi chú" ? "left" : "center"
+                                }
+                                sx={{ whiteSpace: "nowrap", borderBottom: "1px solid #dce2e9" }}
+                              >
+                                <SoftTypography variant="caption" fontWeight="bold">
+                                  {label}
+                                </SoftTypography>
+                              </SoftBox>
+                            ))}
+                          </SoftBox>
+                        </SoftBox>
+                        <SoftBox component="tbody">
+                          {visibleStockCheckItems.map((item, index) => {
+                            const status =
+                              STOCK_CHECK_STATUSES[item.status] || STOCK_CHECK_STATUSES.INVALID;
+                            return (
+                              <SoftBox
+                                component="tr"
+                                key={`${item.productCode}-${item.rowNumber || index}`}
+                                sx={{ borderBottom: "1px solid #edf0f3" }}
+                              >
+                                <SoftBox component="td" px={1.2} py={1.15} textAlign="center">
+                                  <SoftTypography variant="caption">{index + 1}</SoftTypography>
+                                </SoftBox>
+                                <SoftBox component="td" px={1.2} py={1.15} minWidth={230}>
+                                  <SoftTypography
+                                    variant="button"
+                                    fontWeight="bold"
+                                    display="block"
+                                  >
+                                    {item.productName || "Sản phẩm chưa xác định"}
+                                  </SoftTypography>
+                                  <SoftTypography variant="caption" color="text">
+                                    {[item.productCode, item.unit].filter(Boolean).join(" · ")}
+                                  </SoftTypography>
+                                </SoftBox>
+                                {[
+                                  item.systemQuantity,
+                                  item.actualQuantity,
+                                  item.differenceQuantity,
+                                ].map((value, valueIndex) => (
+                                  <SoftBox
+                                    component="td"
+                                    key={`${item.productCode}-${valueIndex}`}
+                                    px={1.2}
+                                    py={1.15}
+                                    textAlign="center"
+                                  >
+                                    <SoftTypography variant="button" fontWeight="bold">
+                                      {value === undefined || value === null
+                                        ? "—"
+                                        : `${valueIndex === 2 && value > 0 ? "+" : ""}${value}`}
+                                    </SoftTypography>
+                                  </SoftBox>
+                                ))}
+                                <SoftBox component="td" px={1.2} py={1.15} textAlign="center">
+                                  <SoftBox
+                                    component="span"
+                                    px={0.9}
+                                    py={0.4}
+                                    borderRadius={1.5}
+                                    bgcolor={status.background}
+                                  >
+                                    <SoftTypography
+                                      component="span"
+                                      variant="caption"
+                                      fontWeight="bold"
+                                      sx={{ color: status.color }}
+                                    >
+                                      {status.label}
+                                    </SoftTypography>
+                                  </SoftBox>
+                                </SoftBox>
+                                <SoftBox component="td" px={1.2} py={1.15} minWidth={220}>
+                                  <SoftTypography variant="caption" color="text">
+                                    {item.note || "—"}
+                                  </SoftTypography>
+                                </SoftBox>
+                              </SoftBox>
+                            );
+                          })}
+                        </SoftBox>
+                      </SoftBox>
+                    </SoftBox>
+
+                    {!visibleStockCheckItems.length && (
+                      <SoftBox py={4} textAlign="center" bgcolor="#fff" borderRadius={2}>
+                        <SoftTypography variant="button" color="text">
+                          Không có sản phẩm thuộc trạng thái đã chọn
+                        </SoftTypography>
+                      </SoftBox>
+                    )}
+                  </>
+                )}
+              </SoftBox>
+            )}
+          </SoftBox>
+        </SoftBox>
+      </Modal>
+
+      <Modal
+        open={Boolean(stockAction)}
+        onClose={stockActionLoading ? undefined : resetStockAction}
+      >
+        <SoftBox
+          sx={{
+            position: "absolute",
+            top: { xs: 0, md: "50%" },
+            left: { xs: 0, md: "50%" },
+            transform: { xs: "none", md: "translate(-50%, -50%)" },
+            width: { xs: "100%", md: "min(680px, 94vw)" },
+            height: { xs: "100dvh", md: "auto" },
+            maxHeight: { md: "92vh" },
+            overflowY: "auto",
+            bgcolor: "#fff",
+            borderRadius: { xs: 0, md: 3 },
+            boxShadow: 24,
+            p: { xs: 2, md: 2.5 },
+          }}
+        >
+          {stockAction &&
+            (() => {
+              const isRestore = stockAction.type === "RESTORE";
+              const preview = stockAction.preview || {};
+              const allowed = isRestore ? preview.canRestore : preview.canSync;
+              const requiredConfirmation = isRestore ? "KHOI PHUC TON XE" : "DONG BO TON XE";
+              const blockers = Array.isArray(preview.blockers) ? preview.blockers : [];
+              const changes = Array.isArray(preview.changes) ? preview.changes : [];
+              return (
+                <>
+                  <SoftBox
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="flex-start"
+                    gap={1}
+                    mb={1.5}
+                  >
+                    <SoftBox display="flex" gap={1} alignItems="center">
+                      <SoftBox
+                        width={44}
+                        height={44}
+                        borderRadius={2}
+                        bgcolor={isRestore ? "#fff3e0" : "#e3f2fd"}
+                        color={isRestore ? "#ef6c00" : "#1565c0"}
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <Icon>{isRestore ? "restore" : "sync"}</Icon>
+                      </SoftBox>
+                      <SoftBox>
+                        <SoftTypography variant="h6" fontWeight="bold">
+                          {isRestore ? "Xác nhận khôi phục tồn xe" : "Xác nhận đồng bộ tồn xe"}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text">
+                          {preview.truck?.code} · {preview.truck?.name}
+                        </SoftTypography>
+                      </SoftBox>
+                    </SoftBox>
+                    <IconButton onClick={resetStockAction} disabled={stockActionLoading}>
+                      <Icon>close</Icon>
+                    </IconButton>
+                  </SoftBox>
+
+                  <SoftBox
+                    p={1.35}
+                    mb={1.25}
+                    borderRadius={2}
+                    bgcolor={allowed ? "#fff8e1" : "#ffebee"}
+                    sx={{ border: `1px solid ${allowed ? "#ffcc80" : "#ef9a9a"}` }}
+                  >
+                    <SoftTypography
+                      variant="button"
+                      fontWeight="bold"
+                      sx={{ color: allowed ? "#e65100" : "#b71c1c" }}
+                    >
+                      <Icon sx={{ verticalAlign: "middle", mr: 0.5 }}>warning</Icon>
+                      {allowed
+                        ? isRestore
+                          ? "Tồn hiện tại sẽ được thay bằng dữ liệu của bản sao. Hệ thống sẽ tự tạo thêm một bản sao an toàn trước khi khôi phục."
+                          : "Số lượng trên app sẽ được thay bằng số lượng thực tế vừa kiểm. Hệ thống sẽ tự tạo bản sao trước khi đồng bộ."
+                        : "Không thể thực hiện vì dữ liệu chưa đáp ứng điều kiện an toàn."}
+                    </SoftTypography>
+                  </SoftBox>
+
+                  {blockers.map((blocker, index) => (
+                    <SoftBox
+                      key={`${blocker.code}-${index}`}
+                      p={1}
+                      mb={0.75}
+                      borderRadius={1.5}
+                      bgcolor="#ffebee"
+                    >
+                      <SoftTypography
+                        variant="caption"
+                        fontWeight="bold"
+                        color="error"
+                        display="block"
+                      >
+                        {blocker.message || blocker.code}
+                      </SoftTypography>
+                      {Array.isArray(blocker.changedProducts) &&
+                        blocker.changedProducts.length > 0 && (
+                          <SoftTypography variant="caption" color="text">
+                            Có {blocker.changedProducts.length} sản phẩm đã đổi tồn sau lúc đối
+                            chiếu.
+                          </SoftTypography>
+                        )}
+                    </SoftBox>
+                  ))}
+
+                  <SoftBox
+                    display="grid"
+                    gap={0.75}
+                    mb={1.5}
+                    sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+                  >
+                    {(isRestore
+                      ? [
+                          ["Sản phẩm đổi", preview.summary?.changedProducts || 0],
+                          ["Số lượng tăng", `+${preview.summary?.gainQuantity || 0}`],
+                          ["Số lượng giảm", `−${preview.summary?.lossQuantity || 0}`],
+                        ]
+                      : [
+                          ["Đã kiểm", preview.summary?.countedProducts || 0],
+                          [
+                            "Thiếu",
+                            preview.summary?.shortageQuantity ||
+                              preview.summary?.totalShortageQuantity ||
+                              0,
+                          ],
+                          [
+                            "Thừa",
+                            preview.summary?.surplusQuantity ||
+                              preview.summary?.totalSurplusQuantity ||
+                              0,
+                          ],
+                        ]
+                    ).map(([label, value]) => (
+                      <SoftBox key={label} p={0.9} borderRadius={1.5} bgcolor="#f5f7fa">
+                        <SoftTypography variant="caption" color="text" display="block">
+                          {label}
+                        </SoftTypography>
+                        <SoftTypography variant="button" fontWeight="bold">
+                          {value}
+                        </SoftTypography>
+                      </SoftBox>
+                    ))}
+                  </SoftBox>
+
+                  {isRestore && changes.length > 0 && (
+                    <SoftBox
+                      mb={1.5}
+                      maxHeight={180}
+                      overflow="auto"
+                      borderRadius={2}
+                      sx={{ border: "1px solid #e0e5eb" }}
+                    >
+                      {changes.slice(0, 50).map((item, index) => (
+                        <SoftBox
+                          key={item.productId || index}
+                          px={1.2}
+                          py={0.8}
+                          display="flex"
+                          justifyContent="space-between"
+                          sx={{ borderBottom: "1px solid #edf0f3" }}
+                        >
+                          <SoftTypography variant="caption">Sản phẩm {index + 1}</SoftTypography>
+                          <SoftTypography variant="caption" fontWeight="bold">
+                            {item.currentQuantity || 0} → {item.restoreQuantity || 0}
+                            {item.differenceQuantity > 0
+                              ? ` (+${item.differenceQuantity})`
+                              : ` (${item.differenceQuantity})`}
+                          </SoftTypography>
+                        </SoftBox>
+                      ))}
+                    </SoftBox>
+                  )}
+
+                  {allowed && (
+                    <>
+                      <SoftTypography variant="caption" fontWeight="bold" display="block" mb={0.5}>
+                        Lý do thực hiện *
+                      </SoftTypography>
+                      <TextField
+                        fullWidth
+                        multiline
+                        minRows={2}
+                        value={stockActionReason}
+                        onChange={(event) => setStockActionReason(event.target.value)}
+                        placeholder={
+                          isRestore
+                            ? "Ví dụ: Khôi phục tồn trước lần kiểm sai..."
+                            : "Ví dụ: Đã kiểm đếm thực tế và xác nhận chênh lệch..."
+                        }
+                        sx={{ mb: 1.25 }}
+                      />
+                      <SoftBox
+                        component="label"
+                        display="flex"
+                        alignItems="flex-start"
+                        gap={1}
+                        p={1.1}
+                        mb={1.25}
+                        borderRadius={2}
+                        bgcolor={stockActionAcknowledged ? "#e8f5e9" : "#f7f8fa"}
+                        sx={{
+                          border: stockActionAcknowledged
+                            ? "2px solid #43a047"
+                            : "1px solid #dce2e9",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={stockActionAcknowledged}
+                          onChange={(event) => setStockActionAcknowledged(event.target.checked)}
+                          style={{ width: 22, height: 22, flexShrink: 0 }}
+                        />
+                        <SoftTypography variant="caption" fontWeight="bold">
+                          Tôi đã kiểm tra số liệu và hiểu rằng thao tác này sẽ thay đổi tồn hàng
+                          trên xe.
+                        </SoftTypography>
+                      </SoftBox>
+                      <SoftTypography variant="caption" fontWeight="bold" display="block" mb={0.5}>
+                        Nhập “{requiredConfirmation}” để xác nhận *
+                      </SoftTypography>
+                      <TextField
+                        fullWidth
+                        value={stockActionConfirmation}
+                        onChange={(event) =>
+                          setStockActionConfirmation(event.target.value.toUpperCase())
+                        }
+                        placeholder={requiredConfirmation}
+                      />
+                    </>
+                  )}
+
+                  <SoftBox
+                    display="flex"
+                    gap={1}
+                    mt={2}
+                    flexDirection={{ xs: "column-reverse", sm: "row" }}
+                  >
+                    <SoftButton
+                      fullWidth
+                      variant="outlined"
+                      color="secondary"
+                      onClick={resetStockAction}
+                      disabled={stockActionLoading}
+                    >
+                      Đóng
+                    </SoftButton>
+                    {allowed && (
+                      <SoftButton
+                        fullWidth
+                        variant="gradient"
+                        color={isRestore ? "warning" : "success"}
+                        onClick={submitStockAction}
+                        disabled={
+                          stockActionLoading ||
+                          !stockActionAcknowledged ||
+                          !stockActionReason.trim() ||
+                          stockActionConfirmation.trim() !== requiredConfirmation
+                        }
+                      >
+                        {stockActionLoading
+                          ? "Đang xử lý..."
+                          : isRestore
+                          ? "Khôi phục tồn xe"
+                          : "Đồng bộ số lượng thực tế"}
+                      </SoftButton>
+                    )}
+                  </SoftBox>
+                </>
+              );
+            })()}
+        </SoftBox>
+      </Modal>
+
+      <Modal open={Boolean(inventoryBackupDetail)} onClose={() => setInventoryBackupDetail(null)}>
+        <SoftBox
+          sx={{
+            position: "absolute",
+            top: { xs: 0, md: "50%" },
+            left: { xs: 0, md: "50%" },
+            transform: { xs: "none", md: "translate(-50%, -50%)" },
+            width: { xs: "100%", md: "min(820px, 94vw)" },
+            height: { xs: "100dvh", md: "auto" },
+            maxHeight: { md: "92vh" },
+            overflowY: "auto",
+            bgcolor: "#fff",
+            borderRadius: { xs: 0, md: 3 },
+            boxShadow: 24,
+            p: { xs: 1.5, md: 2.5 },
+          }}
+        >
+          {inventoryBackupDetail && (
+            <>
+              <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+                <SoftBox>
+                  <SoftTypography variant="h6" fontWeight="bold">
+                    {inventoryBackupDetail.code || "Chi tiết bản sao tồn xe"}
+                  </SoftTypography>
+                  <SoftTypography variant="caption" color="text">
+                    {backupSourceLabel(inventoryBackupDetail.sourceType)} ·{" "}
+                    {date(inventoryBackupDetail.createdAt)}
+                  </SoftTypography>
+                </SoftBox>
+                <IconButton onClick={() => setInventoryBackupDetail(null)}>
+                  <Icon>close</Icon>
+                </IconButton>
+              </SoftBox>
+              <Grid container spacing={1} mb={1.5}>
+                {[
+                  ["Loại hàng", inventoryBackupDetail.totalProducts || 0],
+                  ["Tổng số lượng", inventoryBackupDetail.totalQuantity || 0],
+                  ["Giá trị bán", money(inventoryBackupDetail.totalSellValue || 0)],
+                ].map(([label, value]) => (
+                  <Grid item xs={4} key={label}>
+                    <SoftBox p={1} borderRadius={1.5} bgcolor="#f5f7fa" height="100%">
+                      <SoftTypography variant="caption" color="text" display="block">
+                        {label}
+                      </SoftTypography>
+                      <SoftTypography variant="button" fontWeight="bold">
+                        {value}
+                      </SoftTypography>
+                    </SoftBox>
+                  </Grid>
+                ))}
+              </Grid>
+              <SoftBox display={{ xs: "block", md: "none" }}>
+                {(inventoryBackupDetail.items || []).map((item, index) => (
+                  <SoftBox
+                    key={`${item.productId}-${index}`}
+                    p={1.1}
+                    mb={0.75}
+                    borderRadius={2}
+                    bgcolor="#f8fafc"
+                  >
+                    <SoftTypography variant="button" fontWeight="bold" display="block">
+                      {index + 1}. {item.productName || "Sản phẩm"}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="text" display="block">
+                      {[item.productCode, item.unit].filter(Boolean).join(" · ")}
+                    </SoftTypography>
+                    <SoftBox display="flex" justifyContent="space-between" mt={0.75}>
+                      <SoftTypography variant="caption">
+                        Số lượng: <b>{item.quantity || 0}</b>
+                      </SoftTypography>
+                      <SoftTypography variant="caption">
+                        Giá bán: <b>{money(item.sellPrice || 0)}</b>
+                      </SoftTypography>
+                    </SoftBox>
+                  </SoftBox>
+                ))}
+              </SoftBox>
+              <SoftBox
+                display={{ xs: "none", md: "block" }}
+                sx={{ overflowX: "auto", border: "1px solid #dfe5ec", borderRadius: 2 }}
+              >
+                <SoftBox
+                  component="table"
+                  sx={{ width: "100%", minWidth: 680, borderCollapse: "collapse" }}
+                >
+                  <SoftBox component="thead" bgcolor="#f1f5f9">
+                    <SoftBox component="tr">
+                      {["STT", "Mã", "Sản phẩm", "Đơn vị", "Số lượng", "Giá bán", "Thành tiền"].map(
+                        (label) => (
+                          <SoftBox
+                            component="th"
+                            key={label}
+                            px={1}
+                            py={1}
+                            textAlign={label === "Sản phẩm" ? "left" : "center"}
+                          >
+                            <SoftTypography variant="caption" fontWeight="bold">
+                              {label}
+                            </SoftTypography>
+                          </SoftBox>
+                        )
+                      )}
+                    </SoftBox>
+                  </SoftBox>
+                  <SoftBox component="tbody">
+                    {(inventoryBackupDetail.items || []).map((item, index) => (
+                      <SoftBox
+                        component="tr"
+                        key={`${item.productId}-${index}`}
+                        sx={{ borderTop: "1px solid #edf0f3" }}
+                      >
+                        <SoftBox component="td" px={1} py={0.9} textAlign="center">
+                          {index + 1}
+                        </SoftBox>
+                        <SoftBox component="td" px={1} py={0.9} textAlign="center">
+                          {item.productCode || "—"}
+                        </SoftBox>
+                        <SoftBox component="td" px={1} py={0.9}>
+                          <SoftTypography variant="caption" fontWeight="bold">
+                            {item.productName || "—"}
+                          </SoftTypography>
+                        </SoftBox>
+                        <SoftBox component="td" px={1} py={0.9} textAlign="center">
+                          {item.unit || "—"}
+                        </SoftBox>
+                        <SoftBox component="td" px={1} py={0.9} textAlign="center">
+                          <b>{item.quantity || 0}</b>
+                        </SoftBox>
+                        <SoftBox component="td" px={1} py={0.9} textAlign="right">
+                          {money(item.sellPrice || 0)}
+                        </SoftBox>
+                        <SoftBox component="td" px={1} py={0.9} textAlign="right">
+                          <b>{money((item.quantity || 0) * (item.sellPrice || 0))}</b>
+                        </SoftBox>
+                      </SoftBox>
+                    ))}
+                  </SoftBox>
+                </SoftBox>
+              </SoftBox>
+              <SoftBox display="flex" gap={1} mt={1.5} flexDirection={{ xs: "column", sm: "row" }}>
+                <SoftButton
+                  fullWidth
+                  variant="outlined"
+                  color="info"
+                  startIcon={<Icon>download</Icon>}
+                  onClick={() => exportInventoryBackup(inventoryBackupDetail)}
+                >
+                  Xuất Excel
+                </SoftButton>
+                <SoftButton
+                  fullWidth
+                  variant="gradient"
+                  color="warning"
+                  startIcon={<Icon>restore</Icon>}
+                  disabled={Boolean(inventoryBackupDetail.restoredAt)}
+                  onClick={() => {
+                    const backup = inventoryBackupDetail;
+                    setInventoryBackupDetail(null);
+                    openRestorePreview(backup);
+                  }}
+                >
+                  {inventoryBackupDetail.restoredAt
+                    ? "Bản sao đã khôi phục"
+                    : "Khôi phục bản sao này"}
+                </SoftButton>
+              </SoftBox>
+            </>
           )}
         </SoftBox>
-      </SoftBox>
-    </Modal>
+      </Modal>
+    </>
   );
 }
 
@@ -2913,7 +5182,11 @@ export default function QuanLyXe() {
           onSaved={refresh}
         />
       )}
-      <TruckInventoryModal truck={detailTruck} onClose={() => setDetailTruck(null)} />
+      <TruckInventoryModal
+        truck={detailTruck}
+        onClose={() => setDetailTruck(null)}
+        onChanged={refresh}
+      />
     </DashboardLayout>
   );
 }

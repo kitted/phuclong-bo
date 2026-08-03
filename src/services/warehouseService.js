@@ -400,6 +400,39 @@ export const TruckService = {
   getAvailableDrivers: (params = {}) =>
     AxiosInstance.get("/admin/trucks/available-drivers", { params }),
   getById: (id) => AxiosInstance.get(`/admin/trucks/${id}`),
+  getGoodsReport: (id, params = {}) =>
+    AxiosInstance.get(`/admin/trucks/${id}/goods-report`, { params }),
+  exportGoodsReport: (id, params = {}) =>
+    AxiosInstance.get(`/admin/trucks/${id}/goods-report/export`, {
+      params,
+      responseType: "blob",
+    }),
+  downloadStockCheckTemplate: (id) =>
+    AxiosInstance.get(`/admin/trucks/${id}/stock-check/template`, { responseType: "blob" }),
+  compareStockCheck: (id, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return AxiosInstance.post(`/admin/trucks/${id}/stock-check/compare`, formData);
+  },
+  exportStockCheck: (comparisonId) =>
+    AxiosInstance.get(`/admin/truck-stock-checks/${comparisonId}/export`, {
+      responseType: "blob",
+    }),
+  previewStockCheckSync: (comparisonId) =>
+    AxiosInstance.post(`/admin/truck-stock-checks/${comparisonId}/sync/preview`),
+  syncStockCheck: (comparisonId, payload) =>
+    AxiosInstance.post(`/admin/truck-stock-checks/${comparisonId}/sync`, payload),
+  getInventoryBackups: (truckId, params = {}) =>
+    AxiosInstance.get(`/admin/trucks/${truckId}/inventory-backups`, { params }),
+  getInventoryBackup: (backupId) => AxiosInstance.get(`/admin/truck-inventory-backups/${backupId}`),
+  exportInventoryBackup: (backupId) =>
+    AxiosInstance.get(`/admin/truck-inventory-backups/${backupId}/export`, {
+      responseType: "blob",
+    }),
+  previewInventoryRestore: (backupId) =>
+    AxiosInstance.post(`/admin/truck-inventory-backups/${backupId}/restore/preview`),
+  restoreInventoryBackup: (backupId, payload) =>
+    AxiosInstance.post(`/admin/truck-inventory-backups/${backupId}/restore`, payload),
   create: (payload) => AxiosInstance.post("/admin/trucks", payload),
   update: (id, payload) => AxiosInstance.patch(`/admin/trucks/${id}`, payload),
   changeStatus: (id, status) => AxiosInstance.patch(`/admin/trucks/${id}/status`, { status }),
@@ -437,6 +470,8 @@ export const InvoiceService = {
     }
   },
   getSummary: (params = {}) => AxiosInstance.get(`/admin/invoices/summary`, { params }),
+  exportExcel: (params = {}) =>
+    AxiosInstance.get(`/admin/invoices/export`, { params, responseType: "blob" }),
   getById: async (id) => {
     return await AxiosInstance.get(`/admin/invoices/${id}`);
   },

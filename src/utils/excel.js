@@ -31,6 +31,16 @@ export const exportExcel = (rows, fileName, sheetName = "Data") => {
   XLSX.writeFile(workbook, fileName);
 };
 
+export const createExcelFile = (rows, fileName, sheetName = "Data") => {
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+  const content = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+  return new File([content], fileName, {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+};
+
 export const downloadBlob = (blob, fileName) => {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");

@@ -30,6 +30,7 @@ import { toast } from "react-toastify";
 import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
 import { debtPaymentToInvoice, moneyInWords, printInvoice } from "utils/invoicePrint";
+import { downloadBlob } from "utils/excel";
 import CustomerReturnModal, { InvoiceBusinessTypeSwitch } from "./customer-return-form";
 
 const money = (value = 0) =>
@@ -58,6 +59,59 @@ const today = () => {
     value.getDate()
   ).padStart(2, "0")}`;
 };
+const dateValue = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
+};
+const invoicePeriodOptions = [
+  { value: "DAY", label: "Ngày" },
+  { value: "WEEK", label: "Tuần" },
+  { value: "MONTH", label: "Tháng" },
+  { value: "QUARTER", label: "Quý" },
+  { value: "YEAR", label: "Năm" },
+  { value: "CUSTOM", label: "Từ ngày–đến ngày" },
+];
+const invoicePeriodRange = (period, anchorValue, customFrom, customTo) => {
+  if (period === "CUSTOM") return { from: customFrom, to: customTo };
+  const anchor = new Date(`${anchorValue || today()}T12:00:00`);
+  const year = anchor.getFullYear();
+  const monthIndex = anchor.getMonth();
+  if (period === "DAY") {
+    const value = dateValue(anchor);
+    return { from: value, to: value };
+  }
+  if (period === "WEEK") {
+    const first = new Date(anchor);
+    first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+    const last = new Date(first);
+    last.setDate(last.getDate() + 6);
+    return { from: dateValue(first), to: dateValue(last) };
+  }
+  if (period === "QUARTER") {
+    const quarterStart = Math.floor(monthIndex / 3) * 3;
+    return {
+      from: dateValue(new Date(year, quarterStart, 1)),
+      to: dateValue(new Date(year, quarterStart + 3, 0)),
+    };
+  }
+  if (period === "YEAR") {
+    return { from: `${year}-01-01`, to: `${year}-12-31` };
+  }
+  return {
+    from: dateValue(new Date(year, monthIndex, 1)),
+    to: dateValue(new Date(year, monthIndex + 1, 0)),
+  };
+};
+const shortDate = (value) =>
+  value
+    ? new Date(`${value}T12:00:00`).toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "—";
 const numberText = (value) => new Intl.NumberFormat("vi-VN").format(Number(value) || 0);
 const moneyValue = (value) => Number(String(value || "").replace(/[^0-9]/g, "")) || 0;
 const titleCaseName = (value = "") =>
@@ -3982,10 +4036,17 @@ export default function HoaDon() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [salespersonId, setSalespersonId] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [period, setPeriod] = useState("MONTH");
+  const [anchor, setAnchor] = useState(today());
+  const [customFrom, setCustomFrom] = useState(() => `${today().slice(0, 7)}-01`);
+  const [customTo, setCustomTo] = useState(() => {
+    const current = new Date();
+    return dateValue(new Date(current.getFullYear(), current.getMonth() + 1, 0));
+  });
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(false);
+  const [exportingList, setExportingList] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
   const [detailDocument, setDetailDocument] = useState(null);
@@ -4005,24 +4066,23 @@ export default function HoaDon() {
       .then((response) => setEmployees(listOf(response)))
       .catch(() => setEmployees([]));
   }, [isStaff]);
-  useEffect(() => setPage(1), [debouncedSearch, salespersonId, paymentStatus, month]);
+  useEffect(
+    () => setPage(1),
+    [debouncedSearch, salespersonId, paymentStatus, period, anchor, customFrom, customTo]
+  );
+  const selectedRange = useMemo(
+    () => invoicePeriodRange(period, anchor, customFrom, customTo),
+    [period, anchor, customFrom, customTo]
+  );
   const filters = useMemo(() => {
-    if (!month)
-      return {
-        salespersonId: salespersonId || undefined,
-        paymentStatus: paymentStatus || undefined,
-        search: debouncedSearch || undefined,
-      };
-    const [year, monthNumber] = month.split("-").map(Number);
-    const lastDay = new Date(year, monthNumber, 0).getDate();
     return {
       salespersonId: salespersonId || undefined,
       paymentStatus: paymentStatus || undefined,
       search: debouncedSearch || undefined,
-      from: `${month}-01`,
-      to: `${month}-${String(lastDay).padStart(2, "0")}`,
+      from: selectedRange.from || undefined,
+      to: selectedRange.to || undefined,
     };
-  }, [month, salespersonId, paymentStatus, debouncedSearch]);
+  }, [selectedRange, salespersonId, paymentStatus, debouncedSearch]);
   const load = useCallback(() => {
     setLoading(true);
     Promise.all([
@@ -4041,6 +4101,32 @@ export default function HoaDon() {
       .finally(() => setLoading(false));
   }, [filters, page, isStaff]);
   useEffect(load, [load]);
+  const exportInvoiceList = async () => {
+    if (!selectedRange.from || !selectedRange.to) {
+      toast.error("Vui lòng chọn đầy đủ từ ngày và đến ngày");
+      return;
+    }
+    if (selectedRange.from > selectedRange.to) {
+      toast.error("Từ ngày không được lớn hơn đến ngày");
+      return;
+    }
+    try {
+      setExportingList(true);
+      const response = await InvoiceService.exportExcel(filters);
+      const disposition = response.headers?.["content-disposition"] || "";
+      const utf8Name = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+      const fileName = utf8Name
+        ? decodeURIComponent(utf8Name)
+        : plainName || `hoa-don-${selectedRange.from}-${selectedRange.to}.xlsx`;
+      downloadBlob(response.data, fileName);
+      toast.success("Đã xuất danh sách hóa đơn");
+    } catch (error) {
+      toast.error(errorMessage(error, "Không thể xuất danh sách hóa đơn"));
+    } finally {
+      setExportingList(false);
+    }
+  };
   const openDocument = (document) => {
     if (isDebtPaymentDocument(document)) {
       setDetailId(null);
@@ -4106,7 +4192,13 @@ export default function HoaDon() {
           }}
         >
           <SoftBox p={{ xs: isStaff ? 2 : 3, md: 3 }}>
-            <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+            <SoftBox
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              mb={3}
+            >
               <SoftBox sx={{ display: { xs: isStaff ? "none" : "block", md: "block" } }}>
                 <SoftTypography variant="h5" fontWeight="bold">
                   {isStaff ? "Bán hàng thị trường" : "Hóa đơn bán hàng"}
@@ -4117,14 +4209,27 @@ export default function HoaDon() {
                     : "Doanh thu, thanh toán, khuyến mãi và công nợ"}
                 </SoftTypography>
               </SoftBox>
-              <SoftButton
-                variant="gradient"
-                color="success"
-                startIcon={<Icon>add</Icon>}
-                onClick={() => setCreateOpen(true)}
-              >
-                {isStaff ? "Bán hàng nhanh" : "Tạo hóa đơn"}
-              </SoftButton>
+              <SoftBox display="flex" gap={1} flexWrap="wrap" ml="auto">
+                <SoftButton
+                  variant="outlined"
+                  color="info"
+                  startIcon={<Icon>file_download</Icon>}
+                  disabled={exportingList}
+                  onClick={exportInvoiceList}
+                  sx={{ whiteSpace: "nowrap" }}
+                >
+                  {exportingList ? "Đang xuất..." : "Xuất Excel"}
+                </SoftButton>
+                <SoftButton
+                  variant="gradient"
+                  color="success"
+                  startIcon={<Icon>add</Icon>}
+                  onClick={() => setCreateOpen(true)}
+                  sx={{ whiteSpace: "nowrap" }}
+                >
+                  {isStaff ? "Bán hàng nhanh" : "Tạo hóa đơn"}
+                </SoftButton>
+              </SoftBox>
             </SoftBox>
             <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
               <SoftBox sx={{ flex: 1, minWidth: 230 }}>
@@ -4135,12 +4240,6 @@ export default function HoaDon() {
                   icon={{ component: "search", direction: "left" }}
                 />
               </SoftBox>
-              <SoftInput
-                type="month"
-                value={month}
-                onChange={(event) => setMonth(event.target.value)}
-                sx={{ width: 170, display: { xs: isStaff ? "none" : "block", md: "block" } }}
-              />
               {!isStaff && (
                 <FormControl size="small" sx={{ minWidth: 210 }}>
                   <Select
@@ -4175,6 +4274,149 @@ export default function HoaDon() {
                   <MenuItem value="UNPAID">Chưa thanh toán</MenuItem>
                 </Select>
               </FormControl>
+            </SoftBox>
+            <SoftBox
+              mb={3}
+              p={{ xs: 1.25, md: 1.5 }}
+              border="1px solid #e1e7ef"
+              borderRadius={2}
+              bgcolor="#f8fafc"
+            >
+              <SoftBox
+                display="flex"
+                gap={1}
+                pb={0.5}
+                sx={{
+                  overflowX: "auto",
+                  scrollbarWidth: "none",
+                  scrollSnapType: "x mandatory",
+                  "&::-webkit-scrollbar": { display: "none" },
+                }}
+              >
+                {invoicePeriodOptions.map((option) => {
+                  const active = period === option.value;
+                  return (
+                    <SoftBox
+                      key={option.value}
+                      component="button"
+                      type="button"
+                      onClick={() => setPeriod(option.value)}
+                      px={1.5}
+                      py={1}
+                      sx={{
+                        minWidth: option.value === "CUSTOM" ? 150 : 82,
+                        flexShrink: 0,
+                        scrollSnapAlign: "start",
+                        border: active ? "2px solid #1976d2" : "1px solid #d7dee8",
+                        borderRadius: 1.5,
+                        bgcolor: active ? "#e7f3ff" : "#fff",
+                        color: active ? "#1565c0" : "#52606d",
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {option.label}
+                    </SoftBox>
+                  );
+                })}
+              </SoftBox>
+              <SoftBox
+                mt={1.25}
+                display="flex"
+                gap={1}
+                alignItems={{ xs: "stretch", sm: "center" }}
+                flexDirection={{ xs: "column", sm: "row" }}
+                flexWrap="wrap"
+              >
+                {period === "MONTH" && (
+                  <SoftInput
+                    type="month"
+                    value={anchor.slice(0, 7)}
+                    onChange={(event) =>
+                      event.target.value && setAnchor(`${event.target.value}-01`)
+                    }
+                    sx={{ width: { xs: "100%", sm: 190 } }}
+                  />
+                )}
+                {["DAY", "WEEK"].includes(period) && (
+                  <SoftInput
+                    type="date"
+                    value={anchor}
+                    onChange={(event) => event.target.value && setAnchor(event.target.value)}
+                    sx={{ width: { xs: "100%", sm: 190 } }}
+                  />
+                )}
+                {period === "QUARTER" && (
+                  <>
+                    <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 130 } }}>
+                      <Select
+                        value={Math.floor((Number(anchor.slice(5, 7)) - 1) / 3) + 1}
+                        onChange={(event) => {
+                          const startMonth = (Number(event.target.value) - 1) * 3 + 1;
+                          setAnchor(`${anchor.slice(0, 4)}-${String(startMonth).padStart(2, "0")}-01`);
+                        }}
+                      >
+                        {[1, 2, 3, 4].map((quarter) => (
+                          <MenuItem key={quarter} value={quarter}>
+                            Quý {quarter}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <SoftInput
+                      type="number"
+                      value={anchor.slice(0, 4)}
+                      inputProps={{ min: 2000, max: 2100 }}
+                      onChange={(event) => {
+                        const year = String(event.target.value).slice(0, 4);
+                        if (year.length === 4) setAnchor(`${year}-${anchor.slice(5, 7)}-01`);
+                      }}
+                      sx={{ width: { xs: "100%", sm: 120 } }}
+                    />
+                  </>
+                )}
+                {period === "YEAR" && (
+                  <SoftInput
+                    type="number"
+                    value={anchor.slice(0, 4)}
+                    inputProps={{ min: 2000, max: 2100 }}
+                    onChange={(event) => {
+                      const year = String(event.target.value).slice(0, 4);
+                      if (year.length === 4) setAnchor(`${year}-01-01`);
+                    }}
+                    sx={{ width: { xs: "100%", sm: 150 } }}
+                  />
+                )}
+                {period === "CUSTOM" && (
+                  <>
+                    <SoftBox flex={{ sm: 1 }} minWidth={{ sm: 180 }}>
+                      <SoftTypography variant="caption" color="text" display="block" mb={0.5}>
+                        Từ ngày
+                      </SoftTypography>
+                      <SoftInput
+                        type="date"
+                        value={customFrom}
+                        onChange={(event) => setCustomFrom(event.target.value)}
+                      />
+                    </SoftBox>
+                    <SoftBox flex={{ sm: 1 }} minWidth={{ sm: 180 }}>
+                      <SoftTypography variant="caption" color="text" display="block" mb={0.5}>
+                        Đến ngày
+                      </SoftTypography>
+                      <SoftInput
+                        type="date"
+                        value={customTo}
+                        onChange={(event) => setCustomTo(event.target.value)}
+                      />
+                    </SoftBox>
+                  </>
+                )}
+                <SoftTypography variant="caption" color="text" ml={{ sm: "auto" }}>
+                  Đang xem: <strong>{shortDate(selectedRange.from)}</strong> đến{" "}
+                  <strong>{shortDate(selectedRange.to)}</strong>
+                </SoftTypography>
+              </SoftBox>
             </SoftBox>
             {isStaff && (
               <SoftBox display={{ xs: "block", md: "none" }}>
