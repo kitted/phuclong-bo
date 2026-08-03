@@ -239,8 +239,13 @@ export default function DashboardLive() {
                 : "Đang xác định kỳ"}
             </SoftTypography>
           </SoftBox>
-          <SoftBox display="flex" gap={1}>
-            <FormControl size="small" sx={{ minWidth: 145 }}>
+          <SoftBox
+            display="flex"
+            gap={1}
+            flexWrap="wrap"
+            width={{ xs: "100%", md: "auto" }}
+          >
+            <FormControl size="small" sx={{ minWidth: 145, flex: { xs: 1, sm: "none" } }}>
               <Select value={period} onChange={(event) => setPeriod(event.target.value)}>
                 {[
                   ["WEEK", "Tuần"],
@@ -256,7 +261,7 @@ export default function DashboardLive() {
               </Select>
             </FormControl>
             {period !== "CUSTOM" ? (
-              <SoftBox width={160}>
+              <SoftBox width={{ xs: "100%", sm: 180 }}>
                 <SoftInput
                   type="date"
                   value={anchor}
@@ -265,14 +270,14 @@ export default function DashboardLive() {
               </SoftBox>
             ) : (
               <>
-                <SoftBox width={155}>
+                <SoftBox width={{ xs: "100%", sm: 180 }}>
                   <SoftInput
                     type="date"
                     value={custom.from}
                     onChange={(event) => setCustom({ ...custom, from: event.target.value })}
                   />
                 </SoftBox>
-                <SoftBox width={155}>
+                <SoftBox width={{ xs: "100%", sm: 180 }}>
                   <SoftInput
                     type="date"
                     value={custom.to}

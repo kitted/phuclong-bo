@@ -8,6 +8,8 @@ import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
 import Tooltip from "@mui/material/Tooltip";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import { useSelector } from "react-redux";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
@@ -1192,7 +1194,13 @@ function DataTable({ headers, rows }) {
 }
 
 export default function KhachHang() {
-  const isStaff = useSelector((state) => state.auth?.user?.role === "staff");
+  const currentUser = useSelector((state) => state.auth?.user || {});
+  const isStaff = currentUser?.role === "staff";
+  const theme = useTheme();
+  const touchViewport = useMediaQuery(theme.breakpoints.down("xl"));
+  const isTouchAdmin =
+    String(currentUser?.role || "").toLowerCase() === "admin" &&
+    touchViewport;
   const [customers, setCustomers] = useState([]);
   const [summary, setSummary] = useState({});
   const [search, setSearch] = useState("");
@@ -1645,8 +1653,18 @@ export default function KhachHang() {
                 </Select>
               </FormControl>
             </SoftBox>
-            {isStaff && (
-              <SoftBox display={{ xs: "block", md: "none" }}>
+            {(isStaff || isTouchAdmin) && (
+              <SoftBox
+                display={isTouchAdmin ? "grid" : { xs: "block", md: "none" }}
+                sx={
+                  isTouchAdmin
+                    ? {
+                        gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+                        gap: 1.25,
+                      }
+                    : undefined
+                }
+              >
                 {customers.map((item) => {
                   const warning = item.debtLimit > 0 && item.debt >= item.debtLimit;
                   return (
@@ -1657,7 +1675,18 @@ export default function KhachHang() {
                       gap={1.5}
                       alignItems="center"
                       onClick={() => setDetailId(item.id || item._id)}
-                      sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}
+                      sx={{
+                        borderBottom: "1px solid #edf0f5",
+                        cursor: "pointer",
+                        ...(isTouchAdmin && {
+                          p: 1.5,
+                          border: "1px solid #e1e8f0",
+                          borderRadius: 2.5,
+                          bgcolor: "#fff",
+                          minHeight: 148,
+                          "&:active": { bgcolor: "#f4f8fd" },
+                        }),
+                      }}
                     >
                       <SoftBox
                         width={44}
@@ -1718,7 +1747,12 @@ export default function KhachHang() {
               </SoftBox>
             )}
             <SoftBox
-              sx={{ overflowX: "auto", display: { xs: isStaff ? "none" : "block", md: "block" } }}
+              sx={{
+                overflowX: "auto",
+                display: isTouchAdmin
+                  ? "none"
+                  : { xs: isStaff ? "none" : "block", md: "block" },
+              }}
             >
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>

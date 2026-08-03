@@ -111,6 +111,7 @@ export const debtPaymentToInvoice = (payment = {}, customer = {}) => {
 
 const buildInvoiceDocument = (invoice, autoPrint = false) => {
   if (!invoice) return;
+  const customerReturnDocument = invoice.documentType === "CUSTOMER_RETURN";
   const logoUrl = new URL(
     `${process.env.PUBLIC_URL || ""}/og-1200x1200.png`,
     window.location.origin
@@ -151,16 +152,19 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
         oldDebt + grandTotal - paid
     )
   );
-  const occurredAt = new Date(invoice.createdAt || invoice.date || Date.now());
+  const occurredAt = new Date(invoice.date || invoice.occurredAt || invoice.createdAt || Date.now());
   const totalQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
   const rows = items
     .map((item, index) => {
       const gift = item.lineType === "GIFT";
+      const returned = item.lineType === "RETURN";
       return `<tr class="item-row">
       <td>${index + 1}</td>
       <td class="left product-name">${escapeHtml(
         item.productName || item.productId?.name || "Sản phẩm"
-      )}${gift ? ' <b class="gift">(QUÀ TẶNG)</b>' : ""}</td>
+      )}${gift ? ' <b class="gift">(QUÀ TẶNG)</b>' : ""}${
+        returned ? ' <b class="gift">(HÀNG HOÀN)</b>' : ""
+      }</td>
       <td>${escapeHtml(item.unit || item.productId?.unit || "")}</td>
       <td class="numeric">${number(item.qty)}</td>
       <td class="numeric">${number(gift ? 0 : item.price)}</td>
@@ -421,7 +425,7 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
       </div>
     </div>
     <div class="title">
-      <h1>PHIẾU BÁN HÀNG - KIÊM XUẤT KHO</h1>
+      <h1>${customerReturnDocument ? "PHIẾU HOÀN HÀNG - NHẬP LẠI XE" : "PHIẾU BÁN HÀNG - KIÊM XUẤT KHO"}</h1>
       <p><i>Số phiếu: ${escapeHtml(
         invoice.code || "—"
       )} &nbsp; - &nbsp; Ngày ${occurredAt.toLocaleString("vi-VN", {
@@ -470,13 +474,13 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
         <tr><td class="label" colspan="3">Tổng cộng (1)</td><td class="quantity-total">${number(
           totalQuantity
         )}</td><td></td><td class="amount">${number(grandTotal)}</td><td></td></tr>
-        <tr><td class="label" colspan="5">Nợ cũ (2)</td><td class="amount">${number(
+        <tr><td class="label" colspan="5">${customerReturnDocument ? "Nợ trước hoàn (2)" : "Nợ cũ (2)"}</td><td class="amount">${number(
           oldDebt
         )}</td><td></td></tr>
-        <tr><td class="label" colspan="5">Số tiền thanh toán (3)</td><td class="amount">${number(
+        <tr><td class="label" colspan="5">${customerReturnDocument ? "Giá trị hoàn / cấn nợ (3)" : "Số tiền thanh toán (3)"}</td><td class="amount">${number(
           paid
         )}</td><td></td></tr>
-        <tr><td class="label" colspan="5">Còn nợ (1 + 2 - 3)</td><td class="amount">${number(
+        <tr><td class="label" colspan="5">${customerReturnDocument ? "Nợ sau hoàn" : "Còn nợ (1 + 2 - 3)"}</td><td class="amount">${number(
           remainingDebt
         )}</td><td></td></tr>
       </tbody>
@@ -491,7 +495,9 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
         ? `<p class="gift-code"><b>Mã quà tặng:</b> ${escapeHtml(invoice.giftCode)}</p>`
         : ""
     }
-    <p class="words">Số tiền bằng chữ: <i>${escapeHtml(moneyInWords(paid))}.</i></p>
+    <p class="words">Số tiền bằng chữ: <i>${escapeHtml(
+      moneyInWords(customerReturnDocument ? grandTotal : paid)
+    )}.</i></p>
     <div class="signatures">
       <div>
         <div class="signature-date">&nbsp;</div>
@@ -503,7 +509,7 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
         <div class="signature-date">Ngày ${occurredAt.getDate()} tháng ${
     occurredAt.getMonth() + 1
   } năm ${occurredAt.getFullYear()}</div>
-        <strong>NGƯỜI NHẬN HÀNG</strong>
+        <strong>${customerReturnDocument ? "NGƯỜI TRẢ HÀNG" : "NGƯỜI NHẬN HÀNG"}</strong>
         <span>(ký, họ tên)</span>
         <div class="space"></div>
       </div>

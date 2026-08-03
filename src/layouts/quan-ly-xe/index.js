@@ -10,6 +10,8 @@ import Modal from "@mui/material/Modal";
 import Select from "@mui/material/Select";
 import Tooltip from "@mui/material/Tooltip";
 import TextField from "@mui/material/TextField";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
@@ -1178,6 +1180,10 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
   const [inventoryBackupExporting, setInventoryBackupExporting] = useState("");
 
   useEffect(() => {
+    if (!isAdmin && detailTab > 1) setDetailTab(0);
+  }, [isAdmin, detailTab]);
+
+  useEffect(() => {
     if (!truck) return undefined;
     let active = true;
     setDetail(null);
@@ -2218,7 +2224,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
               items={[
                 { icon: "inventory_2", label: "Hàng hiện có" },
                 { icon: "receipt_long", label: "Lịch sử bán / hoàn" },
-                { icon: "fact_check", label: "Kiểm hàng Excel" },
+                ...(isAdmin ? [{ icon: "fact_check", label: "Kiểm hàng & backup" }] : []),
               ]}
             />
 
@@ -4683,7 +4689,13 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
 }
 
 export default function QuanLyXe() {
-  const isStaff = useSelector((state) => state.auth?.user?.role === "staff");
+  const currentUser = useSelector((state) => state.auth?.user || {});
+  const isStaff = currentUser?.role === "staff";
+  const theme = useTheme();
+  const touchViewport = useMediaQuery(theme.breakpoints.down("xl"));
+  const isTouchAdmin =
+    String(currentUser?.role || "").toLowerCase() === "admin" &&
+    touchViewport;
   const [tab, setTab] = useState(0);
   const [trucks, setTrucks] = useState([]);
   const [summary, setSummary] = useState({});
@@ -5125,7 +5137,12 @@ export default function QuanLyXe() {
               />
             )}
             {tab === 1 && (transfers.length > 0 || !loading) && (
-              <TransferTable transfers={transfers} onReverse={reverseTransfer} readOnly={isStaff} />
+              <TransferTable
+                transfers={transfers}
+                onReverse={reverseTransfer}
+                readOnly={isStaff}
+                touchMode={isTouchAdmin}
+              />
             )}
             {tab === 0 && (
               <MobileLoadMore
@@ -5377,11 +5394,11 @@ function TruckGrid({
   );
 }
 
-function TransferTable({ transfers, onReverse, readOnly }) {
+function TransferTable({ transfers, onReverse, readOnly, touchMode = false }) {
   return (
     <>
-      {readOnly && (
-        <SoftBox display={{ xs: "block", md: "none" }}>
+      {(readOnly || touchMode) && (
+        <SoftBox display={touchMode ? "block" : { xs: "block", md: "none" }}>
           {!transfers.length && (
             <SoftTypography variant="button" color="text" display="block" textAlign="center" py={4}>
               Chưa có phiếu điều chuyển
@@ -5436,12 +5453,26 @@ function TransferTable({ transfers, onReverse, readOnly }) {
                   {money(transfer.totalValue)}
                 </SoftTypography>
               </SoftBox>
+              {!readOnly && (
+                <SoftButton
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                  onClick={() => onReverse(transfer)}
+                  sx={{ mt: 1.25 }}
+                >
+                  Tạo phiếu chuyển ngược
+                </SoftButton>
+              )}
             </SoftBox>
           ))}
         </SoftBox>
       )}
       <SoftBox
-        sx={{ overflowX: "auto", display: { xs: readOnly ? "none" : "block", md: "block" } }}
+        sx={{
+          overflowX: "auto",
+          display: touchMode ? "none" : { xs: readOnly ? "none" : "block", md: "block" },
+        }}
       >
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>

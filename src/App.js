@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import "react-toastify/dist/ReactToastify.css";
 // react-router components
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
@@ -35,6 +35,7 @@ import { authSelector } from "redux/selector";
 import Illustration from "layouts/authentication/sign-in/illustration";
 import { ToastContainer } from "react-toastify";
 import StaffMobileNav from "components/StaffMobileNav";
+import AdminTouchNavigation from "components/AdminTouchNavigation";
 import useAutoRefreshUser from "hook/useAutoRefreshUser";
 export default function App() {
   useAutoRefreshUser();
@@ -46,6 +47,12 @@ export default function App() {
   const normalizedRole = String(user?.role || "").toLowerCase();
   const hasAccessToken = Boolean(localStorage.getItem("access_token"));
   const isAuthenticated = hasAccessToken && ["admin", "staff"].includes(normalizedRole);
+  const adminTouchActive =
+    isAuthenticated &&
+    normalizedRole === "admin" &&
+    layout === "dashboard" &&
+    !pathname.startsWith("/user/") &&
+    pathname !== "/access-denied";
 
   // Open sidenav when mouse enter on mini sidenav
   const handleOnMouseEnter = () => {
@@ -71,10 +78,15 @@ export default function App() {
     document.body.setAttribute("dir", direction);
   }, [direction]);
 
+  useEffect(() => {
+    document.body.classList.toggle("admin-touch-ui", adminTouchActive);
+    return () => document.body.classList.remove("admin-touch-ui");
+  }, [adminTouchActive]);
+
   // Setting page scroll to 0 when changing the route
   useEffect(() => {
     document.documentElement.scrollTop = 0;
-    document.scrollingElement.scrollTop = 0;
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
   }, [pathname]);
 
   const getRoutes = (allRoutes) =>
@@ -146,7 +158,7 @@ export default function App() {
     <ThemeProvider theme={themeRTL}>
       <CssBaseline />
       {isAuthenticated && layout === "dashboard" && pathname !== "/staff-home" && (
-        <>
+        <SoftBox display={normalizedRole === "admin" ? { xs: "none", xl: "block" } : "block"}>
           <Sidenav
             color={sidenavColor}
             brandName="Phúc Long"
@@ -156,7 +168,7 @@ export default function App() {
             onMouseEnter={handleOnMouseEnter}
             onMouseLeave={handleOnMouseLeave}
           />
-        </>
+        </SoftBox>
       )}
       <Routes>
         {!isAuthenticated ? (
@@ -181,6 +193,7 @@ export default function App() {
         )}
       </Routes>
       {isAuthenticated && normalizedRole === "staff" && <StaffMobileNav />}
+      {adminTouchActive && <AdminTouchNavigation />}
       <ToastContainer autoClose={5000} />
     </ThemeProvider>
   );

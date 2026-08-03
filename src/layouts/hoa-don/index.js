@@ -14,6 +14,8 @@ import Tooltip from "@mui/material/Tooltip";
 import TextField from "@mui/material/TextField";
 import FormControl from "@mui/material/FormControl";
 import Select from "@mui/material/Select";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import { useSelector } from "react-redux";
 import { useSearchParams } from "react-router-dom";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -32,6 +34,7 @@ import { debtPaymentToInvoice, moneyInWords, printInvoice } from "utils/invoiceP
 import { downloadBlob } from "utils/excel";
 import { mergeUniqueItems } from "utils/infiniteList";
 import CustomerReturnModal, { InvoiceBusinessTypeSwitch } from "./customer-return-form";
+import CustomerReturnService from "services/customerReturnService";
 
 const money = (value = 0) =>
   new Intl.NumberFormat("vi-VN", {
@@ -138,8 +141,83 @@ const isDebtPaymentDocument = (document) =>
         document.type === "DEBT_PAYMENT" ||
         String(document.code || "").startsWith("PTCN-"))
   );
+const isCustomerReturnDocument = (document) =>
+  Boolean(
+    document &&
+      (document.documentType === "CUSTOMER_RETURN" ||
+        document.type === "CUSTOMER_RETURN" ||
+        String(document.code || "").startsWith("THKH-") ||
+        String(document.code || "").startsWith("PTH-"))
+  );
+const documentOccurredAt = (document = {}) =>
+  document.date || document.occurredAt || document.createdAt;
+const customerReturnToInvoice = (document = {}) => {
+  const items = Array.isArray(document.items) ? document.items : [];
+  const returnAmount = Number(
+    document.returnAmount ??
+      document.totalReturnAmount ??
+      document.totalAmount ??
+      items.reduce(
+        (sum, item) =>
+          sum + Number(item.qty || 0) * Number(item.returnUnitPrice ?? item.price ?? 0),
+        0
+      )
+  );
+  const settlement = document.settlement || {};
+  const debtReductionAmount = Number(
+    document.debtReductionAmount ?? settlement.debtReductionAmount ?? 0
+  );
+  const refunds = document.refunds || settlement.refunds || [];
+  const refundAmount = Number(
+    document.refundAmount ??
+      refunds.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+  );
+  return {
+    ...document,
+    documentType: "CUSTOMER_RETURN",
+    date: documentOccurredAt(document),
+    customerId:
+      (typeof document.customerId === "object" ? document.customerId : null) ||
+      document.customerSnapshot || {
+        id: document.customerId,
+        code: document.customerCode,
+        name: document.customerName,
+        phone: document.customerPhone,
+        address: document.customerAddress,
+      },
+    salespersonName:
+      document.createdByName || document.employeeName || document.salespersonName || "",
+    items: items.map((item) => {
+      const price = Number(item.returnUnitPrice ?? item.price ?? 0);
+      return {
+        ...item,
+        productName: item.productName || item.manualName || item.productId?.name || "Hàng hoàn",
+        unit: item.unit || item.manualUnit || item.productId?.unit || "",
+        price,
+        lineTotal: Number(item.lineTotal ?? Number(item.qty || 0) * price),
+        lineType: "RETURN",
+      };
+    }),
+    subtotal: returnAmount,
+    grandTotal: returnAmount,
+    totalAmount: returnAmount,
+    receivedAmount: returnAmount,
+    paidAmount: returnAmount,
+    returnAmount,
+    debtReductionAmount,
+    refundAmount,
+    customerDebtBefore: Number(
+      document.customerDebtBefore ?? settlement.customerDebtBefore ?? 0
+    ),
+    customerDebtAfter: Number(
+      document.customerDebtAfter ?? settlement.customerDebtAfter ?? 0
+    ),
+    paymentStatus: "PAID",
+  };
+};
 const normalizeInvoiceDocument = (document) => {
   if (!document || typeof document !== "object") return null;
+  if (isCustomerReturnDocument(document)) return customerReturnToInvoice(document);
   return isDebtPaymentDocument(document) ? debtPaymentToInvoice(document) : document;
 };
 const sameId = (left, right) =>
@@ -150,7 +228,7 @@ const invoiceCustomerId = (invoice = {}) =>
   invoice.customerId ||
   invoice.customerSnapshot?.id;
 const invoiceDebtHistoryDate = (invoice = {}) => {
-  const value = new Date(invoice.createdAt || invoice.date || Date.now());
+  const value = new Date(documentOccurredAt(invoice) || Date.now());
   if (Number.isNaN(value.getTime())) return undefined;
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
     value.getDate()
@@ -976,7 +1054,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       try {
         setSubmitting(true);
         const response = await DebtPaymentService.create(getId(customer), {
-          date: new Date().toISOString(),
+          date: `${form.date}T00:00:00+07:00`,
           payments: debtPayments,
           invoiceIds: [],
           note: form.note.trim() || undefined,
@@ -3466,7 +3544,8 @@ function InvoicePaperView({ invoice }) {
   ).join(", ");
   const customerAddress = customer.address || invoice.customerAddress || "";
   const invoiceNote = String(invoice.note || invoice.invoiceNote || "").trim();
-  const occurredAt = new Date(invoice.createdAt || invoice.date || Date.now());
+  const occurredAt = new Date(documentOccurredAt(invoice) || Date.now());
+  const customerReturnDocument = isCustomerReturnDocument(invoice);
   const subtotal = Number(invoice.subtotal ?? invoice.totalAmount ?? 0);
   const discount = Number(invoice.discountAmount || 0);
   const grandTotal = Number(invoice.grandTotal ?? invoice.totalAmount ?? 0);
@@ -3563,7 +3642,9 @@ function InvoicePaperView({ invoice }) {
           color="dark"
           lineHeight={1.1}
         >
-          PHIẾU BÁN HÀNG - KIÊM XUẤT KHO
+          {customerReturnDocument
+            ? "PHIẾU HOÀN HÀNG - NHẬP LẠI XE"
+            : "PHIẾU BÁN HÀNG - KIÊM XUẤT KHO"}
         </SoftTypography>
         <SoftTypography
           component="p"
@@ -3669,12 +3750,14 @@ function InvoicePaperView({ invoice }) {
               {(invoice.items || []).length ? (
                 invoice.items.map((item, index) => {
                   const gift = item.lineType === "GIFT";
+                  const returned = item.lineType === "RETURN";
                   return (
                     <tr key={`${getId(item.productId) || item.productId}-${index}`}>
                       <td className="center">{index + 1}</td>
                       <td className="left">
                         {item.productName || item.productId?.name || "Sản phẩm"}
                         {gift && <b style={{ color: "#1565c0", fontSize: 11 }}> (QUÀ TẶNG)</b>}
+                        {returned && <b style={{ color: "#c62828", fontSize: 11 }}> (HÀNG HOÀN)</b>}
                       </td>
                       <td className="center">{item.unit || item.productId?.unit || ""}</td>
                       <td className="number">{numberText(item.qty)}</td>
@@ -3730,21 +3813,21 @@ function InvoicePaperView({ invoice }) {
               </tr>
               <tr>
                 <td className="summary-label" colSpan={5}>
-                  Nợ cũ (2)
+                  {customerReturnDocument ? "Nợ trước hoàn (2)" : "Nợ cũ (2)"}
                 </td>
                 <td className="summary-value">{numberText(oldDebt)}</td>
                 <td />
               </tr>
               <tr>
                 <td className="summary-label" colSpan={5}>
-                  Số tiền thanh toán (3)
+                  {customerReturnDocument ? "Giá trị hoàn / cấn nợ (3)" : "Số tiền thanh toán (3)"}
                 </td>
                 <td className="summary-value">{numberText(paidAmount)}</td>
                 <td />
               </tr>
               <tr>
                 <td className="summary-label" colSpan={5}>
-                  Còn nợ (1 + 2 - 3)
+                  {customerReturnDocument ? "Nợ sau hoàn" : "Còn nợ (1 + 2 - 3)"}
                 </td>
                 <td className="summary-value">{numberText(debtAfter)}</td>
                 <td />
@@ -3780,7 +3863,7 @@ function InvoicePaperView({ invoice }) {
         fontSize={{ xs: 13, sm: 16 }}
         mt={2.5}
       >
-        Số tiền bằng chữ: <i>{moneyInWords(paidAmount)}.</i>
+        Số tiền bằng chữ: <i>{moneyInWords(customerReturnDocument ? grandTotal : paidAmount)}.</i>
       </SoftTypography>
 
       <SoftBox
@@ -3811,7 +3894,7 @@ function InvoicePaperView({ invoice }) {
             {occurredAt.getFullYear()}
           </SoftTypography>
           <SoftTypography component="p" fontWeight="bold">
-            NGƯỜI NHẬN HÀNG
+            {customerReturnDocument ? "NGƯỜI TRẢ HÀNG" : "NGƯỜI NHẬN HÀNG"}
           </SoftTypography>
           <SoftTypography component="p">(ký, họ tên)</SoftTypography>
           <SoftBox height={70} />
@@ -3879,6 +3962,7 @@ function InvoiceDetail({ id, document, onClose, mobile = false, isAdmin = false,
     return undefined;
   }, [id, document]);
   const debtPaymentDocument = isDebtPaymentDocument(invoice);
+  const customerReturnDocument = isCustomerReturnDocument(invoice);
   const reversed =
     invoice?.status === "REVERSED" ||
     invoice?.invoiceStatus === "REVERSED" ||
@@ -3937,11 +4021,12 @@ function InvoiceDetail({ id, document, onClose, mobile = false, isAdmin = false,
         >
           <SoftBox minWidth={0}>
             <SoftTypography variant="button" fontWeight="bold" display="block">
-              Chi tiết hóa đơn {invoice?.code || ""}
+              {customerReturnDocument ? "Chi tiết phiếu hoàn hàng" : "Chi tiết hóa đơn"}{" "}
+              {invoice?.code || ""}
             </SoftTypography>
             {invoice && (
               <SoftTypography variant="caption" color="text" display="block">
-                {dateTime(invoice.createdAt || invoice.date)}
+                {dateTime(documentOccurredAt(invoice))}
               </SoftTypography>
             )}
           </SoftBox>
@@ -3970,7 +4055,7 @@ function InvoiceDetail({ id, document, onClose, mobile = false, isAdmin = false,
           <SoftButton variant="outlined" color="secondary" fullWidth onClick={onClose}>
             Đóng
           </SoftButton>
-          {isAdmin && !debtPaymentDocument && (
+          {isAdmin && !debtPaymentDocument && !customerReturnDocument && (
             <SoftButton
               variant="outlined"
               color="error"
@@ -4012,6 +4097,11 @@ export default function HoaDon() {
   const currentUser = useSelector((state) => state.auth?.user);
   const [urlSearchParams] = useSearchParams();
   const isStaff = String(currentUser?.role || "").toLowerCase() === "staff";
+  const theme = useTheme();
+  const touchViewport = useMediaQuery(theme.breakpoints.down("xl"));
+  const isTouchAdmin =
+    String(currentUser?.role || "").toLowerCase() === "admin" &&
+    touchViewport;
   const canViewAllCompanyInvoices = Boolean(
     currentUser?.canViewAllInvoices || currentUser?.permissions?.viewAllInvoices
   );
@@ -4037,6 +4127,9 @@ export default function HoaDon() {
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
   const [detailDocument, setDetailDocument] = useState(null);
+  useEffect(() => {
+    if (urlSearchParams.get("create") === "1") setCreateOpen(true);
+  }, [urlSearchParams]);
   useEffect(() => {
     const nextSearch = urlSearchParams.get("search") || "";
     setSearch(nextSearch);
@@ -4072,16 +4165,44 @@ export default function HoaDon() {
   }, [selectedRange, salespersonId, paymentStatus, debouncedSearch]);
   const load = useCallback(() => {
     setLoading(true);
+    const customerReturnRequest = CustomerReturnService.getAll({
+      search: filters.search,
+      from: filters.from,
+      to: filters.to,
+      page,
+      limit: 20,
+    }).catch(() => null);
     Promise.all([
       InvoiceService.getTimeline({ ...filters, page, limit: 20 }),
       InvoiceService.getSummary(filters),
+      customerReturnRequest,
     ])
-      .then(([listResponse, summaryResponse]) => {
-        const nextInvoices = listOf(listResponse).map(normalizeInvoiceDocument).filter(Boolean);
+      .then(([listResponse, summaryResponse, returnResponse]) => {
+        const invoiceDocuments = listOf(listResponse)
+          .map(normalizeInvoiceDocument)
+          .filter(Boolean);
+        const returnDocuments = returnResponse
+          ? listOf(returnResponse).map(customerReturnToInvoice).filter(Boolean)
+          : [];
+        const nextInvoices = [...invoiceDocuments, ...returnDocuments].sort(
+          (left, right) =>
+            new Date(documentOccurredAt(right) || 0).getTime() -
+            new Date(documentOccurredAt(left) || 0).getTime()
+        );
         setInvoices((current) =>
           page > 1 ? mergeUniqueItems(current, nextInvoices) : nextInvoices
         );
-        setMeta(listResponse.data?.meta || { totalPages: 1, total: 0 });
+        const invoiceMeta = listResponse.data?.meta || {};
+        const returnMeta = returnResponse?.data?.meta || {};
+        setMeta({
+          ...invoiceMeta,
+          totalPages: Math.max(
+            Number(invoiceMeta.totalPages || 1),
+            Number(returnMeta.totalPages || 1)
+          ),
+          total: Number(invoiceMeta.total || invoiceMeta.totalItems || 0) +
+            Number(returnMeta.total || returnMeta.totalItems || 0),
+        });
         setSummary(summaryResponse.data?.data || {});
       })
       .catch((error) => toast.error(errorMessage(error, "Không thể tải hóa đơn")))
@@ -4119,7 +4240,7 @@ export default function HoaDon() {
     }
   };
   const openDocument = (document) => {
-    if (isDebtPaymentDocument(document)) {
+    if (isDebtPaymentDocument(document) || isCustomerReturnDocument(document)) {
       setDetailId(null);
       setDetailDocument(normalizeInvoiceDocument(document));
       return;
@@ -4409,35 +4530,75 @@ export default function HoaDon() {
                 </SoftTypography>
               </SoftBox>
             </SoftBox>
-            {isStaff && (
-              <SoftBox display={{ xs: "block", md: "none" }}>
+            {(isStaff || isTouchAdmin) && (
+              <SoftBox
+                display={isTouchAdmin ? "grid" : { xs: "block", md: "none" }}
+                sx={
+                  isTouchAdmin
+                    ? {
+                        gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+                        gap: 1.25,
+                      }
+                    : undefined
+                }
+              >
                 {!loading &&
                   invoices.map((invoice) => {
                     const customerInfo = invoiceCustomer(invoice);
                     const debtPaymentDocument = isDebtPaymentDocument(invoice);
+                    const customerReturnDocument = isCustomerReturnDocument(invoice);
                     const isReversed =
                       invoice.status === "REVERSED" ||
                       invoice.invoiceStatus === "REVERSED" ||
                       Boolean(invoice.reversedAt);
                     return (
                       <SoftBox
-                        key={`${debtPaymentDocument ? "debt-" : "invoice-"}${getId(invoice)}`}
+                        key={`${
+                          customerReturnDocument
+                            ? "return-"
+                            : debtPaymentDocument
+                            ? "debt-"
+                            : "invoice-"
+                        }${getId(invoice)}`}
                         py={1.5}
                         display="flex"
                         gap={1.25}
                         alignItems="flex-start"
                         onClick={() => openDocument(invoice)}
-                        sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}
+                        sx={{
+                          borderBottom: "1px solid #edf0f5",
+                          cursor: "pointer",
+                          ...(isTouchAdmin && {
+                            p: 1.5,
+                            border: "1px solid #e1e8f0",
+                            borderRadius: 2.5,
+                            bgcolor: "#fff",
+                            minHeight: 150,
+                            "&:active": { bgcolor: "#f4f8fd" },
+                          }),
+                        }}
                       >
                         <SoftBox
                           width={44}
                           height={44}
                           borderRadius="50%"
                           bgcolor={
-                            isReversed ? "#ffebee" : debtPaymentDocument ? "#e8f5e9" : "#e7f3ff"
+                            isReversed
+                              ? "#ffebee"
+                              : customerReturnDocument
+                              ? "#fff3e0"
+                              : debtPaymentDocument
+                              ? "#e8f5e9"
+                              : "#e7f3ff"
                           }
                           color={
-                            isReversed ? "#c62828" : debtPaymentDocument ? "#2e7d32" : "#1877f2"
+                            isReversed
+                              ? "#c62828"
+                              : customerReturnDocument
+                              ? "#e65100"
+                              : debtPaymentDocument
+                              ? "#2e7d32"
+                              : "#1877f2"
                           }
                           display="flex"
                           alignItems="center"
@@ -4445,7 +4606,13 @@ export default function HoaDon() {
                           flexShrink={0}
                         >
                           <Icon>
-                            {isReversed ? "undo" : debtPaymentDocument ? "payments" : "receipt"}
+                            {isReversed
+                              ? "undo"
+                              : customerReturnDocument
+                              ? "assignment_return"
+                              : debtPaymentDocument
+                              ? "payments"
+                              : "receipt"}
                           </Icon>
                         </SoftBox>
                         <SoftBox flex={1} minWidth={0}>
@@ -4460,7 +4627,7 @@ export default function HoaDon() {
                             </SoftTypography>
                             <SoftBox textAlign="right" flexShrink={0}>
                               <SoftTypography variant="caption" color="text" display="block">
-                                Đã trả (3)
+                                {customerReturnDocument ? "Giá trị hoàn" : "Đã trả (3)"}
                               </SoftTypography>
                               <SoftTypography
                                 variant="button"
@@ -4489,7 +4656,7 @@ export default function HoaDon() {
                               : customerInfo.label}
                           </SoftTypography>
                           <SoftTypography variant="caption" color="text" display="block" mt={0.25}>
-                            {dateTime(invoice.createdAt || invoice.date)}
+                            {dateTime(documentOccurredAt(invoice))}
                           </SoftTypography>
                           {canViewAllCompanyInvoices && (
                             <SoftTypography variant="caption" color="text" display="block" mt={0.2}>
@@ -4507,6 +4674,8 @@ export default function HoaDon() {
                               sx={{
                                 color: isReversed
                                   ? "#c62828"
+                                  : customerReturnDocument
+                                  ? "#e65100"
                                   : debtPaymentDocument
                                   ? "#2e7d32"
                                   : invoice.debtAmount > 0
@@ -4514,6 +4683,8 @@ export default function HoaDon() {
                                   : "#2e7d32",
                                 bgcolor: isReversed
                                   ? "#ffebee"
+                                  : customerReturnDocument
+                                  ? "#fff3e0"
                                   : debtPaymentDocument
                                   ? "#e8f5e9"
                                   : invoice.debtAmount > 0
@@ -4525,7 +4696,11 @@ export default function HoaDon() {
                               }}
                             >
                               {isReversed
-                                ? "Đã hoàn hóa đơn"
+                                ? customerReturnDocument
+                                  ? "Phiếu hoàn đã đảo"
+                                  : "Đã hoàn hóa đơn"
+                                : customerReturnDocument
+                                ? "Hoàn hàng về xe"
                                 : debtPaymentDocument
                                 ? invoice.status === "CANCELLED"
                                   ? "Phiếu thu đã hủy"
@@ -4547,7 +4722,12 @@ export default function HoaDon() {
               </SoftBox>
             )}
             <SoftBox
-              sx={{ overflowX: "auto", display: { xs: isStaff ? "none" : "block", md: "block" } }}
+              sx={{
+                overflowX: "auto",
+                display: isTouchAdmin
+                  ? "none"
+                  : { xs: isStaff ? "none" : "block", md: "block" },
+              }}
             >
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
@@ -4598,9 +4778,16 @@ export default function HoaDon() {
                   )}
                   {invoices.map((invoice) => {
                     const debtPaymentDocument = isDebtPaymentDocument(invoice);
+                    const customerReturnDocument = isCustomerReturnDocument(invoice);
                     return (
                       <tr
-                        key={`${debtPaymentDocument ? "debt-" : "invoice-"}${getId(invoice)}`}
+                        key={`${
+                          customerReturnDocument
+                            ? "return-"
+                            : debtPaymentDocument
+                            ? "debt-"
+                            : "invoice-"
+                        }${getId(invoice)}`}
                         style={{ borderBottom: "1px solid #eee" }}
                       >
                         <td
@@ -4615,6 +4802,14 @@ export default function HoaDon() {
                               </span>
                             </>
                           )}
+                          {customerReturnDocument && (
+                            <>
+                              <br />
+                              <span style={{ color: "#e65100", fontSize: 11 }}>
+                                PHIẾU HOÀN HÀNG
+                              </span>
+                            </>
+                          )}
                           {invoice.voucherCode && (
                             <>
                               <br />
@@ -4625,7 +4820,7 @@ export default function HoaDon() {
                           )}
                         </td>
                         <td style={{ padding: 12, fontSize: 13 }}>
-                          {dateTime(invoice.createdAt || invoice.date)}
+                          {dateTime(documentOccurredAt(invoice))}
                         </td>
                         <td style={{ padding: 12, fontSize: 13 }}>
                           {invoiceCustomer(invoice).label}
@@ -4651,7 +4846,7 @@ export default function HoaDon() {
                             padding: 12,
                             fontSize: 13,
                             color:
-                              (debtPaymentDocument
+                              (debtPaymentDocument || customerReturnDocument
                                 ? invoice.customerDebtAfter
                                 : invoice.debtAmount) > 0
                                 ? "#C62828"
@@ -4659,7 +4854,9 @@ export default function HoaDon() {
                           }}
                         >
                           {money(
-                            debtPaymentDocument ? invoice.customerDebtAfter : invoice.debtAmount
+                            debtPaymentDocument || customerReturnDocument
+                              ? invoice.customerDebtAfter
+                              : invoice.debtAmount
                           )}
                         </td>
                         <td style={{ padding: 12 }}>
@@ -4668,7 +4865,11 @@ export default function HoaDon() {
                               padding: "4px 9px",
                               borderRadius: 10,
                               fontSize: 11,
-                              background: debtPaymentDocument
+                              background: customerReturnDocument
+                                ? invoice.status === "REVERSED"
+                                  ? "#FFEBEE"
+                                  : "#FFF3E0"
+                                : debtPaymentDocument
                                 ? invoice.status === "CANCELLED"
                                   ? "#FFEBEE"
                                   : "#E8F5E9"
@@ -4677,7 +4878,11 @@ export default function HoaDon() {
                                 : invoice.paymentStatus === "PARTIAL"
                                 ? "#FFF3E0"
                                 : "#FFEBEE",
-                              color: debtPaymentDocument
+                              color: customerReturnDocument
+                                ? invoice.status === "REVERSED"
+                                  ? "#C62828"
+                                  : "#E65100"
+                                : debtPaymentDocument
                                 ? invoice.status === "CANCELLED"
                                   ? "#C62828"
                                   : "#2E7D32"
@@ -4688,7 +4893,11 @@ export default function HoaDon() {
                                 : "#C62828",
                             }}
                           >
-                            {debtPaymentDocument
+                            {customerReturnDocument
+                              ? invoice.status === "REVERSED"
+                                ? "Phiếu hoàn đã đảo"
+                                : "Đã nhận hàng hoàn"
+                              : debtPaymentDocument
                               ? invoice.status === "CANCELLED"
                                 ? "Phiếu thu đã hủy"
                                 : "Đã thu công nợ"

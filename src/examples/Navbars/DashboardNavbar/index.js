@@ -205,7 +205,10 @@ function DashboardNavbar({ absolute, light, isMini }) {
     <AppBar
       position={absolute ? "absolute" : navbarType}
       color="inherit"
-      sx={(theme) => navbar(theme, { transparentNavbar, absolute, light })}
+      sx={(theme) => ({
+        ...navbar(theme, { transparentNavbar, absolute, light }),
+        display: user?.role === "admin" ? { xs: "none", xl: "block" } : undefined,
+      })}
     >
       <Toolbar sx={(theme) => navbarContainer(theme)}>
         <SoftBox color="inherit" mb={{ xs: 1, md: 0 }} sx={(theme) => navbarRow(theme, { isMini })}>
