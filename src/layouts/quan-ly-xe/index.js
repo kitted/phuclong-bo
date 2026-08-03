@@ -26,6 +26,7 @@ import { toast } from "react-toastify";
 import { useSelector } from "react-redux";
 import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
+import CustomerReturnService from "services/customerReturnService";
 
 const EMPTY_TRUCK = { code: "", name: "", licensePlate: "", driverId: "", status: "active" };
 const EMPTY_META = { totalPages: 1, totalItems: 0 };
@@ -93,6 +94,16 @@ const date = (value) =>
         hour12: false,
       })
     : "—";
+const vietnamDateKey = (value) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(parsed);
+};
 const todayValue = () => {
   const value = new Date();
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
@@ -1130,19 +1141,48 @@ function TruckInventoryModal({ truck, onClose }) {
       limit: 100,
     };
     setSalesLoading(true);
-    InvoiceService.getAll(params)
-      .then(async (firstResponse) => {
-        const firstPage = listOf(firstResponse);
-        const totalPages = metaOf(firstResponse).totalPages || 1;
-        if (totalPages <= 1) return firstPage;
-        const remaining = await Promise.all(
-          Array.from({ length: totalPages - 1 }, (_, index) =>
-            InvoiceService.getAll({ ...params, page: index + 2 })
-          )
-        );
-        return firstPage.concat(...remaining.map(listOf));
+    const returnParams = {
+      destinationTruckId: getId(truck),
+      page: 1,
+      limit: 100,
+    };
+    Promise.all([InvoiceService.getAll(params), CustomerReturnService.getAll(returnParams)])
+      .then(async ([firstInvoiceResponse, firstReturnResponse]) => {
+        const invoiceFirstPage = listOf(firstInvoiceResponse);
+        const invoiceTotalPages = metaOf(firstInvoiceResponse).totalPages || 1;
+        const returnFirstPage = listOf(firstReturnResponse);
+        const returnTotalPages = metaOf(firstReturnResponse).totalPages || 1;
+        const [invoiceRemaining, returnRemaining] = await Promise.all([
+          invoiceTotalPages <= 1
+            ? []
+            : Promise.all(
+                Array.from({ length: invoiceTotalPages - 1 }, (_, index) =>
+                  InvoiceService.getAll({ ...params, page: index + 2 })
+                )
+              ),
+          returnTotalPages <= 1
+            ? []
+            : Promise.all(
+                Array.from({ length: returnTotalPages - 1 }, (_, index) =>
+                  CustomerReturnService.getAll({ ...returnParams, page: index + 2 })
+                )
+              ),
+        ]);
+        const customerReturns = returnFirstPage
+          .concat(...returnRemaining.map(listOf))
+          .filter((item) => {
+            const inRange = (value) => {
+              const day = vietnamDateKey(value);
+              return Boolean(day) && (!range.from || day >= range.from) && (!range.to || day <= range.to);
+            };
+            return inRange(item.createdAt || item.date) || inRange(item.reversedAt);
+          });
+        return {
+          invoices: invoiceFirstPage.concat(...invoiceRemaining.map(listOf)),
+          customerReturns,
+        };
       })
-      .then(async (invoices) => {
+      .then(async ({ invoices, customerReturns }) => {
         const truckInvoices = invoices.filter(
           (invoice) => invoice.sourceType === "truck" && sameId(invoice.truckId, getId(truck))
         );
@@ -1175,7 +1215,12 @@ function TruckInventoryModal({ truck, onClose }) {
                     getId(item.productId) ||
                     getId(item.product) ||
                     (typeof item.productId === "string" ? item.productId : null)
-                )
+                  )
+              ),
+              ...customerReturns.flatMap((customerReturn) =>
+                (Array.isArray(customerReturn.items) ? customerReturn.items : [])
+                  .map((item) => item.productId)
+                  .filter(Boolean)
               ),
               ...truckInventoryRows.map(productIdOf),
               ...availableProducts.map(productIdOf),
@@ -1266,6 +1311,11 @@ function TruckInventoryModal({ truck, onClose }) {
         completed.forEach((invoice) =>
           (Array.isArray(invoice.items) ? invoice.items : []).forEach(rememberProduct)
         );
+        customerReturns.forEach((customerReturn) =>
+          (Array.isArray(customerReturn.items) ? customerReturn.items : []).forEach(
+            rememberProduct
+          )
+        );
         const reversalGroups = new Map();
         movements
           .filter(
@@ -1327,8 +1377,70 @@ function TruckInventoryModal({ truck, onClose }) {
             }),
           };
         });
+        const isInSelectedRange = (value) => {
+          const day = vietnamDateKey(value);
+          return Boolean(day) && (!range.from || day >= range.from) && (!range.to || day <= range.to);
+        };
+        const movementForReturnItem = (customerReturn, item, movementType) =>
+          movements.find(
+            (movement) =>
+              movement.type === movementType &&
+              sameId(movement.productId, item.productId) &&
+              (sameId(movement.reference?.id, getId(customerReturn)) ||
+                (movement.reference?.code && movement.reference.code === customerReturn.code)) &&
+              (movementType === "CUSTOMER_RETURN_REVERSED"
+                ? sameId(movement.sourceLocation?.id, getId(truck))
+                : sameId(movement.destinationLocation?.id, getId(truck)))
+          );
+        const mapReturnItems = (customerReturn, movementType) =>
+          (Array.isArray(customerReturn.items) ? customerReturn.items : []).map((item) => {
+            const movement = item.productId
+              ? movementForReturnItem(customerReturn, item, movementType)
+              : null;
+            return {
+              ...item,
+              productName: item.productName || item.manualName || "Hàng ngoài danh mục",
+              productCode: item.productCode || item.manualCode || "",
+              unit: item.unit || item.manualUnit || "",
+              qty: Number(item.qty || 0),
+              truckQuantityBefore: movement?.quantityBefore,
+              truckQuantityAfter: movement?.quantityAfter,
+              movementType: movement?.type || movementType,
+              unclassified: item.itemType === "MANUAL" || Boolean(item.manualName),
+            };
+          });
+        const customerReturnEvents = customerReturns.flatMap((customerReturn) => {
+          const events = [];
+          if (isInSelectedRange(customerReturn.createdAt || customerReturn.date)) {
+            events.push({
+              ...customerReturn,
+              id: `customer-return-${getId(customerReturn) || customerReturn.code}`,
+              eventType: "CUSTOMER_RETURN",
+              createdAt: customerReturn.createdAt || customerReturn.date,
+              items: mapReturnItems(customerReturn, "CUSTOMER_RETURN_TO_TRUCK"),
+            });
+          }
+          if (
+            customerReturn.status === "REVERSED" &&
+            isInSelectedRange(customerReturn.reversedAt)
+          ) {
+            events.push({
+              ...customerReturn,
+              id: `customer-return-reversed-${getId(customerReturn) || customerReturn.code}`,
+              eventType: "CUSTOMER_RETURN_REVERSAL",
+              code: customerReturn.code,
+              createdAt: customerReturn.reversedAt,
+              items: mapReturnItems(customerReturn, "CUSTOMER_RETURN_REVERSED"),
+            });
+          }
+          return events;
+        });
         if (!active) return;
-        const sorted = [...withInventorySnapshots, ...reversalEvents].sort((left, right) => {
+        const sorted = [
+          ...withInventorySnapshots,
+          ...reversalEvents,
+          ...customerReturnEvents,
+        ].sort((left, right) => {
           const leftTime = new Date(left.createdAt || left.date || 0).getTime();
           const rightTime = new Date(right.createdAt || right.date || 0).getTime();
           return salesSort === "asc" ? leftTime - rightTime : rightTime - leftTime;
@@ -1584,7 +1696,11 @@ function TruckInventoryModal({ truck, onClose }) {
             }}
           >
             <Tab icon={<Icon>inventory_2</Icon>} iconPosition="start" label="Hàng hiện có" />
-            <Tab icon={<Icon>receipt_long</Icon>} iconPosition="start" label="Lịch sử bán hàng" />
+            <Tab
+              icon={<Icon>receipt_long</Icon>}
+              iconPosition="start"
+              label="Lịch sử bán / hoàn"
+            />
           </Tabs>
 
           <SoftBox display={detailTab === 0 ? "block" : "none"}>
@@ -1902,7 +2018,14 @@ function TruckInventoryModal({ truck, onClose }) {
                     [
                       "Đã bán",
                       salesInvoices
-                        .filter((invoice) => invoice.eventType !== "REVERSAL")
+                        .filter(
+                          (invoice) =>
+                            ![
+                              "REVERSAL",
+                              "CUSTOMER_RETURN",
+                              "CUSTOMER_RETURN_REVERSAL",
+                            ].includes(invoice.eventType)
+                        )
                         .reduce(
                           (sum, invoice) =>
                             sum +
@@ -1921,7 +2044,9 @@ function TruckInventoryModal({ truck, onClose }) {
                     [
                       "Đã hoàn về xe",
                       salesInvoices
-                        .filter((invoice) => invoice.eventType === "REVERSAL")
+                        .filter((invoice) =>
+                          ["REVERSAL", "CUSTOMER_RETURN"].includes(invoice.eventType)
+                        )
                         .reduce(
                           (sum, invoice) =>
                             sum +
@@ -1959,7 +2084,7 @@ function TruckInventoryModal({ truck, onClose }) {
                 <SoftBox py={6} textAlign="center">
                   <Icon sx={{ color: "#1565c0", fontSize: 38 }}>hourglass_top</Icon>
                   <SoftTypography variant="button" color="text" display="block" mt={1}>
-                    Đang tải lịch sử bán hàng...
+                    Đang tải lịch sử hàng hóa trên xe...
                   </SoftTypography>
                 </SoftBox>
               )}
@@ -1968,7 +2093,7 @@ function TruckInventoryModal({ truck, onClose }) {
                 <SoftBox py={6} textAlign="center" bgcolor="#fff" borderRadius={2}>
                   <Icon sx={{ color: "#b0bec5", fontSize: 46 }}>receipt_long</Icon>
                   <SoftTypography variant="button" color="text" display="block" mt={1}>
-                    Không có hóa đơn bán từ xe trong khoảng thời gian này
+                    Không có hoạt động bán hoặc hoàn hàng trong khoảng thời gian này
                   </SoftTypography>
                 </SoftBox>
               )}
@@ -1976,7 +2101,11 @@ function TruckInventoryModal({ truck, onClose }) {
               {!salesLoading &&
                 salesInvoices.map((invoice) => {
                   const items = Array.isArray(invoice.items) ? invoice.items : [];
-                  const isReversal = invoice.eventType === "REVERSAL";
+                  const isInvoiceReversal = invoice.eventType === "REVERSAL";
+                  const isCustomerReturn = invoice.eventType === "CUSTOMER_RETURN";
+                  const isCustomerReturnReversal =
+                    invoice.eventType === "CUSTOMER_RETURN_REVERSAL";
+                  const isInbound = isInvoiceReversal || isCustomerReturn;
                   const soldQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
                   return (
                     <SoftBox
@@ -1994,14 +2123,20 @@ function TruckInventoryModal({ truck, onClose }) {
                         justifyContent="space-between"
                         alignItems="flex-start"
                         gap={1}
-                        bgcolor={isReversal ? "#f1f8f3" : "#f8fbff"}
+                        bgcolor={
+                          isInbound
+                            ? "#f1f8f3"
+                            : isCustomerReturnReversal
+                            ? "#fff3f3"
+                            : "#f8fbff"
+                        }
                         sx={{ borderBottom: "1px solid #e5eaf0" }}
                       >
                         <SoftBox minWidth={0}>
                           <SoftTypography variant="button" fontWeight="bold" display="block">
                             {invoice.code || "Hóa đơn"}
                           </SoftTypography>
-                          {isReversal && invoice.invoiceCode && (
+                          {isInvoiceReversal && invoice.invoiceCode && (
                             <SoftTypography
                               variant="caption"
                               fontWeight="bold"
@@ -2009,6 +2144,27 @@ function TruckInventoryModal({ truck, onClose }) {
                               sx={{ color: "#2e7d32" }}
                             >
                               Hoàn từ hóa đơn {invoice.invoiceCode}
+                            </SoftTypography>
+                          )}
+                          {isCustomerReturn && (
+                            <SoftTypography
+                              variant="caption"
+                              fontWeight="bold"
+                              display="block"
+                              sx={{ color: "#2e7d32" }}
+                            >
+                              Khách hoàn hàng về xe
+                              {invoice.status === "REVERSED" ? " · Phiếu đã đảo" : ""}
+                            </SoftTypography>
+                          )}
+                          {isCustomerReturnReversal && (
+                            <SoftTypography
+                              variant="caption"
+                              fontWeight="bold"
+                              display="block"
+                              sx={{ color: "#c62828" }}
+                            >
+                              Đảo phiếu hoàn hàng · Hàng được trừ lại khỏi xe
                             </SoftTypography>
                           )}
                           <SoftTypography variant="caption" color="text" display="block">
@@ -2021,7 +2177,7 @@ function TruckInventoryModal({ truck, onClose }) {
                         <SoftBox
                           px={1.1}
                           py={0.65}
-                          bgcolor={isReversal ? "#e8f5e9" : "#ffebee"}
+                          bgcolor={isInbound ? "#e8f5e9" : "#ffebee"}
                           borderRadius={2}
                           textAlign="center"
                           flexShrink={0}
@@ -2029,17 +2185,21 @@ function TruckInventoryModal({ truck, onClose }) {
                           <SoftTypography
                             variant="button"
                             fontWeight="bold"
-                            sx={{ color: isReversal ? "#2e7d32" : "#c62828" }}
+                            sx={{ color: isInbound ? "#2e7d32" : "#c62828" }}
                           >
-                            {isReversal ? "+" : "−"}
+                            {isInbound ? "+" : "−"}
                             {soldQuantity}
                           </SoftTypography>
                           <SoftTypography
                             variant="caption"
                             display="block"
-                            sx={{ color: isReversal ? "#1b5e20" : "#8e1b1b" }}
+                            sx={{ color: isInbound ? "#1b5e20" : "#8e1b1b" }}
                           >
-                            {isReversal ? "hoàn về xe" : "sản phẩm"}
+                            {isInbound
+                              ? "hoàn về xe"
+                              : isCustomerReturnReversal
+                              ? "đảo hoàn hàng"
+                              : "sản phẩm"}
                           </SoftTypography>
                         </SoftBox>
                       </SoftBox>
@@ -2052,7 +2212,7 @@ function TruckInventoryModal({ truck, onClose }) {
                               : null) ||
                             item.product ||
                             {};
-                          const isGift = !isReversal && item.lineType === "GIFT";
+                          const isGift = !isInbound && item.lineType === "GIFT";
                           const stockSnapshot = saleInventorySnapshot(item);
                           const unit = item.unit || product.unit || "";
                           return (
@@ -2075,17 +2235,19 @@ function TruckInventoryModal({ truck, onClose }) {
                                     height={34}
                                     borderRadius="50%"
                                     bgcolor={
-                                      isReversal ? "#e8f5e9" : isGift ? "#fff3e0" : "#e8f5e9"
+                                      isInbound ? "#e8f5e9" : isGift ? "#fff3e0" : "#e8f5e9"
                                     }
-                                    color={isReversal ? "#2e7d32" : isGift ? "#ef6c00" : "#2e7d32"}
+                                    color={isInbound ? "#2e7d32" : isGift ? "#ef6c00" : "#2e7d32"}
                                     display="flex"
                                     alignItems="center"
                                     justifyContent="center"
                                     flexShrink={0}
                                   >
                                     <Icon sx={{ fontSize: 19 }}>
-                                      {isReversal
+                                      {isInbound
                                         ? "restore"
+                                        : isCustomerReturnReversal
+                                        ? "undo"
                                         : isGift
                                         ? "redeem"
                                         : "remove_shopping_cart"}
@@ -2102,8 +2264,14 @@ function TruckInventoryModal({ truck, onClose }) {
                                     <SoftTypography variant="caption" color="text" display="block">
                                       {[
                                         item.productCode || product.code,
-                                        isReversal
-                                          ? "Hoàn về xe"
+                                        isCustomerReturn
+                                          ? item.unclassified
+                                            ? "Hàng hoàn chờ phân loại"
+                                            : "Khách hoàn về xe"
+                                          : isInvoiceReversal
+                                          ? "Hoàn hóa đơn về xe"
+                                          : isCustomerReturnReversal
+                                          ? "Đảo phiếu hoàn"
                                           : isGift
                                           ? "Quà tặng"
                                           : "Hàng bán",
@@ -2124,7 +2292,7 @@ function TruckInventoryModal({ truck, onClose }) {
                                 sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
                                 gap={{ xs: 0.75, md: 1 }}
                               >
-                                {(isReversal
+                                {(isInbound
                                   ? [
                                       [
                                         "Trước khi hoàn",
@@ -2134,6 +2302,12 @@ function TruckInventoryModal({ truck, onClose }) {
                                       ],
                                       ["Đã cộng", stockSnapshot.deducted, "#2e7d32", "#e8f5e9"],
                                       ["Sau khi hoàn", stockSnapshot.after, "#1b5e20", "#dcedc8"],
+                                    ]
+                                  : isCustomerReturnReversal
+                                  ? [
+                                      ["Trước khi đảo", stockSnapshot.before, "#1565c0", "#e3f2fd"],
+                                      ["Đã trừ", stockSnapshot.deducted, "#c62828", "#ffebee"],
+                                      ["Sau khi đảo", stockSnapshot.after, "#2e7d32", "#e8f5e9"],
                                     ]
                                   : [
                                       ["Trước khi bán", stockSnapshot.before, "#1565c0", "#e3f2fd"],
@@ -2187,8 +2361,12 @@ function TruckInventoryModal({ truck, onClose }) {
                                   textAlign="right"
                                   sx={{ fontStyle: "italic" }}
                                 >
-                                  {isReversal
+                                  {item.unclassified
+                                    ? "Hàng ngoài danh mục đã được lưu tại khu vực chờ phân loại trên xe"
+                                    : isInbound
                                     ? "Movement hoàn hàng chưa có snapshot tồn xe"
+                                    : isCustomerReturnReversal
+                                    ? "Movement đảo phiếu hoàn chưa có snapshot tồn xe"
                                     : "Hóa đơn cũ chưa có snapshot tồn xe"}
                                 </SoftTypography>
                               )}

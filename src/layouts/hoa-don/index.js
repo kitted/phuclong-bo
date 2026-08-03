@@ -30,6 +30,7 @@ import { toast } from "react-toastify";
 import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
 import { debtPaymentToInvoice, moneyInWords, printInvoice } from "utils/invoicePrint";
+import CustomerReturnModal, { InvoiceBusinessTypeSwitch } from "./customer-return-form";
 
 const money = (value = 0) =>
   new Intl.NumberFormat("vi-VN", {
@@ -339,6 +340,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   const authUser = useSelector((state) => state.auth?.user);
   const role = authUser?.role;
   const isAdmin = String(role || "").toLowerCase() === "admin";
+  const [documentMode, setDocumentMode] = useState("SALE");
   const [form, setForm] = useState({
     code: "",
     date: today(),
@@ -427,6 +429,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     // lần cho mỗi lần mở để không xóa dữ liệu sale đang nhập.
     if (formInitializedRef.current) return;
     formInitializedRef.current = true;
+    setDocumentMode("SALE");
     setCreatedInvoice(null);
     setForm({
       code: "",
@@ -1017,6 +1020,15 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     form.sourceType === "truck"
       ? [truck?.name || "Xe tải", truck?.licensePlate].filter(Boolean).join(" · ")
       : "Kho chính";
+  if (documentMode === "CUSTOMER_RETURN")
+    return (
+      <CustomerReturnModal
+        open={open}
+        onClose={onClose}
+        onCreated={onCreated}
+        onSwitchToSale={setDocumentMode}
+      />
+    );
   if (reviewOpen)
     return (
       <Modal open={open} onClose={() => !submitting && setReviewOpen(false)}>
@@ -1445,6 +1457,9 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
           <IconButton onClick={onClose}>
             <Icon>close</Icon>
           </IconButton>
+        </SoftBox>
+        <SoftBox px={{ xs: 2, md: 0 }} py={{ xs: 1.25, md: 1.5 }}>
+          <InvoiceBusinessTypeSwitch value="SALE" onChange={setDocumentMode} />
         </SoftBox>
         {!isAdmin && (
           <SoftBox
