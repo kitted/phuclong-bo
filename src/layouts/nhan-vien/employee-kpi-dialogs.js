@@ -14,10 +14,12 @@ import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
+import MobileLoadMore from "components/MobileLoadMore";
 import EmployeeKpiService from "services/employeeKpiService";
 import { PromotionService } from "services/crmService";
 import { CategoryService, ProductService } from "services/warehouseService";
 import { toast } from "react-toastify";
+import { mergeUniqueItems } from "utils/infiniteList";
 
 const METRICS = {
   PROMOTION_ACTIVATION_COUNT: "Số mã khuyến mãi kích hoạt",
@@ -79,7 +81,14 @@ function KpiEvidenceModal({ open, kpi, targetIndex, onClose }) {
       limit: 20,
     })
       .then((response) => {
-        setResult(response.data?.data || null);
+        const nextResult = response.data?.data || null;
+        setResult((current) => {
+          if (page === 1 || !current) return nextResult;
+          return {
+            ...nextResult,
+            invoices: mergeUniqueItems(current.invoices || [], nextResult?.invoices || []),
+          };
+        });
         setMeta(response.data?.meta || { page: 1, totalPages: 1, total: 0 });
       })
       .catch((error) =>
@@ -136,7 +145,7 @@ function KpiEvidenceModal({ open, kpi, targetIndex, onClose }) {
               </tr>
             </thead>
             <tbody>
-              {loading && (
+              {loading && invoices.length === 0 && (
                 <tr>
                   <td colSpan={6} style={{ padding: 30, textAlign: "center" }}>
                     Đang tải...
@@ -150,62 +159,40 @@ function KpiEvidenceModal({ open, kpi, targetIndex, onClose }) {
                   </td>
                 </tr>
               )}
-              {!loading &&
-                invoices.map((invoice) => (
-                  <tr key={invoice.id || invoice._id} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={{ padding: 10, fontSize: 13, fontWeight: 600 }}>{invoice.code}</td>
-                    <td style={{ padding: 10, fontSize: 13 }}>
-                      {invoice.date ? new Date(invoice.date).toLocaleDateString("vi-VN") : "—"}
-                    </td>
-                    <td style={{ padding: 10, fontSize: 13 }}>
-                      {invoice.customerName || "Khách lẻ"}
-                      <br />
-                      <span style={{ color: "#6B7280" }}>{invoice.customerCode || ""}</span>
-                    </td>
-                    <td style={{ padding: 10, fontSize: 13 }}>
-                      {displayValue("TOTAL_REVENUE", invoice.grandTotal)}
-                    </td>
-                    <td style={{ padding: 10, fontSize: 13, fontWeight: 600 }}>
-                      {displayValue(target?.metric, invoice.contributionValue)}
-                    </td>
-                    <td style={{ padding: 10, fontSize: 12 }}>
-                      {(invoice.activationCodes || []).map((activation) => (
-                        <div key={activation.id || activation.code}>
-                          {activation.code || activation}
-                        </div>
-                      ))}
-                    </td>
-                  </tr>
-                ))}
+              {invoices.map((invoice) => (
+                <tr key={invoice.id || invoice._id} style={{ borderBottom: "1px solid #eee" }}>
+                  <td style={{ padding: 10, fontSize: 13, fontWeight: 600 }}>{invoice.code}</td>
+                  <td style={{ padding: 10, fontSize: 13 }}>
+                    {invoice.date ? new Date(invoice.date).toLocaleDateString("vi-VN") : "—"}
+                  </td>
+                  <td style={{ padding: 10, fontSize: 13 }}>
+                    {invoice.customerName || "Khách lẻ"}
+                    <br />
+                    <span style={{ color: "#6B7280" }}>{invoice.customerCode || ""}</span>
+                  </td>
+                  <td style={{ padding: 10, fontSize: 13 }}>
+                    {displayValue("TOTAL_REVENUE", invoice.grandTotal)}
+                  </td>
+                  <td style={{ padding: 10, fontSize: 13, fontWeight: 600 }}>
+                    {displayValue(target?.metric, invoice.contributionValue)}
+                  </td>
+                  <td style={{ padding: 10, fontSize: 12 }}>
+                    {(invoice.activationCodes || []).map((activation) => (
+                      <div key={activation.id || activation.code}>
+                        {activation.code || activation}
+                      </div>
+                    ))}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </SoftBox>
-        <SoftBox mt={2} display="flex" justifyContent="space-between" alignItems="center">
-          <SoftTypography variant="caption">Tổng {meta.total || 0} hóa đơn</SoftTypography>
-          <SoftBox display="flex" gap={1}>
-            <SoftButton
-              size="small"
-              variant="outlined"
-              color="info"
-              disabled={page <= 1}
-              onClick={() => setPage((value) => value - 1)}
-            >
-              Trước
-            </SoftButton>
-            <SoftTypography variant="caption" px={1} pt={1}>
-              Trang {page}/{meta.totalPages || 1}
-            </SoftTypography>
-            <SoftButton
-              size="small"
-              variant="outlined"
-              color="info"
-              disabled={page >= (meta.totalPages || 1)}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              Sau
-            </SoftButton>
-          </SoftBox>
-        </SoftBox>
+        <MobileLoadMore
+          loading={loading}
+          hasMore={page < (meta.totalPages || 1)}
+          onLoadMore={() => setPage((value) => value + 1)}
+        />
         <SoftButton fullWidth variant="outlined" color="secondary" sx={{ mt: 3 }} onClick={onClose}>
           Đóng
         </SoftButton>

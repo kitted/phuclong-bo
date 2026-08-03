@@ -3,7 +3,6 @@ import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import Modal from "@mui/material/Modal";
-import Pagination from "@mui/material/Pagination";
 import Tooltip from "@mui/material/Tooltip";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
@@ -13,6 +12,9 @@ import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
 import InventoryService from "services/inventoryService";
 import { toast } from "react-toastify";
+import WarehouseStockCheckPanel from "./WarehouseStockCheckPanel";
+import MobileLoadMore from "components/MobileLoadMore";
+import { mergeUniqueItems } from "utils/infiniteList";
 
 const PAGE_SIZE = 20;
 
@@ -240,6 +242,7 @@ function InventoryDetailModal({ productId, open, onClose }) {
 }
 
 function TonKho() {
+  const [view, setView] = useState("INVENTORY");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -250,6 +253,7 @@ function TonKho() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [detailProductId, setDetailProductId] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 400);
@@ -272,7 +276,8 @@ function TonKho() {
         if (!active) return;
         const list = normalizeList(listResponse);
         const summaryData = unwrap(summaryResponse) || {};
-        setItems(list.items.map(normalizeItem));
+        const nextItems = list.items.map(normalizeItem);
+        setItems((current) => (page > 1 ? mergeUniqueItems(current, nextItems) : nextItems));
         setMeta({
           page: Number(list.meta.page ?? page),
           totalPages: Number(list.meta.totalPages ?? list.meta.pageCount ?? 1),
@@ -282,14 +287,14 @@ function TonKho() {
       })
       .catch((error) => {
         if (!active) return;
-        setItems([]);
+        if (page === 1) setItems([]);
         toast.error(error.response?.data?.message || "Không thể tải dữ liệu tồn kho");
       })
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [page, debouncedSearch, filterStatus]);
+  }, [page, debouncedSearch, filterStatus, refreshKey]);
 
   const counts = summary.statusCounts || {};
   const totalProducts = Number(summary.totalProducts ?? counts.total ?? meta.totalItems ?? 0);
@@ -390,100 +395,178 @@ function TonKho() {
           ))}
         </SoftBox>
 
-        <Card>
-          <SoftBox p={3}>
-            <SoftBox
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={2}
-              gap={2}
-              flexWrap="wrap"
-            >
-              <SoftTypography variant="h5" fontWeight="bold">
-                Báo cáo Tồn kho
-              </SoftTypography>
-              <SoftButton
-                variant="outlined"
-                color="info"
-                startIcon={<Icon>download</Icon>}
-                disabled={exporting}
-                onClick={handleExport}
+        <SoftBox
+          display="grid"
+          gap={{ xs: 0.8, md: 1.2 }}
+          mb={2}
+          sx={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
+        >
+          {[
+            {
+              value: "INVENTORY",
+              label: "Tồn kho hiện tại",
+              description: "Xem số lượng, giá trị và biến động hàng hóa",
+              icon: "inventory_2",
+            },
+            {
+              value: "STOCK_CHECK",
+              label: "Kiểm hàng & backup",
+              description: "Đếm thực tế, đồng bộ và khôi phục tồn kho",
+              icon: "fact_check",
+            },
+          ].map((option) => {
+            const active = view === option.value;
+            return (
+              <SoftBox
+                component="button"
+                type="button"
+                key={option.value}
+                onClick={() => setView(option.value)}
+                p={{ xs: 1, sm: 1.35 }}
+                textAlign="left"
+                sx={{
+                  border: active ? "2px solid #1976d2" : "1px solid #dce2e9",
+                  borderRadius: 2.25,
+                  bgcolor: active ? "#e7f3ff" : "#fff",
+                  color: active ? "#0d47a1" : "#52606d",
+                  cursor: "pointer",
+                  boxShadow: active ? "0 5px 16px rgba(25,118,210,.12)" : "none",
+                }}
               >
-                {exporting ? "Đang xuất..." : "Xuất Excel"}
-              </SoftButton>
-            </SoftBox>
-            <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap" alignItems="center">
-              <SoftBox sx={{ flex: 1, minWidth: 220 }}>
-                <SoftInput
-                  placeholder="Tìm tên hoặc mã sản phẩm..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  icon={{ component: "search", direction: "left" }}
-                />
-              </SoftBox>
-              <SoftBox display="flex" gap={1} flexWrap="wrap">
-                <FilterBtn value="all" label="Tất cả" count={totalProducts} />
-                <FilterBtn value="ok" label="Còn hàng" count={inStock} />
-                <FilterBtn value="low" label="Sắp hết" count={lowStock} />
-                <FilterBtn value="out" label="Hết hàng" count={outOfStock} />
-              </SoftBox>
-            </SoftBox>
-            <SoftBox sx={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#F8F9FA" }}>
-                    {[
-                      "Mã SP",
-                      "Tên sản phẩm",
-                      "Danh mục",
-                      "ĐVT",
-                      "Tồn kho",
-                      "Trên xe tải",
-                      "Tồn min",
-                      "Giá trị tồn",
-                      "Trạng thái",
-                      "",
-                    ].map((heading, index) => (
-                      <th
-                        key={`${heading}-${index}`}
-                        style={{
-                          padding: "10px 12px",
-                          textAlign: "left",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: "#6B7280",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {heading}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading && (
-                    <tr>
-                      <td
-                        colSpan={10}
-                        style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}
-                      >
-                        Đang tải dữ liệu...
-                      </td>
-                    </tr>
+                <SoftBox display="flex" alignItems="center" gap={{ xs: 0.65, sm: 1 }}>
+                  <SoftBox
+                    width={{ xs: 34, sm: 40 }}
+                    height={{ xs: 34, sm: 40 }}
+                    borderRadius={1.7}
+                    bgcolor={active ? "#d6eaff" : "#f1f4f7"}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    flexShrink={0}
+                  >
+                    <Icon>{option.icon}</Icon>
+                  </SoftBox>
+                  <SoftBox minWidth={0}>
+                    <SoftTypography
+                      variant="button"
+                      fontWeight="bold"
+                      sx={{ color: "inherit", fontSize: { xs: 12, sm: 14 }, lineHeight: 1.25 }}
+                    >
+                      {option.label}
+                    </SoftTypography>
+                    <SoftTypography
+                      variant="caption"
+                      color="text"
+                      display={{ xs: "none", sm: "block" }}
+                    >
+                      {option.description}
+                    </SoftTypography>
+                  </SoftBox>
+                  {active && (
+                    <Icon sx={{ ml: "auto", display: { xs: "none", sm: "block" } }}>
+                      check_circle
+                    </Icon>
                   )}
-                  {!loading && items.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={10}
-                        style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}
-                      >
-                        Không tìm thấy sản phẩm
-                      </td>
+                </SoftBox>
+              </SoftBox>
+            );
+          })}
+        </SoftBox>
+
+        {view === "INVENTORY" && (
+          <Card>
+            <SoftBox p={3}>
+              <SoftBox
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+                mb={2}
+                gap={2}
+                flexWrap="wrap"
+              >
+                <SoftTypography variant="h5" fontWeight="bold">
+                  Báo cáo Tồn kho
+                </SoftTypography>
+                <SoftButton
+                  variant="outlined"
+                  color="info"
+                  startIcon={<Icon>download</Icon>}
+                  disabled={exporting}
+                  onClick={handleExport}
+                >
+                  {exporting ? "Đang xuất..." : "Xuất Excel"}
+                </SoftButton>
+              </SoftBox>
+              <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap" alignItems="center">
+                <SoftBox sx={{ flex: 1, minWidth: 220 }}>
+                  <SoftInput
+                    placeholder="Tìm tên hoặc mã sản phẩm..."
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    icon={{ component: "search", direction: "left" }}
+                  />
+                </SoftBox>
+                <SoftBox display="flex" gap={1} flexWrap="wrap">
+                  <FilterBtn value="all" label="Tất cả" count={totalProducts} />
+                  <FilterBtn value="ok" label="Còn hàng" count={inStock} />
+                  <FilterBtn value="low" label="Sắp hết" count={lowStock} />
+                  <FilterBtn value="out" label="Hết hàng" count={outOfStock} />
+                </SoftBox>
+              </SoftBox>
+              <SoftBox sx={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#F8F9FA" }}>
+                      {[
+                        "Mã SP",
+                        "Tên sản phẩm",
+                        "Danh mục",
+                        "ĐVT",
+                        "Tồn kho",
+                        "Trên xe tải",
+                        "Tồn min",
+                        "Giá trị tồn",
+                        "Trạng thái",
+                        "",
+                      ].map((heading, index) => (
+                        <th
+                          key={`${heading}-${index}`}
+                          style={{
+                            padding: "10px 12px",
+                            textAlign: "left",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: "#6B7280",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {heading}
+                        </th>
+                      ))}
                     </tr>
-                  )}
-                  {!loading &&
-                    items.map((item, index) => {
+                  </thead>
+                  <tbody>
+                    {loading && items.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={10}
+                          style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}
+                        >
+                          Đang tải dữ liệu...
+                        </td>
+                      </tr>
+                    )}
+                    {!loading && items.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={10}
+                          style={{ textAlign: "center", padding: 32, color: "#9E9E9E" }}
+                        >
+                          Không tìm thấy sản phẩm
+                        </td>
+                      </tr>
+                    )}
+                    {items.map((item, index) => {
                       const badge = statusBadge(item.status);
                       const pct =
                         item.minStock > 0
@@ -585,31 +668,33 @@ function TonKho() {
                         </tr>
                       );
                     })}
-                </tbody>
-              </table>
-            </SoftBox>
-            {!loading && meta.totalPages > 1 && (
-              <SoftBox
-                mt={3}
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-                flexWrap="wrap"
-                gap={1}
-              >
-                <SoftTypography variant="caption" color="text">
-                  Tổng {meta.totalItems} sản phẩm
-                </SoftTypography>
-                <Pagination
-                  page={page}
-                  count={meta.totalPages}
-                  color="primary"
-                  onChange={(_, value) => setPage(value)}
-                />
+                  </tbody>
+                </table>
               </SoftBox>
-            )}
-          </SoftBox>
-        </Card>
+              <MobileLoadMore
+                loading={loading}
+                hasMore={page < (meta.totalPages || 1)}
+                onLoadMore={() => setPage((value) => value + 1)}
+              />
+            </SoftBox>
+          </Card>
+        )}
+
+        {view === "STOCK_CHECK" && (
+          <Card sx={{ overflow: "visible" }}>
+            <SoftBox p={{ xs: 1, sm: 1.5, md: 2.5 }}>
+              <SoftBox mb={{ xs: 1.2, md: 2 }} px={{ xs: 0.25, md: 0 }}>
+                <SoftTypography variant="h5" fontWeight="bold">
+                  Kiểm hàng tồn kho
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text">
+                  Kiểm đếm kho chính, đối chiếu chênh lệch và lưu bản sao trước mọi thay đổi.
+                </SoftTypography>
+              </SoftBox>
+              <WarehouseStockCheckPanel onChanged={() => setRefreshKey((value) => value + 1)} />
+            </SoftBox>
+          </Card>
+        )}
       </SoftBox>
       <InventoryDetailModal
         productId={detailProductId}

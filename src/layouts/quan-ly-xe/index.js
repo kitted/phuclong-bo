@@ -7,7 +7,6 @@ import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import MenuItem from "@mui/material/MenuItem";
 import Modal from "@mui/material/Modal";
-import Pagination from "@mui/material/Pagination";
 import Select from "@mui/material/Select";
 import Tooltip from "@mui/material/Tooltip";
 import TextField from "@mui/material/TextField";
@@ -25,6 +24,7 @@ import { useSelector } from "react-redux";
 import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
 import CustomerReturnService from "services/customerReturnService";
+import { mergeUniqueItems } from "utils/infiniteList";
 
 const EMPTY_TRUCK = { code: "", name: "", licensePlate: "", driverId: "", status: "active" };
 const EMPTY_META = { totalPages: 1, totalItems: 0 };
@@ -1274,7 +1274,10 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
     })
       .then((response) => {
         if (!active) return;
-        setInventoryBackups(listOf(response));
+        const nextBackups = listOf(response);
+        setInventoryBackups((current) =>
+          inventoryBackupPage > 1 ? mergeUniqueItems(current, nextBackups) : nextBackups
+        );
         const responseMeta = metaOf(response);
         setInventoryBackupMeta({
           ...EMPTY_META,
@@ -1284,7 +1287,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
       })
       .catch((error) => {
         if (!active) return;
-        setInventoryBackups([]);
+        if (inventoryBackupPage === 1) setInventoryBackups([]);
         toast.error(apiError(error, "Không thể tải danh sách bản sao tồn xe"));
       })
       .finally(() => active && setInventoryBackupsLoading(false));
@@ -3850,17 +3853,11 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                       </SoftBox>
                     )}
 
-                    {(inventoryBackupMeta.totalPages || 1) > 1 && (
-                      <SoftBox display="flex" justifyContent="center" mt={1.5}>
-                        <Pagination
-                          page={inventoryBackupPage}
-                          count={inventoryBackupMeta.totalPages || 1}
-                          onChange={(_, value) => setInventoryBackupPage(value)}
-                          color="primary"
-                          size="small"
-                        />
-                      </SoftBox>
-                    )}
+                    <MobileLoadMore
+                      loading={inventoryBackupsLoading}
+                      hasMore={inventoryBackupPage < (inventoryBackupMeta.totalPages || 1)}
+                      onLoadMore={() => setInventoryBackupPage((value) => value + 1)}
+                    />
                   </SoftBox>
                 )}
 
@@ -4759,12 +4756,12 @@ export default function QuanLyXe() {
         if (!active) return;
         if (tab === 0) {
           const nextTrucks = listOf(listResponse);
-          setTrucks((current) => (isStaff && page > 1 ? [...current, ...nextTrucks] : nextTrucks));
+          setTrucks((current) => (page > 1 ? mergeUniqueItems(current, nextTrucks) : nextTrucks));
           setMeta(metaOf(listResponse));
         } else {
           const nextTransfers = listOf(listResponse);
           setTransfers((current) =>
-            isStaff && transferPage > 1 ? [...current, ...nextTransfers] : nextTransfers
+            transferPage > 1 ? mergeUniqueItems(current, nextTransfers) : nextTransfers
           );
           setTransferMeta(metaOf(listResponse));
           setTransferSummary(unwrap(summaryResponse) || {});
@@ -4787,7 +4784,6 @@ export default function QuanLyXe() {
     transferFrom,
     transferTo,
     refreshKey,
-    isStaff,
   ]);
   useEffect(() => {
     if (tab !== 1 || truckOptions.length) return;
@@ -4806,8 +4802,9 @@ export default function QuanLyXe() {
       .then((options) => setTruckOptions(options))
       .catch((error) => toast.error(apiError(error, "Không thể tải danh sách xe để lọc")));
   }, [tab, truckOptions.length]);
-  const refresh = (firstPage = false) => {
-    if (firstPage) setPage(1);
+  const refresh = () => {
+    setPage(1);
+    setTransferPage(1);
     setRefreshKey((value) => value + 1);
   };
   const changeStatus = async (truck) => {
@@ -4825,8 +4822,7 @@ export default function QuanLyXe() {
     try {
       await TruckService.delete(getId(truck));
       toast.success("Đã xóa xe");
-      if (trucks.length === 1 && page > 1) setPage((value) => value - 1);
-      else refresh();
+      refresh();
     } catch (error) {
       toast.error(apiError(error, "Không thể xóa xe"));
     }
@@ -5131,29 +5127,18 @@ export default function QuanLyXe() {
             {tab === 1 && (transfers.length > 0 || !loading) && (
               <TransferTable transfers={transfers} onReverse={reverseTransfer} readOnly={isStaff} />
             )}
-            {isStaff && tab === 0 && (
+            {tab === 0 && (
               <MobileLoadMore
                 loading={loading}
                 hasMore={page < (meta.totalPages || 1)}
                 onLoadMore={() => setPage((value) => value + 1)}
               />
             )}
-            {isStaff && tab === 1 && (
+            {tab === 1 && (
               <MobileLoadMore
                 loading={loading}
                 hasMore={transferPage < (transferMeta.totalPages || 1)}
                 onLoadMore={() => setTransferPage((value) => value + 1)}
-              />
-            )}
-            {!isStaff && tab === 0 && meta.totalPages > 1 && (
-              <Pager meta={meta} page={page} setPage={setPage} label="xe" />
-            )}
-            {!isStaff && tab === 1 && transferMeta.totalPages > 1 && (
-              <Pager
-                meta={transferMeta}
-                page={transferPage}
-                setPage={setTransferPage}
-                label="phiếu"
               />
             )}
           </SoftBox>
@@ -5633,21 +5618,5 @@ function TransferTable({ transfers, onReverse, readOnly }) {
         </table>
       </SoftBox>
     </>
-  );
-}
-
-function Pager({ meta, page, setPage, label }) {
-  return (
-    <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center">
-      <SoftTypography variant="caption" color="text">
-        Tổng {meta.totalItems || 0} {label}
-      </SoftTypography>
-      <Pagination
-        page={page}
-        count={meta.totalPages || 1}
-        color="primary"
-        onChange={(_, value) => setPage(value)}
-      />
-    </SoftBox>
   );
 }

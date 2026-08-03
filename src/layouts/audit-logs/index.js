@@ -6,7 +6,6 @@ import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import MenuItem from "@mui/material/MenuItem";
 import Modal from "@mui/material/Modal";
-import Pagination from "@mui/material/Pagination";
 import Select from "@mui/material/Select";
 import Tooltip from "@mui/material/Tooltip";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -14,9 +13,11 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
+import MobileLoadMore from "components/MobileLoadMore";
 import AuditLogService from "services/auditLogService";
 import EmployeeService from "services/employeeService";
 import { toast } from "react-toastify";
+import { mergeUniqueItems } from "utils/infiniteList";
 
 const getId = (value) => value?.id || value?._id;
 const rowsOf = (response) => {
@@ -224,7 +225,8 @@ export default function AuditLogs() {
     ])
       .then(([listResponse, summaryResponse]) => {
         if (!active) return;
-        setLogs(rowsOf(listResponse));
+        const nextLogs = rowsOf(listResponse);
+        setLogs((current) => (page > 1 ? mergeUniqueItems(current, nextLogs) : nextLogs));
         setMeta(listResponse.data?.meta || { totalPages: 1, total: 0 });
         setSummary(summaryResponse.data?.data || {});
       })
@@ -399,7 +401,7 @@ export default function AuditLogs() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading && (
+                  {loading && logs.length === 0 && (
                     <tr>
                       <td colSpan={9} style={{ padding: 35, textAlign: "center" }}>
                         Đang tải...
@@ -416,90 +418,81 @@ export default function AuditLogs() {
                       </td>
                     </tr>
                   )}
-                  {!loading &&
-                    logs.map((log) => {
-                      const code = statusCode(log);
-                      return (
-                        <tr key={getId(log)} style={{ borderBottom: "1px solid #eee" }}>
-                          <td style={{ padding: 11, fontSize: 12, whiteSpace: "nowrap" }}>
-                            {dateTime(log.createdAt || log.timestamp)}
-                          </td>
-                          <td style={{ padding: 11, fontSize: 13 }}>
-                            {actorName(log)}
-                            <br />
-                            <span style={{ color: "#6B7280" }}>
-                              {log.actor?.employeeCode ||
-                                log.employeeCode ||
-                                log.actor?.role ||
-                                log.role ||
-                                ""}
-                            </span>
-                          </td>
-                          <td style={{ padding: 11, fontSize: 12 }}>
-                            {actionLabel[log.action] || log.action || "—"}
-                          </td>
-                          <td style={{ padding: 11, fontSize: 12 }}>
-                            <b>{log.method}</b> {log.routeTemplate || log.url}
-                          </td>
-                          <td style={{ padding: 11, fontSize: 12 }}>
-                            {log.resource || "—"}
-                            <br />
-                            <span style={{ color: "#6B7280" }}>
-                              {log.entityCode || log.entityId || ""}
-                            </span>
-                          </td>
-                          <td style={{ padding: 11 }}>
-                            <span
-                              style={{
-                                padding: "3px 8px",
-                                borderRadius: 10,
-                                fontSize: 11,
-                                color: code >= 400 ? "#C62828" : "#2E7D32",
-                                background: code >= 400 ? "#FFEBEE" : "#E8F5E9",
-                              }}
-                            >
-                              {code || "—"}
-                            </span>
-                          </td>
-                          <td style={{ padding: 11, fontSize: 12 }}>
-                            {log.durationMs ?? log.duration ?? 0} ms
-                          </td>
-                          <td
+                  {logs.map((log) => {
+                    const code = statusCode(log);
+                    return (
+                      <tr key={getId(log)} style={{ borderBottom: "1px solid #eee" }}>
+                        <td style={{ padding: 11, fontSize: 12, whiteSpace: "nowrap" }}>
+                          {dateTime(log.createdAt || log.timestamp)}
+                        </td>
+                        <td style={{ padding: 11, fontSize: 13 }}>
+                          {actorName(log)}
+                          <br />
+                          <span style={{ color: "#6B7280" }}>
+                            {log.actor?.employeeCode ||
+                              log.employeeCode ||
+                              log.actor?.role ||
+                              log.role ||
+                              ""}
+                          </span>
+                        </td>
+                        <td style={{ padding: 11, fontSize: 12 }}>
+                          {actionLabel[log.action] || log.action || "—"}
+                        </td>
+                        <td style={{ padding: 11, fontSize: 12 }}>
+                          <b>{log.method}</b> {log.routeTemplate || log.url}
+                        </td>
+                        <td style={{ padding: 11, fontSize: 12 }}>
+                          {log.resource || "—"}
+                          <br />
+                          <span style={{ color: "#6B7280" }}>
+                            {log.entityCode || log.entityId || ""}
+                          </span>
+                        </td>
+                        <td style={{ padding: 11 }}>
+                          <span
                             style={{
-                              padding: 11,
+                              padding: "3px 8px",
+                              borderRadius: 10,
                               fontSize: 11,
-                              maxWidth: 150,
-                              wordBreak: "break-all",
+                              color: code >= 400 ? "#C62828" : "#2E7D32",
+                              background: code >= 400 ? "#FFEBEE" : "#E8F5E9",
                             }}
                           >
-                            {log.correlationId || "—"}
-                          </td>
-                          <td style={{ padding: 11 }}>
-                            <Tooltip title="Xem chi tiết">
-                              <IconButton size="small" onClick={() => setDetailId(getId(log))}>
-                                <Icon color="info">visibility</Icon>
-                              </IconButton>
-                            </Tooltip>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            {code || "—"}
+                          </span>
+                        </td>
+                        <td style={{ padding: 11, fontSize: 12 }}>
+                          {log.durationMs ?? log.duration ?? 0} ms
+                        </td>
+                        <td
+                          style={{
+                            padding: 11,
+                            fontSize: 11,
+                            maxWidth: 150,
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          {log.correlationId || "—"}
+                        </td>
+                        <td style={{ padding: 11 }}>
+                          <Tooltip title="Xem chi tiết">
+                            <IconButton size="small" onClick={() => setDetailId(getId(log))}>
+                              <Icon color="info">visibility</Icon>
+                            </IconButton>
+                          </Tooltip>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </SoftBox>
-            {meta.totalPages > 1 && (
-              <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center">
-                <SoftTypography variant="caption">
-                  Tổng {meta.total ?? meta.totalItems ?? 0} bản ghi
-                </SoftTypography>
-                <Pagination
-                  page={page}
-                  count={meta.totalPages}
-                  color="primary"
-                  onChange={(_, value) => setPage(value)}
-                />
-              </SoftBox>
-            )}
+            <MobileLoadMore
+              loading={loading}
+              hasMore={page < (meta.totalPages || 1)}
+              onLoadMore={() => setPage((value) => value + 1)}
+            />
           </SoftBox>
         </Card>
       </SoftBox>

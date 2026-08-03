@@ -10,6 +10,7 @@ import { CustomerService } from "services/crmService";
 import { DebtPaymentModal } from "layouts/khach-hang/debt-payment";
 import { toast } from "react-toastify";
 import MobileLoadMore from "components/MobileLoadMore";
+import { mergeUniqueItems } from "utils/infiniteList";
 
 const money = (value) => `${Number(value || 0).toLocaleString("vi-VN")} ₫`;
 const listOf = (response) => {
@@ -25,6 +26,7 @@ export default function ThuCongNo() {
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ totalPages: 1, totalItems: 0 });
   const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
@@ -42,23 +44,28 @@ export default function ThuCongNo() {
     })
       .then((response) => {
         const nextCustomers = listOf(response);
-        setCustomers((current) => (page > 1 ? [...current, ...nextCustomers] : nextCustomers));
+        setCustomers((current) =>
+          page > 1 ? mergeUniqueItems(current, nextCustomers) : nextCustomers
+        );
         setMeta(response.data?.meta || { totalPages: 1, totalItems: 0 });
       })
       .catch((error) => {
-        setCustomers([]);
+        if (page === 1) setCustomers([]);
         toast.error(error.response?.data?.message || "Không thể tải khách hàng công nợ");
       })
       .finally(() => setLoading(false));
   }, [debouncedSearch, page]);
-  useEffect(load, [load]);
+  useEffect(load, [load, refreshKey]);
 
   return (
     <DashboardLayout compactMobile>
       <StaffMobileHeader
         title="Thu công nợ"
         subtitle="Lập phiếu thu cho khách hàng"
-        onRefresh={load}
+        onRefresh={() => {
+          setPage(1);
+          setRefreshKey((value) => value + 1);
+        }}
       />
       <SoftBox minHeight="100vh" bgcolor="#f0f2f5" pb={10} pt={1}>
         <Card sx={{ borderRadius: 0, boxShadow: "none" }}>
@@ -153,7 +160,10 @@ export default function ThuCongNo() {
         open={Boolean(selected)}
         customer={selected}
         onClose={() => setSelected(null)}
-        onCreated={load}
+        onCreated={() => {
+          setPage(1);
+          setRefreshKey((value) => value + 1);
+        }}
         mobile
       />
     </DashboardLayout>

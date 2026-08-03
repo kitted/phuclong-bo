@@ -7,7 +7,6 @@ import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import MenuItem from "@mui/material/MenuItem";
 import Modal from "@mui/material/Modal";
-import Pagination from "@mui/material/Pagination";
 import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
 import Tooltip from "@mui/material/Tooltip";
@@ -17,7 +16,9 @@ import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
+import MobileLoadMore from "components/MobileLoadMore";
 import EmployeeService from "services/employeeService";
+import { mergeUniqueItems } from "utils/infiniteList";
 import { toast } from "react-toastify";
 import { AssignKpiModal, KpiProgressModal } from "./employee-kpi-dialogs";
 
@@ -198,9 +199,7 @@ function EmployeeForm({ open, employeeId, onClose, onSaved }) {
                 borderRadius={2}
                 bgcolor={form.canViewAllInvoices ? "#e8f5e9" : "#f8fafc"}
                 sx={{
-                  border: form.canViewAllInvoices
-                    ? "2px solid #66bb6a"
-                    : "1px solid #dfe3e8",
+                  border: form.canViewAllInvoices ? "2px solid #66bb6a" : "1px solid #dfe3e8",
                 }}
               >
                 <FormControlLabel
@@ -280,19 +279,22 @@ export default function NhanVien() {
       EmployeeService.getSummary(),
     ])
       .then(([listResponse, summaryResponse]) => {
-        setEmployees(Array.isArray(listResponse.data?.data) ? listResponse.data.data : []);
+        const nextEmployees = Array.isArray(listResponse.data?.data) ? listResponse.data.data : [];
+        setEmployees((current) =>
+          page > 1 ? mergeUniqueItems(current, nextEmployees) : nextEmployees
+        );
         setMeta(listResponse.data?.meta || { totalPages: 1, totalItems: 0 });
         setSummary(summaryResponse.data?.data || {});
       })
       .catch((error) => {
-        setEmployees([]);
+        if (page === 1) setEmployees([]);
         toast.error(error.response?.data?.message || "Không thể tải danh sách nhân viên");
       })
       .finally(() => setLoading(false));
   };
   useEffect(load, [page, debouncedSearch, status, refreshKey]);
-  const refresh = (firstPage = false) => {
-    if (firstPage) setPage(1);
+  const refresh = () => {
+    setPage(1);
     setRefreshKey((value) => value + 1);
   };
   const changeStatus = async (employee) => {
@@ -310,8 +312,7 @@ export default function NhanVien() {
     try {
       await EmployeeService.remove(getId(employee));
       toast.success("Đã xóa nhân viên");
-      if (employees.length === 1 && page > 1) setPage((value) => value - 1);
-      else refresh();
+      refresh();
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể xóa nhân viên");
     }
@@ -431,7 +432,7 @@ export default function NhanVien() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading && (
+                  {loading && employees.length === 0 && (
                     <tr>
                       <td colSpan={8} style={{ textAlign: "center", padding: 32 }}>
                         Đang tải...
@@ -448,132 +449,119 @@ export default function NhanVien() {
                       </td>
                     </tr>
                   )}
-                  {!loading &&
-                    employees.map((employee) => (
-                      <tr key={getId(employee)} style={{ borderBottom: "1px solid #eee" }}>
-                        <td style={{ padding: "10px 12px" }}>
-                          <SoftTypography variant="button" fontWeight="bold">
-                            {employee.fullName || "Chưa cập nhật"}
-                          </SoftTypography>
-                          <SoftTypography variant="caption" display="block" color="text">
-                            {employee.employeeCode || "—"}
-                          </SoftTypography>
-                        </td>
-                        <td style={{ padding: "10px 12px", fontSize: 13 }}>
-                          {employee.username}
-                          <br />
-                          <span style={{ color: "#6B7280" }}>Staff</span>
-                        </td>
-                        <td style={{ padding: "10px 12px", fontSize: 13 }}>
-                          {employee.phone || "—"}
-                          <br />
-                          <span style={{ color: "#6B7280" }}>{employee.email || "—"}</span>
-                        </td>
-                        <td style={{ padding: "10px 12px" }}>{statusBadge(employee.status)}</td>
-                        <td style={{ padding: "10px 12px" }}>
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 5,
-                              padding: "4px 9px",
-                              borderRadius: 12,
-                              whiteSpace: "nowrap",
-                              fontSize: 11,
-                              fontWeight: 600,
-                              color:
-                                employee.canViewAllInvoices ||
-                                employee.permissions?.viewAllInvoices
-                                  ? "#2E7D32"
-                                  : "#6B7280",
-                              background:
-                                employee.canViewAllInvoices ||
-                                employee.permissions?.viewAllInvoices
-                                  ? "#E8F5E9"
-                                  : "#F3F4F6",
+                  {employees.map((employee) => (
+                    <tr key={getId(employee)} style={{ borderBottom: "1px solid #eee" }}>
+                      <td style={{ padding: "10px 12px" }}>
+                        <SoftTypography variant="button" fontWeight="bold">
+                          {employee.fullName || "Chưa cập nhật"}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" display="block" color="text">
+                          {employee.employeeCode || "—"}
+                        </SoftTypography>
+                      </td>
+                      <td style={{ padding: "10px 12px", fontSize: 13 }}>
+                        {employee.username}
+                        <br />
+                        <span style={{ color: "#6B7280" }}>Staff</span>
+                      </td>
+                      <td style={{ padding: "10px 12px", fontSize: 13 }}>
+                        {employee.phone || "—"}
+                        <br />
+                        <span style={{ color: "#6B7280" }}>{employee.email || "—"}</span>
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>{statusBadge(employee.status)}</td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            padding: "4px 9px",
+                            borderRadius: 12,
+                            whiteSpace: "nowrap",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color:
+                              employee.canViewAllInvoices || employee.permissions?.viewAllInvoices
+                                ? "#2E7D32"
+                                : "#6B7280",
+                            background:
+                              employee.canViewAllInvoices || employee.permissions?.viewAllInvoices
+                                ? "#E8F5E9"
+                                : "#F3F4F6",
+                          }}
+                        >
+                          <Icon sx={{ fontSize: "15px !important" }}>
+                            {employee.canViewAllInvoices || employee.permissions?.viewAllInvoices
+                              ? "visibility"
+                              : "person"}
+                          </Icon>
+                          {employee.canViewAllInvoices || employee.permissions?.viewAllInvoices
+                            ? "Toàn công ty"
+                            : "Của bản thân"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 12px", fontSize: 13 }}>
+                        {employee.lastLoginAt
+                          ? new Date(employee.lastLoginAt).toLocaleString("vi-VN")
+                          : "Chưa đăng nhập"}
+                      </td>
+                      <td style={{ padding: "10px 12px", fontSize: 13 }}>
+                        {employee.createdAt
+                          ? new Date(employee.createdAt).toLocaleDateString("vi-VN")
+                          : "—"}
+                      </td>
+                      <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                        <Tooltip title="Giao KPI">
+                          <IconButton size="small" onClick={() => setAssignKpiEmployee(employee)}>
+                            <Icon sx={{ color: "#7B1FA2" }}>assignment_add</Icon>
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Xem tiến độ KPI">
+                          <IconButton size="small" onClick={() => setProgressEmployee(employee)}>
+                            <Icon sx={{ color: "#00897B" }}>analytics</Icon>
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Chỉnh sửa">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setSelectedId(getId(employee));
+                              setFormOpen(true);
                             }}
                           >
-                            <Icon sx={{ fontSize: "15px !important" }}>
-                              {employee.canViewAllInvoices ||
-                              employee.permissions?.viewAllInvoices
-                                ? "visibility"
-                                : "person"}
-                            </Icon>
-                            {employee.canViewAllInvoices ||
-                            employee.permissions?.viewAllInvoices
-                              ? "Toàn công ty"
-                              : "Của bản thân"}
-                          </span>
-                        </td>
-                        <td style={{ padding: "10px 12px", fontSize: 13 }}>
-                          {employee.lastLoginAt
-                            ? new Date(employee.lastLoginAt).toLocaleString("vi-VN")
-                            : "Chưa đăng nhập"}
-                        </td>
-                        <td style={{ padding: "10px 12px", fontSize: 13 }}>
-                          {employee.createdAt
-                            ? new Date(employee.createdAt).toLocaleDateString("vi-VN")
-                            : "—"}
-                        </td>
-                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                          <Tooltip title="Giao KPI">
-                            <IconButton size="small" onClick={() => setAssignKpiEmployee(employee)}>
-                              <Icon sx={{ color: "#7B1FA2" }}>assignment_add</Icon>
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Xem tiến độ KPI">
-                            <IconButton size="small" onClick={() => setProgressEmployee(employee)}>
-                              <Icon sx={{ color: "#00897B" }}>analytics</Icon>
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Chỉnh sửa">
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedId(getId(employee));
-                                setFormOpen(true);
-                              }}
+                            <Icon color="info">edit</Icon>
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip
+                          title={
+                            employee.status === "ACTIVE" ? "Khóa tài khoản" : "Mở khóa tài khoản"
+                          }
+                        >
+                          <IconButton size="small" onClick={() => changeStatus(employee)}>
+                            <Icon
+                              sx={{ color: employee.status === "ACTIVE" ? "#E65100" : "#2E7D32" }}
                             >
-                              <Icon color="info">edit</Icon>
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip
-                            title={
-                              employee.status === "ACTIVE" ? "Khóa tài khoản" : "Mở khóa tài khoản"
-                            }
-                          >
-                            <IconButton size="small" onClick={() => changeStatus(employee)}>
-                              <Icon
-                                sx={{ color: employee.status === "ACTIVE" ? "#E65100" : "#2E7D32" }}
-                              >
-                                {employee.status === "ACTIVE" ? "lock" : "lock_open"}
-                              </Icon>
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Xóa nhân viên">
-                            <IconButton size="small" onClick={() => remove(employee)}>
-                              <Icon sx={{ color: "#EF4444" }}>delete</Icon>
-                            </IconButton>
-                          </Tooltip>
-                        </td>
-                      </tr>
-                    ))}
+                              {employee.status === "ACTIVE" ? "lock" : "lock_open"}
+                            </Icon>
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Xóa nhân viên">
+                          <IconButton size="small" onClick={() => remove(employee)}>
+                            <Icon sx={{ color: "#EF4444" }}>delete</Icon>
+                          </IconButton>
+                        </Tooltip>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </SoftBox>
-            {meta.totalPages > 1 && (
-              <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center">
-                <SoftTypography variant="caption" color="text">
-                  Tổng {meta.totalItems} nhân viên
-                </SoftTypography>
-                <Pagination
-                  page={page}
-                  count={meta.totalPages}
-                  color="primary"
-                  onChange={(_, value) => setPage(value)}
-                />
-              </SoftBox>
-            )}
+            <MobileLoadMore
+              loading={loading}
+              hasMore={page < (meta.totalPages || 1)}
+              onLoadMore={() => setPage((value) => value + 1)}
+            />
           </SoftBox>
         </Card>
       </SoftBox>

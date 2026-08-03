@@ -4,7 +4,6 @@ import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import Modal from "@mui/material/Modal";
-import Pagination from "@mui/material/Pagination";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
@@ -16,9 +15,11 @@ import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
+import MobileLoadMore from "components/MobileLoadMore";
 import { CategoryService, ProductService } from "services/warehouseService";
 import { CustomerService, PromotionService, PRODUCT_TYPES } from "services/crmService";
 import { toast } from "react-toastify";
+import { mergeUniqueItems } from "utils/infiniteList";
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
@@ -1463,19 +1464,22 @@ export default function KhuyenMai() {
       PromotionService.getSummary(),
     ])
       .then(([listResponse, summaryResponse]) => {
-        setPromotions(listResponse.data?.data || []);
+        const nextPromotions = Array.isArray(listResponse.data?.data) ? listResponse.data.data : [];
+        setPromotions((current) =>
+          page > 1 ? mergeUniqueItems(current, nextPromotions) : nextPromotions
+        );
         setMeta(listResponse.data?.meta || { totalPages: 1, totalItems: 0 });
         setSummary(summaryResponse.data?.data || {});
       })
       .catch((error) => {
-        setPromotions([]);
+        if (page === 1) setPromotions([]);
         toast.error(error.response?.data?.message || "Không thể tải chương trình khuyến mãi");
       })
       .finally(() => setLoading(false));
   };
   useEffect(load, [page, debouncedSearch, status, type, refreshKey]);
-  const refresh = (firstPage = false) => {
-    if (firstPage) setPage(1);
+  const refresh = () => {
+    setPage(1);
     setRefreshKey((value) => value + 1);
   };
   const scopeLabel = (item) =>
@@ -1624,7 +1628,7 @@ export default function KhuyenMai() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading && (
+                  {loading && promotions.length === 0 && (
                     <tr>
                       <td colSpan={7} style={{ textAlign: "center", padding: 30 }}>
                         Đang tải...
@@ -1641,145 +1645,136 @@ export default function KhuyenMai() {
                       </td>
                     </tr>
                   )}
-                  {!loading &&
-                    promotions.map((item) => {
-                      const next = nextStatus(item);
-                      const canAssign =
-                        item.type === "VOUCHER" &&
-                        ["ACTIVE", "SCHEDULED"].includes(item.status) &&
-                        Number(item.activated) < Number(item.quantity);
-                      return (
-                        <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}>
-                          <td style={{ padding: 10 }}>
-                            <SoftTypography variant="button" fontWeight="bold">
-                              {item.name}
-                            </SoftTypography>
-                            <SoftTypography variant="caption" color="text" display="block">
-                              {item.code} ·{" "}
-                              {item.type === "VOUCHER"
-                                ? "Voucher"
-                                : item.type === "AUTO_DISCOUNT"
-                                ? "Tự động giảm giá"
-                                : item.type === "BUY_X_GET_Y"
-                                ? "Mua X tặng Y"
-                                : "Gói tặng quà"}
-                            </SoftTypography>
-                          </td>
-                          <td style={{ padding: 10, fontSize: 13, fontWeight: 600 }}>
-                            {isGiftPromotion(item.type)
-                              ? `Tặng ${(item.giftGroups || []).length} nhóm quà`
-                              : item.discountType === "PERCENT"
-                              ? `${item.discountValue}%${
-                                  item.maxDiscount ? ` · tối đa ${money(item.maxDiscount)}` : ""
-                                }`
-                              : money(item.discountValue)}
-                            {!isGiftPromotion(item.type) && (
-                              <>
-                                <br />
-                                <span style={{ fontSize: 11, color: "#6B7280" }}>
-                                  Đơn từ {money(item.minOrderValue)}
-                                </span>
-                              </>
-                            )}
-                          </td>
-                          <td style={{ padding: 10, fontSize: 13 }}>{scopeLabel(item)}</td>
-                          <td style={{ padding: 10, fontSize: 12 }}>
-                            {new Date(item.startAt).toLocaleString("vi-VN")}
-                            <br />→ {new Date(item.endAt).toLocaleString("vi-VN")}
-                          </td>
-                          <td style={{ padding: 10, fontSize: 13 }}>
-                            {item.activated || 0} / <b>{item.used || 0}</b>
-                            {item.type === "VOUCHER" && (
+                  {promotions.map((item) => {
+                    const next = nextStatus(item);
+                    const canAssign =
+                      item.type === "VOUCHER" &&
+                      ["ACTIVE", "SCHEDULED"].includes(item.status) &&
+                      Number(item.activated) < Number(item.quantity);
+                    return (
+                      <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}>
+                        <td style={{ padding: 10 }}>
+                          <SoftTypography variant="button" fontWeight="bold">
+                            {item.name}
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text" display="block">
+                            {item.code} ·{" "}
+                            {item.type === "VOUCHER"
+                              ? "Voucher"
+                              : item.type === "AUTO_DISCOUNT"
+                              ? "Tự động giảm giá"
+                              : item.type === "BUY_X_GET_Y"
+                              ? "Mua X tặng Y"
+                              : "Gói tặng quà"}
+                          </SoftTypography>
+                        </td>
+                        <td style={{ padding: 10, fontSize: 13, fontWeight: 600 }}>
+                          {isGiftPromotion(item.type)
+                            ? `Tặng ${(item.giftGroups || []).length} nhóm quà`
+                            : item.discountType === "PERCENT"
+                            ? `${item.discountValue}%${
+                                item.maxDiscount ? ` · tối đa ${money(item.maxDiscount)}` : ""
+                              }`
+                            : money(item.discountValue)}
+                          {!isGiftPromotion(item.type) && (
+                            <>
+                              <br />
                               <span style={{ fontSize: 11, color: "#6B7280" }}>
-                                {" "}
-                                / {item.quantity}
+                                Đơn từ {money(item.minOrderValue)}
                               </span>
-                            )}
-                          </td>
-                          <td style={{ padding: 10 }}>{pill(item.status)}</td>
-                          <td style={{ padding: 10, whiteSpace: "nowrap" }}>
-                            <Tooltip title="Hiệu quả và hóa đơn áp dụng">
-                              <IconButton onClick={() => setPerformancePromotion(item)}>
-                                <Icon sx={{ color: "#2E7D32" }}>analytics</Icon>
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Chỉnh sửa">
-                              <IconButton onClick={() => editPromotion(item)}>
-                                <Icon color="info">edit</Icon>
-                              </IconButton>
-                            </Tooltip>
-                            {item.type === "VOUCHER" && (
-                              <Tooltip
-                                title={
-                                  canAssign
-                                    ? "Cấp voucher cho khách"
-                                    : "Không thể cấp voucher lúc này"
-                                }
-                              >
-                                <span>
-                                  <IconButton
-                                    disabled={!canAssign}
-                                    onClick={() => setVoucherPromotion(item)}
-                                  >
-                                    <Icon sx={{ color: canAssign ? "#7B1FA2" : "#BDBDBD" }}>
-                                      confirmation_number
-                                    </Icon>
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                            )}
+                            </>
+                          )}
+                        </td>
+                        <td style={{ padding: 10, fontSize: 13 }}>{scopeLabel(item)}</td>
+                        <td style={{ padding: 10, fontSize: 12 }}>
+                          {new Date(item.startAt).toLocaleString("vi-VN")}
+                          <br />→ {new Date(item.endAt).toLocaleString("vi-VN")}
+                        </td>
+                        <td style={{ padding: 10, fontSize: 13 }}>
+                          {item.activated || 0} / <b>{item.used || 0}</b>
+                          {item.type === "VOUCHER" && (
+                            <span style={{ fontSize: 11, color: "#6B7280" }}>
+                              {" "}
+                              / {item.quantity}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: 10 }}>{pill(item.status)}</td>
+                        <td style={{ padding: 10, whiteSpace: "nowrap" }}>
+                          <Tooltip title="Hiệu quả và hóa đơn áp dụng">
+                            <IconButton onClick={() => setPerformancePromotion(item)}>
+                              <Icon sx={{ color: "#2E7D32" }}>analytics</Icon>
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Chỉnh sửa">
+                            <IconButton onClick={() => editPromotion(item)}>
+                              <Icon color="info">edit</Icon>
+                            </IconButton>
+                          </Tooltip>
+                          {item.type === "VOUCHER" && (
                             <Tooltip
                               title={
-                                next
-                                  ? next === "ACTIVE"
-                                    ? "Kích hoạt"
-                                    : next === "SCHEDULED"
-                                    ? "Lên lịch"
-                                    : "Tạm dừng"
-                                  : "Không thể đổi trạng thái"
+                                canAssign
+                                  ? "Cấp voucher cho khách"
+                                  : "Không thể cấp voucher lúc này"
                               }
                             >
                               <span>
-                                <IconButton disabled={!next} onClick={() => changeStatus(item)}>
-                                  <Icon
-                                    sx={{
-                                      color: !next
-                                        ? "#BDBDBD"
-                                        : item.status === "ACTIVE" ||
-                                          (item.status === "SCHEDULED" && next === "PAUSED")
-                                        ? "#E65100"
-                                        : "#2E7D32",
-                                    }}
-                                  >
-                                    {next === "PAUSED"
-                                      ? "pause_circle"
-                                      : next === "SCHEDULED"
-                                      ? "schedule"
-                                      : "play_circle"}
+                                <IconButton
+                                  disabled={!canAssign}
+                                  onClick={() => setVoucherPromotion(item)}
+                                >
+                                  <Icon sx={{ color: canAssign ? "#7B1FA2" : "#BDBDBD" }}>
+                                    confirmation_number
                                   </Icon>
                                 </IconButton>
                               </span>
                             </Tooltip>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          )}
+                          <Tooltip
+                            title={
+                              next
+                                ? next === "ACTIVE"
+                                  ? "Kích hoạt"
+                                  : next === "SCHEDULED"
+                                  ? "Lên lịch"
+                                  : "Tạm dừng"
+                                : "Không thể đổi trạng thái"
+                            }
+                          >
+                            <span>
+                              <IconButton disabled={!next} onClick={() => changeStatus(item)}>
+                                <Icon
+                                  sx={{
+                                    color: !next
+                                      ? "#BDBDBD"
+                                      : item.status === "ACTIVE" ||
+                                        (item.status === "SCHEDULED" && next === "PAUSED")
+                                      ? "#E65100"
+                                      : "#2E7D32",
+                                  }}
+                                >
+                                  {next === "PAUSED"
+                                    ? "pause_circle"
+                                    : next === "SCHEDULED"
+                                    ? "schedule"
+                                    : "play_circle"}
+                                </Icon>
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </SoftBox>
-            {meta.totalPages > 1 && (
-              <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center">
-                <SoftTypography variant="caption" color="text">
-                  Tổng {meta.totalItems} chương trình
-                </SoftTypography>
-                <Pagination
-                  page={page}
-                  count={meta.totalPages}
-                  color="primary"
-                  onChange={(_, value) => setPage(value)}
-                />
-              </SoftBox>
-            )}
+            <MobileLoadMore
+              loading={loading}
+              hasMore={page < (meta.totalPages || 1)}
+              onLoadMore={() => setPage((value) => value + 1)}
+            />
           </SoftBox>
         </Card>
       </SoftBox>

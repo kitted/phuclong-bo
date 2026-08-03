@@ -4,21 +4,20 @@ import { useMemo, useEffect, useState } from "react";
 import PropTypes from "prop-types";
 
 // react-table components
-import { useTable, usePagination, useGlobalFilter, useAsyncDebounce, useSortBy } from "react-table";
+import { useTable, useGlobalFilter, useAsyncDebounce, useSortBy } from "react-table";
 
 // @mui material components
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableContainer from "@mui/material/TableContainer";
 import TableRow from "@mui/material/TableRow";
-import Icon from "@mui/material/Icon";
 
 // Soft UI Dashboard PRO React components
 import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 import SoftSelect from "components/SoftSelect";
 import SoftInput from "components/SoftInput";
-import SoftPagination from "components/SoftPagination";
+import MobileLoadMore from "components/MobileLoadMore";
 
 // Soft UI Dashboard PRO React example components
 import DataTableHeadCell from "examples/Tables/DataTable/DataTableHeadCell";
@@ -26,26 +25,13 @@ import DataTableBodyCell from "examples/Tables/DataTable/DataTableBodyCell";
 import { Stack } from "@mui/material";
 import SoftDatePicker from "components/SoftDatePicker";
 
-function DataTable({
-  entriesPerPage,
-  canSearch,
-  showTotalEntries,
-  table,
-  pagination,
-  isSorted,
-  noEndBorder,
-}) {
+function DataTable({ entriesPerPage, canSearch, showTotalEntries, table, isSorted, noEndBorder }) {
   const defaultValue = entriesPerPage?.defaultValue ? entriesPerPage.defaultValue : 10;
   const entries = entriesPerPage?.entries ? entriesPerPage.entries : [5, 10, 15, 20, 25];
   const columns = useMemo(() => table.columns, [table]);
   const data = useMemo(() => table.rows, [table]);
 
-  const tableInstance = useTable(
-    { columns, data, initialState: { pageIndex: 0 } },
-    useGlobalFilter,
-    useSortBy,
-    usePagination
-  );
+  const tableInstance = useTable({ columns, data }, useGlobalFilter, useSortBy);
 
   const [startDate, setStartDate] = useState(new Date());
 
@@ -57,45 +43,18 @@ function DataTable({
     headerGroups,
     prepareRow,
     rows,
-    page,
-    pageOptions,
-    canPreviousPage,
-    canNextPage,
-    gotoPage,
-    nextPage,
-    previousPage,
-    setPageSize,
     setGlobalFilter,
-    state: { pageIndex, pageSize, globalFilter },
+    state: { globalFilter },
   } = tableInstance;
 
-  // Set the default value for the entries per page when component mounts
-  useEffect(() => setPageSize(defaultValue || 10), [defaultValue]);
+  const [batchSize, setBatchSize] = useState(defaultValue || 10);
+  const [visibleCount, setVisibleCount] = useState(defaultValue || 10);
 
-  // Set the entries per page value based on the select value
-  const setEntriesPerPage = ({ value }) => setPageSize(value);
-
-  // Render the paginations
-  const renderPagination = pageOptions.map((option) => (
-    <SoftPagination
-      item
-      key={option}
-      onClick={() => gotoPage(Number(option))}
-      active={pageIndex === option}
-    >
-      {option + 1}
-    </SoftPagination>
-  ));
-
-  // Handler for the input to set the pagination index
-  const handleInputPagination = ({ target: { value } }) =>
-    value > pageOptions.length || value < 0 ? gotoPage(0) : gotoPage(Number(value));
-
-  // Customized page options starting from 1
-  const customizedPageOptions = pageOptions.map((option) => option + 1);
-
-  // Setting value for the pagination input
-  const handleInputPaginationValue = ({ target: value }) => gotoPage(Number(value.value - 1));
+  const setEntriesPerPage = ({ value }) => {
+    const nextSize = Number(value) || 10;
+    setBatchSize(nextSize);
+    setVisibleCount(nextSize);
+  };
 
   // Search input value state
   const [search, setSearch] = useState(globalFilter);
@@ -103,7 +62,10 @@ function DataTable({
   // Search input state handle
   const onSearchChange = useAsyncDebounce((value) => {
     setGlobalFilter(value || undefined);
+    setVisibleCount(batchSize);
   }, 100);
+
+  useEffect(() => setVisibleCount(batchSize), [data, batchSize]);
 
   // A function that sets the sorted value for the table
   const setSortedValue = (column) => {
@@ -116,19 +78,9 @@ function DataTable({
     return sortedValue;
   };
 
-  // Setting the entries starting point
-  const entriesStart = pageIndex === 0 ? pageIndex + 1 : pageIndex * pageSize + 1;
-
-  // Setting the entries ending point
-  let entriesEnd;
-
-  if (pageIndex === 0) {
-    entriesEnd = pageSize;
-  } else if (pageIndex === pageOptions.length - 1) {
-    entriesEnd = rows.length;
-  } else {
-    entriesEnd = pageSize * (pageIndex + 1);
-  }
+  const visibleRows = rows.slice(0, visibleCount);
+  const entriesStart = visibleRows.length ? 1 : 0;
+  const entriesEnd = visibleRows.length;
 
   return (
     <>
@@ -240,7 +192,7 @@ function DataTable({
             })}
           </SoftBox>
           <TableBody {...getTableBodyProps()}>
-            {page.map((row, key) => {
+            {visibleRows.map((row, key) => {
               prepareRow(row);
               return (
                 <TableRow key={key} {...row.getRowProps()}>
@@ -265,7 +217,7 @@ function DataTable({
           flexDirection={{ xs: "column", sm: "row" }}
           justifyContent="space-between"
           alignItems={{ xs: "flex-start", sm: "center" }}
-          p={!showTotalEntries && pageOptions.length === 1 ? 0 : 3}
+          p={!showTotalEntries ? 0 : 3}
         >
           {showTotalEntries && (
             <SoftBox mb={{ xs: 3, sm: 0 }}>
@@ -274,35 +226,12 @@ function DataTable({
               </SoftTypography>
             </SoftBox>
           )}
-          {pageOptions.length > 1 && (
-            <SoftPagination
-              variant={pagination.variant ? pagination.variant : "gradient"}
-              color={pagination.color ? pagination.color : "info"}
-            >
-              {canPreviousPage && (
-                <SoftPagination item onClick={() => previousPage()}>
-                  <Icon sx={{ fontWeight: "bold" }}>chevron_left</Icon>
-                </SoftPagination>
-              )}
-              {renderPagination.length > 6 ? (
-                <SoftBox width="5rem" mx={1}>
-                  <SoftInput
-                    inputProps={{ type: "number", min: 1, max: customizedPageOptions.length }}
-                    value={customizedPageOptions[pageIndex]}
-                    onChange={(handleInputPagination, handleInputPaginationValue)}
-                  />
-                </SoftBox>
-              ) : (
-                renderPagination
-              )}
-              {canNextPage && (
-                <SoftPagination item onClick={() => nextPage()}>
-                  <Icon sx={{ fontWeight: "bold" }}>chevron_right</Icon>
-                </SoftPagination>
-              )}
-            </SoftPagination>
-          )}
         </SoftBox>
+        <MobileLoadMore
+          loading={false}
+          hasMore={visibleRows.length < rows.length}
+          onLoadMore={() => setVisibleCount((current) => current + batchSize)}
+        />
       </TableContainer>
     </>
   );

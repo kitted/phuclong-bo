@@ -8,7 +8,6 @@ import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import Modal from "@mui/material/Modal";
 import MenuItem from "@mui/material/MenuItem";
-import Pagination from "@mui/material/Pagination";
 import Radio from "@mui/material/Radio";
 import RadioGroup from "@mui/material/RadioGroup";
 import Tooltip from "@mui/material/Tooltip";
@@ -31,6 +30,7 @@ import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
 import { debtPaymentToInvoice, moneyInWords, printInvoice } from "utils/invoicePrint";
 import { downloadBlob } from "utils/excel";
+import { mergeUniqueItems } from "utils/infiniteList";
 import CustomerReturnModal, { InvoiceBusinessTypeSwitch } from "./customer-return-form";
 
 const money = (value = 0) =>
@@ -803,48 +803,47 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
   const overLimit = Boolean(
     debtLimitApplies && customer && debtLimit > 0 && projectedDebt > debtLimit
   );
-  const paymentModePresentation =
-    {
-      PAY_NOW: {
-        label: "Thanh toán hóa đơn",
-        description:
-          invoiceDebt > 0
-            ? `Khách trả ${money(paidAmount)} · Cộng công nợ mới ${money(invoiceDebt)}`
-            : `Khách thanh toán ${money(paidAmount)} cho hóa đơn hiện tại`,
-        icon: "payments",
-        color: "#2e7d32",
-        background: "#ecfdf3",
-      },
-      PAY_WITH_DEBT: {
-        label: "Thanh toán hóa đơn và trừ nợ cũ",
-        description: `Trả hóa đơn ${money(invoicePaidAmount)} · Trừ nợ cũ ${money(
-          previousDebtPaidAmount
-        )}`,
-        icon: "account_balance_wallet",
-        color: "#00897b",
-        background: "#e0f2f1",
-      },
-      DEBT: {
-        label: "Ghi nợ toàn bộ",
-        description: `Cộng ${money(grandTotal)} vào công nợ khách hàng`,
-        icon: "pending_actions",
-        color: "#ed6c02",
-        background: "#fff7ed",
-      },
-      DEBT_PAYMENT: {
-        label: "Thanh toán công nợ",
-        description: `Chỉ thu ${money(paidAmount)}, không xuất hàng hóa`,
-        icon: "price_check",
-        color: "#1565c0",
-        background: "#e3f2fd",
-      },
-    }[form.paymentMode] || {
-      label: "Chưa xác định",
-      description: "Nhập số tiền khách thanh toán để hệ thống tự ghi nhận",
-      icon: "info",
-      color: "#607d8b",
-      background: "#f5f7fa",
-    };
+  const paymentModePresentation = {
+    PAY_NOW: {
+      label: "Thanh toán hóa đơn",
+      description:
+        invoiceDebt > 0
+          ? `Khách trả ${money(paidAmount)} · Cộng công nợ mới ${money(invoiceDebt)}`
+          : `Khách thanh toán ${money(paidAmount)} cho hóa đơn hiện tại`,
+      icon: "payments",
+      color: "#2e7d32",
+      background: "#ecfdf3",
+    },
+    PAY_WITH_DEBT: {
+      label: "Thanh toán hóa đơn và trừ nợ cũ",
+      description: `Trả hóa đơn ${money(invoicePaidAmount)} · Trừ nợ cũ ${money(
+        previousDebtPaidAmount
+      )}`,
+      icon: "account_balance_wallet",
+      color: "#00897b",
+      background: "#e0f2f1",
+    },
+    DEBT: {
+      label: "Ghi nợ toàn bộ",
+      description: `Cộng ${money(grandTotal)} vào công nợ khách hàng`,
+      icon: "pending_actions",
+      color: "#ed6c02",
+      background: "#fff7ed",
+    },
+    DEBT_PAYMENT: {
+      label: "Thanh toán công nợ",
+      description: `Chỉ thu ${money(paidAmount)}, không xuất hàng hóa`,
+      icon: "price_check",
+      color: "#1565c0",
+      background: "#e3f2fd",
+    },
+  }[form.paymentMode] || {
+    label: "Chưa xác định",
+    description: "Nhập số tiền khách thanh toán để hệ thống tự ghi nhận",
+    icon: "info",
+    color: "#607d8b",
+    background: "#f5f7fa",
+  };
   useEffect(() => {
     if (!open) return;
     let paymentMode = "DEBT";
@@ -878,9 +877,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
         getId(line.productId) || line.productId || getId(line.product) || line.product?.productId;
       const linePrice = Number(line.price ?? line.unitPrice ?? line.sellPrice ?? 0);
       return (
-        lineProductId &&
-        String(lineProductId) === productId &&
-        linePrice === Number(expectedPrice)
+        lineProductId && String(lineProductId) === productId && linePrice === Number(expectedPrice)
       );
     });
   };
@@ -942,8 +939,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       return "Vui lòng nhập tên khách hàng mới";
     if (form.paymentMode === "DEBT" && !hasCustomerProfile)
       return "Hóa đơn ghi nợ bắt buộc có hồ sơ khách hàng";
-    if (paysExistingDebt && !customer)
-      return "Vui lòng chọn khách hàng để thanh toán công nợ cũ";
+    if (paysExistingDebt && !customer) return "Vui lòng chọn khách hàng để thanh toán công nợ cũ";
     if (paysExistingDebt && currentDebt <= 0) return "Khách hàng hiện không có công nợ cũ";
     if (paidAmount > maximumPaymentAmount)
       return paysExistingDebt
@@ -1238,12 +1234,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                 ["Khách thanh toán", paidAmount],
                 ["Còn nợ sau hóa đơn", projectedDebt],
               ].map(([label, value]) => (
-                <SoftBox
-                  key={label}
-                  display="flex"
-                  justifyContent="space-between"
-                  py={0.6}
-                >
+                <SoftBox key={label} display="flex" justifyContent="space-between" py={0.6}>
                   <SoftTypography variant="button">{label}</SoftTypography>
                   <SoftTypography
                     variant="button"
@@ -3764,12 +3755,7 @@ function InvoicePaperView({ invoice }) {
       </SoftBox>
 
       {invoiceNote && (
-        <SoftBox
-          mt={2}
-          p={1.5}
-          bgcolor="#fff8e1"
-          sx={{ border: "1px solid #d7c58f" }}
-        >
+        <SoftBox mt={2} p={1.5} bgcolor="#fff8e1" sx={{ border: "1px solid #d7c58f" }}>
           <SoftTypography
             component="p"
             fontFamily="inherit"
@@ -4044,6 +4030,7 @@ export default function HoaDon() {
     return dateValue(new Date(current.getFullYear(), current.getMonth() + 1, 0));
   });
   const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [meta, setMeta] = useState({ totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(false);
   const [exportingList, setExportingList] = useState(false);
@@ -4092,15 +4079,19 @@ export default function HoaDon() {
       .then(([listResponse, summaryResponse]) => {
         const nextInvoices = listOf(listResponse).map(normalizeInvoiceDocument).filter(Boolean);
         setInvoices((current) =>
-          isStaff && page > 1 ? [...current, ...nextInvoices] : nextInvoices
+          page > 1 ? mergeUniqueItems(current, nextInvoices) : nextInvoices
         );
         setMeta(listResponse.data?.meta || { totalPages: 1, total: 0 });
         setSummary(summaryResponse.data?.data || {});
       })
       .catch((error) => toast.error(errorMessage(error, "Không thể tải hóa đơn")))
       .finally(() => setLoading(false));
-  }, [filters, page, isStaff]);
-  useEffect(load, [load]);
+  }, [filters, page]);
+  useEffect(load, [load, refreshKey]);
+  const refreshList = () => {
+    setPage(1);
+    setRefreshKey((value) => value + 1);
+  };
   const exportInvoiceList = async () => {
     if (!selectedRange.from || !selectedRange.to) {
       toast.error("Vui lòng chọn đầy đủ từ ngày và đến ngày");
@@ -4143,9 +4134,7 @@ export default function HoaDon() {
         <StaffMobileHeader
           title="Hóa đơn"
           subtitle={
-            canViewAllCompanyInvoices
-              ? "Toàn bộ hóa đơn của công ty"
-              : "Lịch sử bán hàng của tôi"
+            canViewAllCompanyInvoices ? "Toàn bộ hóa đơn của công ty" : "Lịch sử bán hàng của tôi"
           }
           onRefresh={load}
         />
@@ -4354,7 +4343,9 @@ export default function HoaDon() {
                         value={Math.floor((Number(anchor.slice(5, 7)) - 1) / 3) + 1}
                         onChange={(event) => {
                           const startMonth = (Number(event.target.value) - 1) * 3 + 1;
-                          setAnchor(`${anchor.slice(0, 4)}-${String(startMonth).padStart(2, "0")}-01`);
+                          setAnchor(
+                            `${anchor.slice(0, 4)}-${String(startMonth).padStart(2, "0")}-01`
+                          );
                         }}
                       >
                         {[1, 2, 3, 4].map((quarter) => (
@@ -4501,12 +4492,7 @@ export default function HoaDon() {
                             {dateTime(invoice.createdAt || invoice.date)}
                           </SoftTypography>
                           {canViewAllCompanyInvoices && (
-                            <SoftTypography
-                              variant="caption"
-                              color="text"
-                              display="block"
-                              mt={0.2}
-                            >
+                            <SoftTypography variant="caption" color="text" display="block" mt={0.2}>
                               Nhân viên:{" "}
                               {invoice.salespersonName ||
                                 invoice.collectorName ||
@@ -4726,28 +4712,19 @@ export default function HoaDon() {
                 </tbody>
               </table>
             </SoftBox>
-            {isStaff && (
-              <MobileLoadMore
-                loading={loading}
-                hasMore={page < (meta.totalPages || 1)}
-                onLoadMore={() => setPage((value) => value + 1)}
-              />
-            )}
-            {!isStaff && meta.totalPages > 1 && (
-              <SoftBox mt={3} display="flex" justifyContent="space-between" alignItems="center">
-                <SoftTypography variant="caption">Tổng {meta.total || 0} hóa đơn</SoftTypography>
-                <Pagination
-                  page={page}
-                  count={meta.totalPages}
-                  color="primary"
-                  onChange={(_, value) => setPage(value)}
-                />
-              </SoftBox>
-            )}
+            <MobileLoadMore
+              loading={loading}
+              hasMore={page < (meta.totalPages || 1)}
+              onLoadMore={() => setPage((value) => value + 1)}
+            />
           </SoftBox>
         </Card>
       </SoftBox>
-      <CreateInvoiceModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={load} />
+      <CreateInvoiceModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={refreshList}
+      />
       <InvoiceDetail
         id={detailId}
         document={detailDocument}
@@ -4759,7 +4736,7 @@ export default function HoaDon() {
         isAdmin={!isStaff}
         onReversed={() => {
           setDetailId(null);
-          load();
+          refreshList();
         }}
       />
     </DashboardLayout>

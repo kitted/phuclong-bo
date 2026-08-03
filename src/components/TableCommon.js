@@ -1,19 +1,11 @@
 /* eslint-disable react/prop-types */
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import {
-  Pagination,
-  PaginationItem,
-  Table,
-  TableBody,
-  TableContainer,
-  TableRow,
-} from "@mui/material";
+import { Table, TableBody, TableContainer, TableRow } from "@mui/material";
 import DataTableBodyCell from "examples/Tables/DataTable/DataTableBodyCell";
 import DataTableHeadCell from "examples/Tables/DataTable/DataTableHeadCell";
 import { useEffect, useRef, useState } from "react";
 import SoftBox from "./SoftBox";
 import SoftTypography from "./SoftTypography";
+import MobileLoadMore from "./MobileLoadMore";
 export default function TableCommon({
   loading,
   paginationData,
@@ -22,36 +14,20 @@ export default function TableCommon({
   noEndBorder,
   tableInstance,
 }) {
-  const {
-    getTableProps,
-    getTableBodyProps,
-    headerGroups,
-    prepareRow,
-    rows,
-    page,
-    setPageSize,
-    state: { pageIndex, pageSize },
-  } = tableInstance;
+  const { getTableProps, getTableBodyProps, headerGroups, prepareRow, rows, setPageSize } =
+    tableInstance;
 
   const [totalPage, setTotalPage] = useState(0);
   const containerRef = useRef();
 
   useEffect(() => {
     setPageSize(paginationData.size);
-    // setPaginationData((prev) => ({ ...prev, size: 10 }));
-  }, []);
+  }, [paginationData.size, setPageSize]);
 
   useEffect(() => {
     const totalPage = Math.ceil(paginationData?.count / paginationData?.size);
     setTotalPage(totalPage);
   }, [paginationData.count, paginationData.size]);
-
-  let countButton = [];
-  if (paginationData) {
-    for (let i = 0; i < totalPage; i++) {
-      countButton.push(i);
-    }
-  }
 
   const setSortedValue = (column) => {
     let sortedValue;
@@ -63,18 +39,9 @@ export default function TableCommon({
     return sortedValue;
   };
 
-  let entriesEnd;
-
-  if (pageIndex === 0) {
-    entriesEnd = pageSize;
-  } else if (pageIndex === countButton.length - 1) {
-    entriesEnd = rows.length;
-  } else {
-    entriesEnd = pageSize * (pageIndex + 1);
-  }
   return (
     <TableContainer sx={{ boxShadow: "none" }} ref={containerRef}>
-      {loading ? (
+      {loading && rows.length === 0 ? (
         <SoftBox
           display="flex"
           justifyContent="center"
@@ -134,7 +101,7 @@ export default function TableCommon({
               })}
             </SoftBox>
             <TableBody {...getTableBodyProps()}>
-              {page.map((row, key) => {
+              {rows.map((row, key) => {
                 prepareRow(row);
                 return (
                   <TableRow key={key} {...row.getRowProps()}>
@@ -171,24 +138,17 @@ export default function TableCommon({
             / {paginationData?.count}
           </SoftTypography>
         </SoftBox>
-        {countButton.length > 1 && (
-          <Pagination
-            count={countButton.length}
-            color="secondary"
-            page={paginationData.page}
-            onChange={(e, value) => setPaginationData((prev) => ({ ...prev, page: value }))}
-            renderItem={(item) => (
-              <PaginationItem
-                slots={{
-                  previous: ArrowBackIcon,
-                  next: ArrowForwardIcon,
-                }}
-                {...item}
-              />
-            )}
-          />
-        )}
       </SoftBox>
+      <MobileLoadMore
+        loading={loading}
+        hasMore={Number(paginationData?.page || 1) < totalPage}
+        onLoadMore={() =>
+          setPaginationData((current) => ({
+            ...current,
+            page: Number(current.page || 1) + 1,
+          }))
+        }
+      />
     </TableContainer>
   );
 }

@@ -2,15 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
 import SoftBox from "components/SoftBox";
-import SoftButton from "components/SoftButton";
+import MobileLoadMore from "components/MobileLoadMore";
+import { mergeUniqueItems } from "utils/infiniteList";
 import SoftTypography from "components/SoftTypography";
 import { CustomerService } from "services/crmService";
 import { toast } from "react-toastify";
 
 const money = (value) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(
-    Number(value) || 0
-  );
+  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
 
 const dateTime = (value) =>
   value
@@ -111,14 +110,13 @@ export default function CustomerDebtHistory({ customerId, refreshKey = 0 }) {
         const historyRows = Array.isArray(historyResponse.data?.data)
           ? historyResponse.data.data
           : [];
-        setRows((current) => (page === 1 ? historyRows : [...current, ...historyRows]));
+        setRows((current) => (page === 1 ? historyRows : mergeUniqueItems(current, historyRows)));
         setSummary(historyResponse.data?.summary || {});
         setMeta(historyResponse.data?.meta || { totalPages: 1 });
         setChart(Array.isArray(chartResponse.data?.data) ? chartResponse.data.data : []);
       })
       .catch((error) => {
-        if (active)
-          toast.error(error.response?.data?.message || "Không thể tải lịch sử công nợ");
+        if (active) toast.error(error.response?.data?.message || "Không thể tải lịch sử công nợ");
       })
       .finally(() => active && setLoading(false));
     return () => {
@@ -134,7 +132,10 @@ export default function CustomerDebtHistory({ customerId, refreshKey = 0 }) {
           ["Hạn mức hiện tại", summary.currentDebtLimit, "#ed6c02"],
           ["Công nợ cao nhất", summary.highestDebt, "#1877f2"],
         ].map(([label, value, color]) => (
-          <Card key={label} sx={{ minWidth: 190, flex: 1, boxShadow: "none", border: "1px solid #e4e6eb" }}>
+          <Card
+            key={label}
+            sx={{ minWidth: 190, flex: 1, boxShadow: "none", border: "1px solid #e4e6eb" }}
+          >
             <SoftBox p={1.5}>
               <SoftTypography variant="caption" color="text">
                 {label}
@@ -197,7 +198,9 @@ export default function CustomerDebtHistory({ customerId, refreshKey = 0 }) {
                 </SoftTypography>
                 {(item.referenceCode || item.referenceId || item.note) && (
                   <SoftTypography variant="caption" color="text" display="block">
-                    {[item.referenceCode || item.referenceId, item.note].filter(Boolean).join(" · ")}
+                    {[item.referenceCode || item.referenceId, item.note]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </SoftTypography>
                 )}
               </SoftBox>
@@ -209,17 +212,11 @@ export default function CustomerDebtHistory({ customerId, refreshKey = 0 }) {
             Chưa có lịch sử công nợ
           </SoftTypography>
         )}
-        {page < (meta.totalPages || 1) && (
-          <SoftButton
-            color="info"
-            variant="outlined"
-            fullWidth
-            disabled={loading}
-            onClick={() => setPage((value) => value + 1)}
-          >
-            {loading ? "Đang tải..." : "Xem thêm"}
-          </SoftButton>
-        )}
+        <MobileLoadMore
+          loading={loading}
+          hasMore={page < (meta.totalPages || 1)}
+          onLoadMore={() => setPage((value) => value + 1)}
+        />
       </SoftBox>
     </SoftBox>
   );

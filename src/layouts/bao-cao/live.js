@@ -4,7 +4,6 @@ import FormControl from "@mui/material/FormControl";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
 import MenuItem from "@mui/material/MenuItem";
-import Pagination from "@mui/material/Pagination";
 import Select from "@mui/material/Select";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
@@ -12,9 +11,11 @@ import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
+import MobileLoadMore from "components/MobileLoadMore";
 import { ReportsService } from "services/analyticsService";
 import { downloadBlob } from "utils/excel";
 import { toast } from "react-toastify";
+import { mergeUniqueItems } from "utils/infiniteList";
 import { Bar, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -335,6 +336,7 @@ export default function ReportsLive() {
   const [trend, setTrend] = useState([]);
   const [report, setReport] = useState({});
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [customerPurchaseStatus, setCustomerPurchaseStatus] = useState("ALL");
   const [customerSearchInput, setCustomerSearchInput] = useState("");
@@ -380,7 +382,9 @@ export default function ReportsLive() {
   useEffect(() => {
     if (params.period === "CUSTOM" && (!params.from || !params.to)) return;
     let active = true;
-    setLoading(true);
+    const appendingCustomers = tab === "CUSTOMERS" && customerPage > 1;
+    if (appendingCustomers) setLoadingMore(true);
+    else setLoading(true);
     Promise.all([
       ReportsService.overview(params),
       ReportsService.salesTrend(params),
@@ -391,16 +395,31 @@ export default function ReportsLive() {
         setOverview(overviewResponse.data?.data || {});
         setTrend(trendResponse.data?.data || []);
         const body = reportResponse.data || {};
-        setReport(body.data || body);
+        const nextReport = body.data || body;
+        setReport((current) => {
+          if (!appendingCustomers) return nextReport;
+          const currentRows = Array.isArray(current?.data) ? current.data : [];
+          const nextRows = Array.isArray(nextReport?.data) ? nextReport.data : [];
+          return {
+            ...nextReport,
+            data: mergeUniqueItems(currentRows, nextRows, (item, index) =>
+              String(item?.customerId || item?.id || item?._id || item?.customerCode || index)
+            ),
+          };
+        });
       })
       .catch(
         (error) => active && toast.error(error.response?.data?.message || "Không thể tải báo cáo")
       )
-      .finally(() => active && setLoading(false));
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+        setLoadingMore(false);
+      });
     return () => {
       active = false;
     };
-  }, [params, reportParams, tab]);
+  }, [params, reportParams, tab, customerPage]);
   const changePeriod = (nextPeriod) => {
     if (nextPeriod === "CUSTOM" && (!custom.from || !custom.to)) {
       setCustom(monthRange(anchor));
@@ -843,16 +862,12 @@ export default function ReportsLive() {
               ) : (
                 <GenericTable rows={detailRows} />
               )}
-              {tab === "CUSTOMERS" && Number(customerMeta.totalPages || 0) > 1 && (
-                <SoftBox mt={2.5} display="flex" justifyContent="center">
-                  <Pagination
-                    page={Number(customerMeta.page || customerPage)}
-                    count={Number(customerMeta.totalPages || 1)}
-                    onChange={(_, value) => setCustomerPage(value)}
-                    color="primary"
-                    shape="rounded"
-                  />
-                </SoftBox>
+              {tab === "CUSTOMERS" && (
+                <MobileLoadMore
+                  loading={loadingMore}
+                  hasMore={customerPage < Number(customerMeta.totalPages || 1)}
+                  onLoadMore={() => setCustomerPage((value) => value + 1)}
+                />
               )}
             </SoftBox>
           </SoftBox>

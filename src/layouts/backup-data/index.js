@@ -6,15 +6,16 @@ import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import Modal from "@mui/material/Modal";
-import Pagination from "@mui/material/Pagination";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
+import MobileLoadMore from "components/MobileLoadMore";
 import BackupService from "services/backupService";
 import { toast } from "react-toastify";
+import { mergeUniqueItems } from "utils/infiniteList";
 
 const MAX_BACKUP_SIZE = 512 * 1024 * 1024;
 const CONFIRMATION_TEXT = "KHOI PHUC DU LIEU";
@@ -132,7 +133,7 @@ export default function BackupData() {
       .then((response) => {
         if (!active) return;
         const rows = Array.isArray(response?.data?.data) ? response.data.data : [];
-        setSnapshots(rows);
+        setSnapshots((current) => (snapshotPage > 1 ? mergeUniqueItems(current, rows) : rows));
         setSnapshotMeta({
           page: response?.data?.meta?.page || snapshotPage,
           total: response?.data?.meta?.total || 0,
@@ -141,7 +142,7 @@ export default function BackupData() {
       })
       .catch((error) => {
         if (!active) return;
-        setSnapshots([]);
+        if (snapshotPage === 1) setSnapshots([]);
         toast.error(errorMessage(error, "Không thể tải danh sách bản sao hệ thống"));
       })
       .finally(() => active && setSnapshotsLoading(false));
@@ -180,7 +181,10 @@ export default function BackupData() {
     setCurrentPassword("");
   };
 
-  const refreshSnapshots = () => setSnapshotRefreshKey((value) => value + 1);
+  const refreshSnapshots = () => {
+    setSnapshotPage(1);
+    setSnapshotRefreshKey((value) => value + 1);
+  };
 
   const createSnapshot = async () => {
     if (!snapshotName.trim()) {
@@ -250,8 +254,7 @@ export default function BackupData() {
     try {
       setSnapshotDeleting(String(getId(snapshot)));
       await BackupService.deleteSnapshot(getId(snapshot));
-      if (snapshots.length === 1 && snapshotPage > 1) setSnapshotPage((value) => value - 1);
-      else refreshSnapshots();
+      refreshSnapshots();
       toast.success("Đã xóa bản sao hệ thống");
     } catch (error) {
       toast.error(errorMessage(error, "Không thể xóa bản sao"));
@@ -852,17 +855,11 @@ export default function BackupData() {
                     </SoftBox>
                   )}
 
-                  {(snapshotMeta.totalPages || 1) > 1 && (
-                    <SoftBox display="flex" justifyContent="center" mt={1.5}>
-                      <Pagination
-                        page={snapshotPage}
-                        count={snapshotMeta.totalPages || 1}
-                        onChange={(_, value) => setSnapshotPage(value)}
-                        color="primary"
-                        size="small"
-                      />
-                    </SoftBox>
-                  )}
+                  <MobileLoadMore
+                    loading={snapshotsLoading}
+                    hasMore={snapshotPage < (snapshotMeta.totalPages || 1)}
+                    onLoadMore={() => setSnapshotPage((value) => value + 1)}
+                  />
                 </SoftBox>
               </Card>
             </Grid>
