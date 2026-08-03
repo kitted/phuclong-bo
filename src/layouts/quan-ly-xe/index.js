@@ -9,8 +9,6 @@ import MenuItem from "@mui/material/MenuItem";
 import Modal from "@mui/material/Modal";
 import Pagination from "@mui/material/Pagination";
 import Select from "@mui/material/Select";
-import Tab from "@mui/material/Tab";
-import Tabs from "@mui/material/Tabs";
 import Tooltip from "@mui/material/Tooltip";
 import TextField from "@mui/material/TextField";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -94,6 +92,53 @@ const date = (value) =>
         hour12: false,
       })
     : "—";
+function SegmentedTabs({ value, onChange, items, fullWidth = false }) {
+  return (
+    <SoftBox
+      display="flex"
+      gap={0.75}
+      p={0.5}
+      mb={2}
+      borderRadius={2}
+      bgcolor="#eef2f6"
+      sx={{ overflowX: "auto" }}
+    >
+      {items.map((item, index) => {
+        const selected = value === index;
+        return (
+          <SoftBox
+            key={item.label}
+            component="button"
+            type="button"
+            onClick={() => onChange(index)}
+            minHeight={44}
+            px={1.5}
+            borderRadius={1.5}
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            gap={0.75}
+            flex={fullWidth ? "1 0 0" : "0 0 auto"}
+            bgcolor={selected ? "#fff" : "transparent"}
+            sx={{
+              border: 0,
+              color: selected ? "#1565c0" : "#67748e",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+              boxShadow: selected ? "0 1px 4px rgba(52, 71, 103, 0.12)" : "none",
+            }}
+          >
+            {item.icon && <Icon sx={{ fontSize: 19 }}>{item.icon}</Icon>}
+            {item.label}
+          </SoftBox>
+        );
+      })}
+    </SoftBox>
+  );
+}
 const vietnamDateKey = (value) => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "";
@@ -1173,7 +1218,9 @@ function TruckInventoryModal({ truck, onClose }) {
           .filter((item) => {
             const inRange = (value) => {
               const day = vietnamDateKey(value);
-              return Boolean(day) && (!range.from || day >= range.from) && (!range.to || day <= range.to);
+              return (
+                Boolean(day) && (!range.from || day >= range.from) && (!range.to || day <= range.to)
+              );
             };
             return inRange(item.createdAt || item.date) || inRange(item.reversedAt);
           });
@@ -1215,7 +1262,7 @@ function TruckInventoryModal({ truck, onClose }) {
                     getId(item.productId) ||
                     getId(item.product) ||
                     (typeof item.productId === "string" ? item.productId : null)
-                  )
+                )
               ),
               ...customerReturns.flatMap((customerReturn) =>
                 (Array.isArray(customerReturn.items) ? customerReturn.items : [])
@@ -1312,9 +1359,7 @@ function TruckInventoryModal({ truck, onClose }) {
           (Array.isArray(invoice.items) ? invoice.items : []).forEach(rememberProduct)
         );
         customerReturns.forEach((customerReturn) =>
-          (Array.isArray(customerReturn.items) ? customerReturn.items : []).forEach(
-            rememberProduct
-          )
+          (Array.isArray(customerReturn.items) ? customerReturn.items : []).forEach(rememberProduct)
         );
         const reversalGroups = new Map();
         movements
@@ -1379,7 +1424,9 @@ function TruckInventoryModal({ truck, onClose }) {
         });
         const isInSelectedRange = (value) => {
           const day = vietnamDateKey(value);
-          return Boolean(day) && (!range.from || day >= range.from) && (!range.to || day <= range.to);
+          return (
+            Boolean(day) && (!range.from || day >= range.from) && (!range.to || day <= range.to)
+          );
         };
         const movementForReturnItem = (customerReturn, item, movementType) =>
           movements.find(
@@ -1436,15 +1483,13 @@ function TruckInventoryModal({ truck, onClose }) {
           return events;
         });
         if (!active) return;
-        const sorted = [
-          ...withInventorySnapshots,
-          ...reversalEvents,
-          ...customerReturnEvents,
-        ].sort((left, right) => {
-          const leftTime = new Date(left.createdAt || left.date || 0).getTime();
-          const rightTime = new Date(right.createdAt || right.date || 0).getTime();
-          return salesSort === "asc" ? leftTime - rightTime : rightTime - leftTime;
-        });
+        const sorted = [...withInventorySnapshots, ...reversalEvents, ...customerReturnEvents].sort(
+          (left, right) => {
+            const leftTime = new Date(left.createdAt || left.date || 0).getTime();
+            const rightTime = new Date(right.createdAt || right.date || 0).getTime();
+            return salesSort === "asc" ? leftTime - rightTime : rightTime - leftTime;
+          }
+        );
         setSalesInvoices(sorted);
       })
       .catch((error) => {
@@ -1677,31 +1722,15 @@ function TruckInventoryModal({ truck, onClose }) {
             </Grid>
           </SoftBox>
 
-          <Tabs
+          <SegmentedTabs
             value={detailTab}
-            onChange={(_, value) => setDetailTab(value)}
-            variant="fullWidth"
-            sx={{
-              mb: 2,
-              bgcolor: "#eef2f6",
-              borderRadius: 2,
-              p: 0.5,
-              "& .MuiTab-root": {
-                minHeight: 44,
-                borderRadius: 1.5,
-                fontWeight: 700,
-                textTransform: "none",
-              },
-              "& .Mui-selected": { bgcolor: "#fff", color: "#1565c0" },
-            }}
-          >
-            <Tab icon={<Icon>inventory_2</Icon>} iconPosition="start" label="Hàng hiện có" />
-            <Tab
-              icon={<Icon>receipt_long</Icon>}
-              iconPosition="start"
-              label="Lịch sử bán / hoàn"
-            />
-          </Tabs>
+            onChange={setDetailTab}
+            fullWidth
+            items={[
+              { icon: "inventory_2", label: "Hàng hiện có" },
+              { icon: "receipt_long", label: "Lịch sử bán / hoàn" },
+            ]}
+          />
 
           <SoftBox display={detailTab === 0 ? "block" : "none"}>
             <SoftBox
@@ -2020,11 +2049,9 @@ function TruckInventoryModal({ truck, onClose }) {
                       salesInvoices
                         .filter(
                           (invoice) =>
-                            ![
-                              "REVERSAL",
-                              "CUSTOMER_RETURN",
-                              "CUSTOMER_RETURN_REVERSAL",
-                            ].includes(invoice.eventType)
+                            !["REVERSAL", "CUSTOMER_RETURN", "CUSTOMER_RETURN_REVERSAL"].includes(
+                              invoice.eventType
+                            )
                         )
                         .reduce(
                           (sum, invoice) =>
@@ -2103,8 +2130,7 @@ function TruckInventoryModal({ truck, onClose }) {
                   const items = Array.isArray(invoice.items) ? invoice.items : [];
                   const isInvoiceReversal = invoice.eventType === "REVERSAL";
                   const isCustomerReturn = invoice.eventType === "CUSTOMER_RETURN";
-                  const isCustomerReturnReversal =
-                    invoice.eventType === "CUSTOMER_RETURN_REVERSAL";
+                  const isCustomerReturnReversal = invoice.eventType === "CUSTOMER_RETURN_REVERSAL";
                   const isInbound = isInvoiceReversal || isCustomerReturn;
                   const soldQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
                   return (
@@ -2124,11 +2150,7 @@ function TruckInventoryModal({ truck, onClose }) {
                         alignItems="flex-start"
                         gap={1}
                         bgcolor={
-                          isInbound
-                            ? "#f1f8f3"
-                            : isCustomerReturnReversal
-                            ? "#fff3f3"
-                            : "#f8fbff"
+                          isInbound ? "#f1f8f3" : isCustomerReturnReversal ? "#fff3f3" : "#f8fbff"
                         }
                         sx={{ borderBottom: "1px solid #e5eaf0" }}
                       >
@@ -2234,9 +2256,7 @@ function TruckInventoryModal({ truck, onClose }) {
                                     width={34}
                                     height={34}
                                     borderRadius="50%"
-                                    bgcolor={
-                                      isInbound ? "#e8f5e9" : isGift ? "#fff3e0" : "#e8f5e9"
-                                    }
+                                    bgcolor={isInbound ? "#e8f5e9" : isGift ? "#fff3e0" : "#e8f5e9"}
                                     color={isInbound ? "#2e7d32" : isGift ? "#ef6c00" : "#2e7d32"}
                                     display="flex"
                                     alignItems="center"
@@ -2683,17 +2703,17 @@ export default function QuanLyXe() {
                   </SoftButton>
                 ))}
             </SoftBox>
-            <Tabs
+            <SegmentedTabs
               value={tab}
-              onChange={(_, value) => {
+              onChange={(value) => {
                 setTab(value);
                 setSearch("");
               }}
-              sx={{ mt: 2, mb: 2 }}
-            >
-              <Tab label="Danh sách xe" />
-              <Tab label="Lịch sử điều chuyển" />
-            </Tabs>
+              items={[
+                { icon: "local_shipping", label: "Danh sách xe" },
+                { icon: "swap_horiz", label: "Lịch sử điều chuyển" },
+              ]}
+            />
             <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
               <SoftBox sx={{ flex: 1, minWidth: 240 }}>
                 <SoftInput

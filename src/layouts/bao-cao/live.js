@@ -4,9 +4,8 @@ import FormControl from "@mui/material/FormControl";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
 import MenuItem from "@mui/material/MenuItem";
+import Pagination from "@mui/material/Pagination";
 import Select from "@mui/material/Select";
-import Tab from "@mui/material/Tab";
-import Tabs from "@mui/material/Tabs";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
@@ -68,6 +67,15 @@ const labels = {
   totalCustomers: "Tổng khách",
   newCustomers: "Khách mới",
   returningCustomers: "Khách quay lại",
+  customersWithInvoices: "Khách có mua hàng",
+  customersWithoutInvoices: "Khách không mua hàng",
+  customerCode: "Mã khách hàng",
+  customerName: "Tên khách hàng",
+  phone: "Số điện thoại",
+  purchaseStatus: "Tình trạng mua hàng",
+  purchaseAmount: "Tiền hàng đã mua",
+  debtAddedAmount: "Công nợ cộng thêm",
+  cashPaidAmount: "Tiền mặt đã trả",
   activePrograms: "CTKM đang chạy",
   activeActivationCodes: "Mã kích hoạt",
   promotionRevenue: "Doanh thu khuyến mãi",
@@ -86,6 +94,27 @@ const format = (key, value) => {
       maximumFractionDigits: 0,
     }).format(Number(raw) || 0);
   return Number(raw || 0).toLocaleString("vi-VN");
+};
+const shortDate = (value) =>
+  value
+    ? new Date(value).toLocaleDateString("vi-VN", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "—";
+const monthRange = (anchorValue) => {
+  const [year, month] = String(anchorValue || "")
+    .slice(0, 7)
+    .split("-")
+    .map(Number);
+  if (!year || !month) return { from: "", to: "" };
+  const lastDay = new Date(year, month, 0).getDate();
+  return {
+    from: `${year}-${String(month).padStart(2, "0")}-01`,
+    to: `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
+  };
 };
 const endpointByTab = {
   SALES: "sales",
@@ -108,6 +137,17 @@ const tabLabels = {
   CUSTOMERS: "Khách hàng",
   PROMOTIONS: "Khuyến mãi",
   EMPLOYEES: "Nhân viên",
+};
+const tabIcons = {
+  SALES: "paid",
+  PAYMENTS: "payments",
+  DEBT: "account_balance_wallet",
+  PRODUCTS: "inventory_2",
+  INVENTORY: "warehouse",
+  TRUCKS: "local_shipping",
+  CUSTOMERS: "groups",
+  PROMOTIONS: "redeem",
+  EMPLOYEES: "badge",
 };
 const chartOptions = {
   responsive: true,
@@ -198,6 +238,93 @@ function GenericTable({ rows }) {
   );
 }
 
+function CustomerActivityTable({ rows = [] }) {
+  if (!rows.length)
+    return (
+      <SoftBox py={5} textAlign="center">
+        <Icon sx={{ color: "#b0bec5", fontSize: 44 }}>groups</Icon>
+        <SoftTypography variant="button" color="text" display="block" mt={1}>
+          Không có khách hàng phù hợp với bộ lọc.
+        </SoftTypography>
+      </SoftBox>
+    );
+
+  return (
+    <SoftBox sx={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", minWidth: 980, borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ background: "#F4F7FB" }}>
+            {[
+              "STT",
+              "Khách hàng",
+              "Tình trạng",
+              "Số hóa đơn",
+              "Tiền hàng đã mua",
+              "Công nợ cộng thêm",
+              "Tiền mặt đã trả",
+            ].map((label) => (
+              <th key={label} style={{ padding: "12px 10px", textAlign: "left", fontSize: 12 }}>
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => {
+            const purchased =
+              row.hasPurchased === true ||
+              row.purchaseStatus === "PURCHASED" ||
+              Number(row.invoiceCount || 0) > 0;
+            return (
+              <tr
+                key={row.customerId || row.id || `${row.customerCode || "customer"}-${index}`}
+                style={{ borderBottom: "1px solid #e9edf2" }}
+              >
+                <td style={{ padding: 12, fontSize: 13 }}>{row.rowNumber || index + 1}</td>
+                <td style={{ padding: 12, minWidth: 270 }}>
+                  <SoftTypography variant="button" fontWeight="bold" display="block">
+                    {[row.customerCode || "Chưa có mã", row.customerName || row.name]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </SoftTypography>
+                  <SoftTypography variant="caption" color="text">
+                    {row.phone || row.customerPhone || "Chưa có số điện thoại"}
+                  </SoftTypography>
+                </td>
+                <td style={{ padding: 12 }}>
+                  <SoftBox
+                    component="span"
+                    px={1.1}
+                    py={0.55}
+                    borderRadius={2}
+                    bgcolor={purchased ? "#E8F5E9" : "#F1F3F5"}
+                    color={purchased ? "#2E7D32" : "#616161"}
+                    sx={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}
+                  >
+                    {purchased ? "Có mua hàng" : "Không mua hàng"}
+                  </SoftBox>
+                </td>
+                <td style={{ padding: 12, fontSize: 13, fontWeight: 700 }}>
+                  {Number(row.invoiceCount || 0).toLocaleString("vi-VN")}
+                </td>
+                <td style={{ padding: 12, fontSize: 13, fontWeight: 700, color: "#1565C0" }}>
+                  {format("purchaseAmount", row.purchaseAmount || 0)}
+                </td>
+                <td style={{ padding: 12, fontSize: 13, fontWeight: 700, color: "#C62828" }}>
+                  {format("debtAddedAmount", row.debtAddedAmount || 0)}
+                </td>
+                <td style={{ padding: 12, fontSize: 13, fontWeight: 700, color: "#2E7D32" }}>
+                  {format("cashPaidAmount", row.cashPaidAmount || 0)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </SoftBox>
+  );
+}
+
 export default function ReportsLive() {
   const [tab, setTab] = useState("SALES");
   const [period, setPeriod] = useState("MONTH");
@@ -209,6 +336,10 @@ export default function ReportsLive() {
   const [report, setReport] = useState({});
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [customerPurchaseStatus, setCustomerPurchaseStatus] = useState("ALL");
+  const [customerSearchInput, setCustomerSearchInput] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerPage, setCustomerPage] = useState(1);
   const params = useMemo(
     () => ({
       period,
@@ -222,10 +353,30 @@ export default function ReportsLive() {
     }),
     [period, anchor, custom, granularity]
   );
+  const reportParams = useMemo(
+    () =>
+      tab === "CUSTOMERS"
+        ? {
+            ...params,
+            purchaseStatus: customerPurchaseStatus,
+            search: customerSearch || undefined,
+            page: customerPage,
+            limit: 20,
+          }
+        : params,
+    [params, tab, customerPurchaseStatus, customerSearch, customerPage]
+  );
   useEffect(() => {
     if (period === "WEEK" || period === "MONTH") setGranularity("DAY");
     else setGranularity("MONTH");
   }, [period]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setCustomerSearch(customerSearchInput.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [customerSearchInput]);
+  useEffect(() => {
+    setCustomerPage(1);
+  }, [period, anchor, custom.from, custom.to, customerPurchaseStatus, customerSearch]);
   useEffect(() => {
     if (params.period === "CUSTOM" && (!params.from || !params.to)) return;
     let active = true;
@@ -233,7 +384,7 @@ export default function ReportsLive() {
     Promise.all([
       ReportsService.overview(params),
       ReportsService.salesTrend(params),
-      ReportsService[endpointByTab[tab]](params),
+      ReportsService[endpointByTab[tab]](reportParams),
     ])
       .then(([overviewResponse, trendResponse, reportResponse]) => {
         if (!active) return;
@@ -249,11 +400,26 @@ export default function ReportsLive() {
     return () => {
       active = false;
     };
-  }, [params, tab]);
+  }, [params, reportParams, tab]);
+  const changePeriod = (nextPeriod) => {
+    if (nextPeriod === "CUSTOM" && (!custom.from || !custom.to)) {
+      setCustom(monthRange(anchor));
+    }
+    setPeriod(nextPeriod);
+  };
   const exportReport = async () => {
     try {
       setExporting(true);
-      const response = await ReportsService.export({ ...params, report: tab });
+      const exportParams =
+        tab === "CUSTOMERS"
+          ? {
+              ...params,
+              report: tab,
+              purchaseStatus: customerPurchaseStatus,
+              search: customerSearch || undefined,
+            }
+          : { ...params, report: tab };
+      const response = await ReportsService.export(exportParams);
       downloadBlob(
         response.data,
         `bao-cao-${tab.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.xlsx`
@@ -293,6 +459,17 @@ export default function ReportsLive() {
     ([, value]) => value && typeof value === "object"
   );
   const detailRows = Array.isArray(report) ? report : report.topItems || report.data || [];
+  const customerMeta = report.meta || {};
+  const customerSummary = report.summary || {};
+  const customerMetricSummary = Object.fromEntries(
+    Object.entries(customerSummary).filter(
+      ([key]) =>
+        !["totalCustomers", "customersWithInvoices", "customersWithoutInvoices"].includes(key)
+    )
+  );
+  const customerPeriodLabel = report.period
+    ? `${shortDate(report.period.from)} - ${shortDate(report.period.to)}`
+    : "Đang xác định khoảng thời gian";
   return (
     <DashboardLayout>
       <DashboardNavbar />
@@ -320,90 +497,274 @@ export default function ReportsLive() {
             disabled={exporting}
             onClick={exportReport}
           >
-            {exporting ? "Đang xuất..." : "Xuất Excel"}
+            {exporting
+              ? "Đang xuất..."
+              : tab === "CUSTOMERS"
+              ? "Xuất danh sách khách hàng"
+              : "Xuất Excel"}
           </SoftButton>
         </SoftBox>
         <Card>
-          <SoftBox p={2.5} display="flex" gap={2} flexWrap="wrap" alignItems="center">
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <Select value={period} onChange={(event) => setPeriod(event.target.value)}>
-                {[
-                  ["WEEK", "Theo tuần"],
-                  ["MONTH", "Theo tháng"],
-                  ["QUARTER", "Theo quý"],
-                  ["YEAR", "Theo năm"],
-                  ["CUSTOM", "Tùy chỉnh"],
-                ].map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {period !== "CUSTOM" ? (
-              <SoftBox width={165}>
-                <SoftInput
-                  type="date"
-                  value={anchor}
-                  onChange={(event) => setAnchor(event.target.value)}
-                />
-              </SoftBox>
-            ) : (
-              <>
-                <SoftBox width={160}>
-                  <SoftInput
-                    type="date"
-                    value={custom.from}
-                    onChange={(event) => setCustom({ ...custom, from: event.target.value })}
-                  />
+          <SoftBox
+            px={1.5}
+            py={1.25}
+            display="flex"
+            gap={1}
+            sx={{ overflowX: "auto", scrollbarWidth: "thin" }}
+          >
+            {Object.entries(tabLabels).map(([value, label]) => {
+              const selected = tab === value;
+              return (
+                <SoftBox
+                  key={value}
+                  component="button"
+                  type="button"
+                  onClick={() => setTab(value)}
+                  px={1.75}
+                  py={1.1}
+                  borderRadius={2}
+                  display="flex"
+                  alignItems="center"
+                  gap={0.75}
+                  flexShrink={0}
+                  bgcolor={selected ? "#E3F2FD" : "transparent"}
+                  sx={{
+                    border: `1.5px solid ${selected ? "#1976D2" : "transparent"}`,
+                    color: selected ? "#1565C0" : "#67748E",
+                    cursor: "pointer",
+                    font: "inherit",
+                    fontSize: 13,
+                    fontWeight: selected ? 700 : 600,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <Icon sx={{ fontSize: 19 }}>{tabIcons[value]}</Icon>
+                  {label}
                 </SoftBox>
-                <SoftBox width={160}>
-                  <SoftInput
-                    type="date"
-                    value={custom.to}
-                    onChange={(event) => setCustom({ ...custom, to: event.target.value })}
-                  />
-                </SoftBox>
-              </>
-            )}
-            <FormControl size="small" sx={{ minWidth: 145 }}>
-              <Select value={granularity} onChange={(event) => setGranularity(event.target.value)}>
-                <MenuItem value="DAY">Theo ngày</MenuItem>
-                <MenuItem value="WEEK">Theo tuần</MenuItem>
-                <MenuItem value="MONTH">Theo tháng</MenuItem>
-              </Select>
-            </FormControl>
+              );
+            })}
           </SoftBox>
         </Card>
-        <SoftBox mt={3}>
-          <SummaryCards summary={overview.summary} />
-        </SoftBox>
-        <Card sx={{ mt: 3 }}>
-          <SoftBox p={3} height={380}>
-            <SoftTypography variant="h6" fontWeight="bold">
-              Xu hướng doanh thu và dòng tiền
+        <Card sx={{ mt: 2 }}>
+          <SoftBox p={2.5}>
+            <SoftTypography variant="button" fontWeight="bold" display="block" mb={1.5}>
+              {tab === "CUSTOMERS" ? "1. Chọn thời gian báo cáo" : "Chọn thời gian báo cáo"}
             </SoftTypography>
-            {loading ? (
-              <SoftTypography variant="button">Đang tải...</SoftTypography>
-            ) : (
-              <Line data={seriesChart} options={chartOptions} />
-            )}
+            <SoftBox display="flex" gap={2} flexWrap="wrap" alignItems="flex-end">
+              <SoftBox width="100%">
+                <SoftTypography variant="caption" color="text" display="block" mb={0.5}>
+                  Loại kỳ báo cáo
+                </SoftTypography>
+                <SoftBox display="flex" gap={1} flexWrap="wrap">
+                  {[
+                    ["WEEK", "Tuần", "date_range"],
+                    ["MONTH", "Tháng", "calendar_month"],
+                    ["QUARTER", "Quý", "view_week"],
+                    ["YEAR", "Năm", "event"],
+                    ["CUSTOM", "Từ ngày - đến ngày", "edit_calendar"],
+                  ].map(([value, label, icon]) => {
+                    const selected = period === value;
+                    return (
+                      <SoftBox
+                        key={value}
+                        component="button"
+                        type="button"
+                        onClick={() => changePeriod(value)}
+                        px={1.5}
+                        py={1}
+                        borderRadius={2}
+                        display="flex"
+                        alignItems="center"
+                        gap={0.75}
+                        bgcolor={selected ? "#E3F2FD" : "#fff"}
+                        sx={{
+                          border: `1.5px solid ${selected ? "#1976D2" : "#dfe4ea"}`,
+                          color: selected ? "#1565C0" : "#67748E",
+                          cursor: "pointer",
+                          font: "inherit",
+                          fontSize: 13,
+                          fontWeight: 700,
+                        }}
+                      >
+                        <Icon sx={{ fontSize: 18 }}>{icon}</Icon>
+                        {label}
+                      </SoftBox>
+                    );
+                  })}
+                </SoftBox>
+              </SoftBox>
+              {period !== "CUSTOM" ? (
+                <SoftBox width={180}>
+                  <SoftTypography variant="caption" color="text" display="block" mb={0.5}>
+                    {period === "MONTH"
+                      ? "Chọn tháng"
+                      : period === "WEEK"
+                      ? "Chọn ngày trong tuần"
+                      : period === "QUARTER"
+                      ? "Chọn ngày trong quý"
+                      : "Chọn ngày trong năm"}
+                  </SoftTypography>
+                  <SoftInput
+                    type={period === "MONTH" ? "month" : "date"}
+                    value={period === "MONTH" ? anchor.slice(0, 7) : anchor}
+                    onChange={(event) =>
+                      setAnchor(
+                        period === "MONTH" ? `${event.target.value}-01` : event.target.value
+                      )
+                    }
+                  />
+                </SoftBox>
+              ) : (
+                <>
+                  <SoftBox width={180}>
+                    <SoftTypography variant="caption" color="text" display="block" mb={0.5}>
+                      Từ ngày
+                    </SoftTypography>
+                    <SoftInput
+                      type="date"
+                      value={custom.from}
+                      onChange={(event) => setCustom({ ...custom, from: event.target.value })}
+                    />
+                  </SoftBox>
+                  <SoftBox width={180}>
+                    <SoftTypography variant="caption" color="text" display="block" mb={0.5}>
+                      Đến ngày
+                    </SoftTypography>
+                    <SoftInput
+                      type="date"
+                      value={custom.to}
+                      onChange={(event) => setCustom({ ...custom, to: event.target.value })}
+                    />
+                  </SoftBox>
+                </>
+              )}
+              {tab !== "CUSTOMERS" && (
+                <SoftBox minWidth={155}>
+                  <SoftTypography variant="caption" color="text" display="block" mb={0.5}>
+                    Nhóm biểu đồ
+                  </SoftTypography>
+                  <FormControl size="small" fullWidth>
+                    <Select
+                      value={granularity}
+                      onChange={(event) => setGranularity(event.target.value)}
+                    >
+                      <MenuItem value="DAY">Theo ngày</MenuItem>
+                      <MenuItem value="WEEK">Theo tuần</MenuItem>
+                      <MenuItem value="MONTH">Theo tháng</MenuItem>
+                    </Select>
+                  </FormControl>
+                </SoftBox>
+              )}
+            </SoftBox>
           </SoftBox>
         </Card>
+        {tab !== "CUSTOMERS" && (
+          <>
+            <SoftBox mt={3}>
+              <SummaryCards summary={overview.summary} />
+            </SoftBox>
+            <Card sx={{ mt: 3 }}>
+              <SoftBox p={3} height={380}>
+                <SoftTypography variant="h6" fontWeight="bold">
+                  Xu hướng doanh thu và dòng tiền
+                </SoftTypography>
+                {loading ? (
+                  <SoftTypography variant="button">Đang tải...</SoftTypography>
+                ) : (
+                  <Line data={seriesChart} options={chartOptions} />
+                )}
+              </SoftBox>
+            </Card>
+          </>
+        )}
         <Card sx={{ mt: 3 }}>
-          <SoftBox px={2} pt={1} sx={{ overflowX: "auto" }}>
-            <Tabs
-              value={tab}
-              onChange={(_, value) => setTab(value)}
-              sx={{ minWidth: 900, "& .MuiTabs-flexContainer": { flexWrap: "nowrap" } }}
-            >
-              {Object.entries(tabLabels).map(([value, label]) => (
-                <Tab key={value} value={value} label={label} />
-              ))}
-            </Tabs>
-          </SoftBox>
-          <SoftBox p={3}>
-            {report.summary && <SummaryCards summary={report.summary} />}
+          <SoftBox p={{ xs: 2, md: 3 }}>
+            {tab === "CUSTOMERS" && (
+              <SoftBox mb={3}>
+                <SoftBox mb={2}>
+                  <SoftTypography variant="h5" fontWeight="bold">
+                    2. Chọn nhóm khách hàng
+                  </SoftTypography>
+                  <SoftTypography variant="caption" color="text">
+                    {customerPeriodLabel} · Chạm vào một thẻ để lọc danh sách
+                  </SoftTypography>
+                </SoftBox>
+                <Grid container spacing={1.5}>
+                  {[
+                    [
+                      "ALL",
+                      "Tất cả khách hàng",
+                      customerSummary.totalCustomers,
+                      "#1565C0",
+                      "#E3F2FD",
+                    ],
+                    [
+                      "PURCHASED",
+                      "Có mua hàng",
+                      customerSummary.customersWithInvoices,
+                      "#2E7D32",
+                      "#E8F5E9",
+                    ],
+                    [
+                      "NOT_PURCHASED",
+                      "Không mua hàng",
+                      customerSummary.customersWithoutInvoices,
+                      "#616161",
+                      "#F1F3F5",
+                    ],
+                  ].map(([value, label, count, color, background]) => {
+                    const selected = customerPurchaseStatus === value;
+                    return (
+                      <Grid item xs={12} sm={4} key={value}>
+                        <SoftBox
+                          component="button"
+                          type="button"
+                          onClick={() => setCustomerPurchaseStatus(value)}
+                          width="100%"
+                          p={1.5}
+                          borderRadius={2}
+                          textAlign="left"
+                          bgcolor={selected ? background : "#fff"}
+                          sx={{
+                            cursor: "pointer",
+                            border: `2px solid ${selected ? color : "#e4e8ed"}`,
+                            transition: "all 160ms ease",
+                          }}
+                        >
+                          <SoftBox
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="space-between"
+                          >
+                            <SoftBox>
+                              <SoftTypography
+                                variant="button"
+                                fontWeight="bold"
+                                display="block"
+                                sx={{ color: selected ? color : "#344767" }}
+                              >
+                                {label}
+                              </SoftTypography>
+                              <SoftTypography variant="h6" fontWeight="bold" sx={{ color }}>
+                                {count === undefined ? "—" : Number(count).toLocaleString("vi-VN")}
+                              </SoftTypography>
+                            </SoftBox>
+                            <Icon sx={{ color: selected ? color : "#cfd5dc", fontSize: 26 }}>
+                              {selected ? "check_circle" : "radio_button_unchecked"}
+                            </Icon>
+                          </SoftBox>
+                        </SoftBox>
+                      </Grid>
+                    );
+                  })}
+                </Grid>
+              </SoftBox>
+            )}
+            {report.summary && (
+              <SummaryCards
+                summary={tab === "CUSTOMERS" ? customerMetricSummary : report.summary}
+              />
+            )}
             {report.summary?.ledgerCoverageNotice && (
               <SoftBox mt={2} p={2} bgcolor="#FFF3E0" borderRadius={2}>
                 <SoftTypography variant="caption" color="warning">
@@ -439,10 +800,60 @@ export default function ReportsLive() {
               </Grid>
             )}
             <SoftBox mt={3}>
-              <SoftTypography variant="h6" fontWeight="bold" mb={1.5}>
-                Dữ liệu chi tiết
-              </SoftTypography>
-              <GenericTable rows={detailRows} />
+              {tab === "CUSTOMERS" ? (
+                <SoftBox
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems={{ xs: "stretch", md: "flex-end" }}
+                  flexDirection={{ xs: "column", md: "row" }}
+                  gap={1.5}
+                  mb={2}
+                >
+                  <SoftBox>
+                    <SoftTypography variant="h5" fontWeight="bold">
+                      3. Tìm và xem khách hàng
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="text">
+                      {Number(customerMeta.totalItems || 0).toLocaleString("vi-VN")} khách hàng phù
+                      hợp
+                    </SoftTypography>
+                  </SoftBox>
+                  <SoftBox width={{ xs: "100%", md: 380 }}>
+                    <SoftInput
+                      value={customerSearchInput}
+                      onChange={(event) => setCustomerSearchInput(event.target.value)}
+                      placeholder="Nhập mã, tên hoặc số điện thoại..."
+                      icon={{ component: "search", direction: "left" }}
+                    />
+                  </SoftBox>
+                </SoftBox>
+              ) : (
+                <SoftTypography variant="h6" fontWeight="bold" mb={1.5}>
+                  Dữ liệu chi tiết
+                </SoftTypography>
+              )}
+              {loading ? (
+                <SoftBox py={4} textAlign="center">
+                  <SoftTypography variant="button" color="text">
+                    Đang tải dữ liệu báo cáo...
+                  </SoftTypography>
+                </SoftBox>
+              ) : tab === "CUSTOMERS" ? (
+                <CustomerActivityTable rows={detailRows} />
+              ) : (
+                <GenericTable rows={detailRows} />
+              )}
+              {tab === "CUSTOMERS" && Number(customerMeta.totalPages || 0) > 1 && (
+                <SoftBox mt={2.5} display="flex" justifyContent="center">
+                  <Pagination
+                    page={Number(customerMeta.page || customerPage)}
+                    count={Number(customerMeta.totalPages || 1)}
+                    onChange={(_, value) => setCustomerPage(value)}
+                    color="primary"
+                    shape="rounded"
+                  />
+                </SoftBox>
+              )}
             </SoftBox>
           </SoftBox>
         </Card>
