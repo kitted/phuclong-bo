@@ -1,6 +1,32 @@
 import AxiosInstance from "./api";
 
 export const BackupService = {
+  createSnapshot: (payload) =>
+    AxiosInstance.post("/admin/backups/snapshots", payload, {
+      timeout: 10 * 60 * 1000,
+    }),
+
+  getSnapshots: (params = {}) => AxiosInstance.get("/admin/backups/snapshots", { params }),
+
+  getSnapshot: (id) => AxiosInstance.get(`/admin/backups/snapshots/${encodeURIComponent(id)}`),
+
+  downloadSnapshot: (id) =>
+    AxiosInstance.get(`/admin/backups/snapshots/${encodeURIComponent(id)}/download`, {
+      responseType: "blob",
+      timeout: 10 * 60 * 1000,
+    }),
+
+  previewSnapshotRestore: (id) =>
+    AxiosInstance.post(`/admin/backups/snapshots/${encodeURIComponent(id)}/restore/preview`),
+
+  restoreSnapshot: (id, payload) =>
+    AxiosInstance.post(`/admin/backups/snapshots/${encodeURIComponent(id)}/restore`, payload, {
+      timeout: 10 * 60 * 1000,
+    }),
+
+  deleteSnapshot: (id) =>
+    AxiosInstance.delete(`/admin/backups/snapshots/${encodeURIComponent(id)}`),
+
   exportDatabase: (payload = {}) =>
     AxiosInstance.post("/admin/backups/export", payload, {
       responseType: "blob",
@@ -18,14 +44,11 @@ export const BackupService = {
   },
 
   restore: (restoreToken, payload) =>
-    AxiosInstance.post(
-      `/admin/backups/${encodeURIComponent(restoreToken)}/restore`,
-      payload,
-      { timeout: 10 * 60 * 1000 }
-    ),
+    AxiosInstance.post(`/admin/backups/${encodeURIComponent(restoreToken)}/restore`, payload, {
+      timeout: 10 * 60 * 1000,
+    }),
 
-  getJob: (jobId) =>
-    AxiosInstance.get(`/admin/backups/jobs/${encodeURIComponent(jobId)}`),
+  getJob: (jobId) => AxiosInstance.get(`/admin/backups/jobs/${encodeURIComponent(jobId)}`),
 };
 
 export default BackupService;
