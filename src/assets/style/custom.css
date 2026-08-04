@@ -343,7 +343,7 @@ input[name="tongThuong"]
 }
 
 /* Convert data tables to readable record cards on phones and tablets. */
-@media (max-width: 1535.95px) {
+@media (max-width: 1199.95px) {
   .admin-responsive-table {
     display: block !important;
     width: 100% !important;

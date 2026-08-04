@@ -489,6 +489,26 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
       })
     );
   const selectedTotalQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+
+  const selectAllTruckItems = () => {
+    const allItems = products
+      .filter((product) => {
+        const stock = stockOf(product);
+        return stock > 0;
+      })
+      .map((product) => ({
+        productId: getId(product) || product?.productId,
+        qty: stockOf(product),
+        product,
+      }));
+    if (!allItems.length) {
+      toast.info("Xe hiện không có hàng để trả về kho");
+      return;
+    }
+    setItems(allItems);
+    toast.success(`Đã chọn tất cả ${allItems.length} loại hàng trên xe`);
+  };
+
   const save = async () => {
     const normalized = items.map((item) => ({ productId: item.productId, qty: Number(item.qty) }));
     if (!normalized.length) return toast.error("Vui lòng chọn ít nhất một sản phẩm");
@@ -601,9 +621,23 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
           </Field>
         </Grid>
         <SoftBox mt={2.5}>
-          <SoftTypography variant="button" fontWeight="bold" display="block" mb={0.75}>
-            {isLoad ? "Tìm và chọn hàng trong kho" : "Tìm và chọn hàng trên xe"}
-          </SoftTypography>
+          <SoftBox display="flex" alignItems="center" justifyContent="space-between" mb={0.75} gap={1}>
+            <SoftTypography variant="button" fontWeight="bold" display="block">
+              {isLoad ? "Tìm và chọn hàng trong kho" : "Tìm và chọn hàng trên xe"}
+            </SoftTypography>
+            {!isLoad && (
+              <SoftButton
+                size="small"
+                variant="outlined"
+                color="info"
+                startIcon={<Icon>done_all</Icon>}
+                onClick={selectAllTruckItems}
+                sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
+              >
+                Chọn tất cả hàng trên xe
+              </SoftButton>
+            )}
+          </SoftBox>
           <Autocomplete
             value={null}
             inputValue={productSearch}
@@ -1404,7 +1438,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
   const [inventoryBackupExporting, setInventoryBackupExporting] = useState("");
 
   useEffect(() => {
-    if (!isAdmin && detailTab > 1) setDetailTab(0);
+    if (!isAdmin && detailTab > 2) setDetailTab(0);
   }, [isAdmin, detailTab]);
 
   useEffect(() => {
@@ -1495,7 +1529,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
   }, [truck, directCounts, directNotes, directDraftTruckId]);
 
   useEffect(() => {
-    if (!truck || !isAdmin || detailTab !== 2 || stockCheckMode !== "BACKUPS") return undefined;
+    if (!truck || !isAdmin || detailTab !== 3 || stockCheckMode !== "BACKUPS") return undefined;
     let active = true;
     setInventoryBackupsLoading(true);
     TruckService.getInventoryBackups(getId(truck), {
@@ -1558,7 +1592,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
   }, [truck, detailTab, salesPeriod, salesDate, salesWeek]);
 
   useEffect(() => {
-    if (!truck || detailTab !== 1) return undefined;
+    if (!truck || detailTab !== 2) return undefined;
     let active = true;
     const range =
       salesPeriod === "DAY"
@@ -2447,6 +2481,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
               fullWidth
               items={[
                 { icon: "inventory_2", label: "Hàng hiện có" },
+                { icon: "analytics", label: "Tổng hợp hàng hóa" },
                 { icon: "receipt_long", label: "Lịch sử bán / hoàn" },
                 ...(isAdmin ? [{ icon: "fact_check", label: "Kiểm hàng & backup" }] : []),
               ]}
@@ -2701,6 +2736,318 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
 
                 <Grid container spacing={1.25} mt={0.25} mb={2}>
                   {salesPeriod === "DAY" && (
+                    <Grid item xs={12}>
+                      <SoftInput
+                        type="date"
+                        value={salesDate}
+                        onChange={(event) => setSalesDate(event.target.value)}
+                      />
+                    </Grid>
+                  )}
+                  {salesPeriod === "WEEK" && (
+                    <Grid item xs={12}>
+                      <SoftInput
+                        type="week"
+                        value={salesWeek}
+                        onChange={(event) => setSalesWeek(event.target.value)}
+                      />
+                    </Grid>
+                  )}
+                </Grid>
+
+                {goodsReportLoading && (
+                  <SoftBox py={6} textAlign="center">
+                    <Icon sx={{ color: "#1565c0", fontSize: 38 }}>hourglass_top</Icon>
+                    <SoftTypography variant="button" color="text" display="block" mt={1}>
+                      Đang tải tổng hợp hàng hóa trên xe...
+                    </SoftTypography>
+                  </SoftBox>
+                )}
+
+                {!goodsReportLoading && !salesProductSummary.length && (
+                  <SoftBox py={6} textAlign="center" bgcolor="#fff" borderRadius={2}>
+                    <Icon sx={{ color: "#b0bec5", fontSize: 46 }}>analytics</Icon>
+                    <SoftTypography variant="button" color="text" display="block" mt={1}>
+                      Không có hoạt động hàng hóa trong khoảng thời gian này
+                    </SoftTypography>
+                  </SoftBox>
+                )}
+
+                {!goodsReportLoading && salesProductSummary.length > 0 && (
+                  <>
+                    <Grid container spacing={1.25} mt={0.25} mb={2}>
+                      {[
+                        ["Chứng từ", salesTotals.documentCount, "receipt_long", "#1565c0", "#e3f2fd"],
+                        [
+                          "Đã bán",
+                          salesTotals.soldQuantity,
+                          "remove_shopping_cart",
+                          "#c62828",
+                          "#ffebee",
+                        ],
+                        ["Quà tặng", salesTotals.giftQuantity, "redeem", "#ef6c00", "#fff3e0"],
+                        ["Hoàn về xe", salesTotals.inboundQuantity, "restore", "#2e7d32", "#e8f5e9"],
+                        [
+                          "Biến động ròng",
+                          salesTotals.netQuantity > 0
+                            ? `+${salesTotals.netQuantity}`
+                            : salesTotals.netQuantity,
+                          "swap_vert",
+                          salesTotals.netQuantity > 0 ? "#2e7d32" : "#c62828",
+                          salesTotals.netQuantity > 0 ? "#e8f5e9" : "#ffebee",
+                        ],
+                        ["Doanh thu", money(salesTotals.revenue), "payments", "#7b1fa2", "#f3e5f5"],
+                      ].map(([label, value, icon, color, background]) => (
+                        <Grid item xs={6} sm={4} md={2} key={label}>
+                          <SoftBox p={1.4} borderRadius={2} bgcolor={background}>
+                            <SoftBox display="flex" alignItems="center" gap={0.75}>
+                              <Icon sx={{ color, fontSize: 21 }}>{icon}</Icon>
+                              <SoftTypography variant="caption" color="text">
+                                {label}
+                              </SoftTypography>
+                            </SoftBox>
+                            <SoftTypography variant="h6" fontWeight="bold" sx={{ color }}>
+                              {value}
+                            </SoftTypography>
+                          </SoftBox>
+                        </Grid>
+                      ))}
+                    </Grid>
+
+                    <SoftBox
+                      mb={2}
+                      bgcolor="#fff"
+                      borderRadius={2.5}
+                      overflow="hidden"
+                      sx={{ border: "1px solid #dfe5ec" }}
+                    >
+                      <SoftBox
+                        px={{ xs: 1.5, md: 2 }}
+                        py={1.35}
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        gap={1}
+                        bgcolor="#f8fbff"
+                        sx={{ borderBottom: "1px solid #e5eaf0" }}
+                      >
+                        <SoftBox minWidth={0}>
+                          <SoftTypography variant="button" fontWeight="bold" display="block">
+                            Tổng hợp hàng hóa trong kỳ
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text" display="block">
+                            {salesProductSummary.length} mặt hàng ·{" "}
+                            {selectedSalesRange.from || "Tất cả"}
+                            {selectedSalesRange.to ? ` đến ${selectedSalesRange.to}` : ""}
+                          </SoftTypography>
+                        </SoftBox>
+                        <SoftButton
+                          size="small"
+                          variant="gradient"
+                          color="success"
+                          startIcon={<Icon>file_download</Icon>}
+                          disabled={goodsReportExporting}
+                          onClick={exportTruckGoods}
+                          sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
+                        >
+                          {goodsReportExporting ? "Đang xuất..." : "Xuất Excel"}
+                        </SoftButton>
+                      </SoftBox>
+
+                      <SoftBox display={{ xs: "block", md: "none" }} p={1.25}>
+                        {salesProductSummary.map((item, index) => (
+                          <SoftBox
+                            key={`${item.productId || item.code || item.name}-${index}`}
+                            p={1.25}
+                            mb={1}
+                            borderRadius={2}
+                            bgcolor="#f8fafc"
+                            sx={{ border: "1px solid #e3e8ef" }}
+                          >
+                            <SoftBox display="flex" justifyContent="space-between" gap={1}>
+                              <SoftBox minWidth={0}>
+                                <SoftTypography variant="button" fontWeight="bold" display="block">
+                                  {index + 1}. {item.name}
+                                </SoftTypography>
+                                <SoftTypography variant="caption" color="text">
+                                  {[item.code, item.unit, `${item.documentCount} chứng từ`]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </SoftTypography>
+                              </SoftBox>
+                              <SoftBox
+                                px={1}
+                                py={0.45}
+                                height="fit-content"
+                                borderRadius={1.5}
+                                bgcolor={item.netQuantity > 0 ? "#e8f5e9" : "#ffebee"}
+                                flexShrink={0}
+                              >
+                                <SoftTypography
+                                  variant="caption"
+                                  fontWeight="bold"
+                                  sx={{ color: item.netQuantity > 0 ? "#2e7d32" : "#c62828" }}
+                                >
+                                  Ròng {item.netQuantity > 0 ? "+" : ""}
+                                  {item.netQuantity}
+                                </SoftTypography>
+                              </SoftBox>
+                            </SoftBox>
+                            <SoftBox
+                              mt={1}
+                              display="grid"
+                              gap={0.75}
+                              sx={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
+                            >
+                              {[
+                                ["Tồn đầu", item.openingQuantity ?? "—", "#1565c0", "#e3f2fd"],
+                                ["Đã bán", item.soldQuantity, "#c62828", "#ffebee"],
+                                ["Quà tặng", item.giftQuantity, "#ef6c00", "#fff3e0"],
+                                ["Hoàn về", item.inboundQuantity, "#2e7d32", "#e8f5e9"],
+                                ["Đảo hoàn", item.returnReversedQuantity, "#ad1457", "#fce4ec"],
+                                ["Tồn cuối", item.closingQuantity ?? "—", "#1b5e20", "#dcedc8"],
+                              ].map(([label, value, color, background]) => (
+                                <SoftBox key={label} p={0.85} borderRadius={1.5} bgcolor={background}>
+                                  <SoftTypography variant="caption" sx={{ color }} display="block">
+                                    {label}
+                                  </SoftTypography>
+                                  <SoftTypography variant="button" fontWeight="bold" sx={{ color }}>
+                                    {value}
+                                  </SoftTypography>
+                                </SoftBox>
+                              ))}
+                            </SoftBox>
+                            <SoftBox display="flex" justifyContent="space-between" mt={1}>
+                              <SoftTypography variant="caption" color="text">
+                                Doanh thu hàng bán
+                              </SoftTypography>
+                              <SoftTypography variant="button" fontWeight="bold" color="info">
+                                {money(item.revenue)}
+                              </SoftTypography>
+                            </SoftBox>
+                          </SoftBox>
+                        ))}
+                      </SoftBox>
+
+                      <SoftBox display={{ xs: "none", md: "block" }} sx={{ overflowX: "auto" }}>
+                        <SoftBox
+                          component="table"
+                          sx={{ width: "100%", minWidth: 1050, borderCollapse: "collapse" }}
+                        >
+                          <SoftBox component="thead" bgcolor="#f1f5f9">
+                            <SoftBox component="tr">
+                              {[
+                                "STT",
+                                "Sản phẩm",
+                                "Tồn đầu",
+                                "Đã bán",
+                                "Quà tặng",
+                                "Hoàn về xe",
+                                "Đảo hoàn",
+                                "Biến động",
+                                "Tồn cuối",
+                                "Doanh thu",
+                              ].map((label) => (
+                                <SoftBox
+                                  component="th"
+                                  key={label}
+                                  px={1.15}
+                                  py={1.2}
+                                  textAlign={label === "Sản phẩm" ? "left" : "right"}
+                                  sx={{ borderBottom: "1px solid #dce2e9", whiteSpace: "nowrap" }}
+                                >
+                                  <SoftTypography variant="caption" fontWeight="bold">
+                                    {label}
+                                  </SoftTypography>
+                                </SoftBox>
+                              ))}
+                            </SoftBox>
+                          </SoftBox>
+                          <SoftBox component="tbody">
+                            {salesProductSummary.map((item, index) => (
+                              <SoftBox
+                                component="tr"
+                                key={`${item.productId || item.code || item.name}-${index}`}
+                                sx={{ borderBottom: "1px solid #edf0f3" }}
+                              >
+                                <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
+                                  <SoftTypography variant="caption">{index + 1}</SoftTypography>
+                                </SoftBox>
+                                <SoftBox component="td" px={1.15} py={1.15} minWidth={220}>
+                                  <SoftTypography variant="button" fontWeight="bold" display="block">
+                                    {item.name}
+                                  </SoftTypography>
+                                  <SoftTypography variant="caption" color="text">
+                                    {[item.code, item.unit, `${item.documentCount} chứng từ`]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </SoftTypography>
+                                </SoftBox>
+                                {[
+                                  item.openingQuantity ?? "—",
+                                  item.soldQuantity,
+                                  item.giftQuantity,
+                                  item.inboundQuantity,
+                                  item.returnReversedQuantity,
+                                ].map((value, valueIndex) => (
+                                  <SoftBox
+                                    component="td"
+                                    key={`${item.name}-${valueIndex}`}
+                                    px={1.15}
+                                    py={1.15}
+                                    textAlign="right"
+                                  >
+                                    <SoftTypography variant="button">{value}</SoftTypography>
+                                  </SoftBox>
+                                ))}
+                                <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
+                                  <SoftTypography
+                                    variant="button"
+                                    fontWeight="bold"
+                                    sx={{ color: item.netQuantity > 0 ? "#2e7d32" : "#c62828" }}
+                                  >
+                                    {item.netQuantity > 0 ? "+" : ""}
+                                    {item.netQuantity}
+                                  </SoftTypography>
+                                </SoftBox>
+                                <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
+                                  <SoftTypography variant="button" fontWeight="bold">
+                                    {item.closingQuantity ?? "—"}
+                                  </SoftTypography>
+                                </SoftBox>
+                                <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
+                                  <SoftTypography variant="button" fontWeight="bold" color="info">
+                                    {money(item.revenue)}
+                                  </SoftTypography>
+                                </SoftBox>
+                              </SoftBox>
+                            ))}
+                          </SoftBox>
+                        </SoftBox>
+                      </SoftBox>
+                    </SoftBox>
+                  </>
+                )}
+              </SoftBox>
+            )}
+
+            {detailTab === 2 && (
+              <SoftBox>
+                <QuickSortBar
+                  label="Xem lịch sử theo"
+                  value={salesPeriod}
+                  onChange={setSalesPeriod}
+                  mobileColumns={3}
+                  compact
+                  options={[
+                    { value: "DAY", label: "Ngày", icon: "today" },
+                    { value: "WEEK", label: "Tuần", icon: "date_range" },
+                    { value: "ALL", label: "Tất cả", icon: "history" },
+                  ]}
+                />
+
+                <Grid container spacing={1.25} mt={0.25} mb={2}>
+                  {salesPeriod === "DAY" && (
                     <Grid item xs={12} sm={6}>
                       <SoftInput
                         type="date"
@@ -2732,262 +3079,6 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                     />
                   </Grid>
                 </Grid>
-
-                {!goodsReportLoading && salesProductSummary.length > 0 && (
-                  <Grid container spacing={1} mb={1.5}>
-                    {[
-                      ["Chứng từ", salesTotals.documentCount, "receipt_long", "#1565c0", "#e3f2fd"],
-                      [
-                        "Đã bán",
-                        salesTotals.soldQuantity,
-                        "remove_shopping_cart",
-                        "#c62828",
-                        "#ffebee",
-                      ],
-                      ["Quà tặng", salesTotals.giftQuantity, "redeem", "#ef6c00", "#fff3e0"],
-                      ["Hoàn về xe", salesTotals.inboundQuantity, "restore", "#2e7d32", "#e8f5e9"],
-                      [
-                        "Biến động ròng",
-                        salesTotals.netQuantity > 0
-                          ? `+${salesTotals.netQuantity}`
-                          : salesTotals.netQuantity,
-                        "swap_vert",
-                        salesTotals.netQuantity > 0 ? "#2e7d32" : "#c62828",
-                        salesTotals.netQuantity > 0 ? "#e8f5e9" : "#ffebee",
-                      ],
-                      ["Doanh thu", money(salesTotals.revenue), "payments", "#7b1fa2", "#f3e5f5"],
-                    ].map(([label, value, icon, color, background]) => (
-                      <Grid item xs={6} sm={4} md={2} key={label}>
-                        <SoftBox p={1.4} borderRadius={2} bgcolor={background}>
-                          <SoftBox display="flex" alignItems="center" gap={0.75}>
-                            <Icon sx={{ color, fontSize: 21 }}>{icon}</Icon>
-                            <SoftTypography variant="caption" color="text">
-                              {label}
-                            </SoftTypography>
-                          </SoftBox>
-                          <SoftTypography variant="h6" fontWeight="bold" sx={{ color }}>
-                            {value}
-                          </SoftTypography>
-                        </SoftBox>
-                      </Grid>
-                    ))}
-                  </Grid>
-                )}
-
-                {!goodsReportLoading && salesProductSummary.length > 0 && (
-                  <SoftBox
-                    mb={2}
-                    bgcolor="#fff"
-                    borderRadius={2.5}
-                    overflow="hidden"
-                    sx={{ border: "1px solid #dfe5ec" }}
-                  >
-                    <SoftBox
-                      px={{ xs: 1.5, md: 2 }}
-                      py={1.35}
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="space-between"
-                      gap={1}
-                      bgcolor="#f8fbff"
-                      sx={{ borderBottom: "1px solid #e5eaf0" }}
-                    >
-                      <SoftBox minWidth={0}>
-                        <SoftTypography variant="button" fontWeight="bold" display="block">
-                          Tổng hợp hàng hóa trong kỳ
-                        </SoftTypography>
-                        <SoftTypography variant="caption" color="text" display="block">
-                          {salesProductSummary.length} mặt hàng ·{" "}
-                          {selectedSalesRange.from || "Tất cả"}
-                          {selectedSalesRange.to ? ` đến ${selectedSalesRange.to}` : ""}
-                        </SoftTypography>
-                      </SoftBox>
-                      <SoftButton
-                        size="small"
-                        variant="gradient"
-                        color="success"
-                        startIcon={<Icon>file_download</Icon>}
-                        disabled={goodsReportExporting}
-                        onClick={exportTruckGoods}
-                        sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
-                      >
-                        {goodsReportExporting ? "Đang xuất..." : "Xuất Excel"}
-                      </SoftButton>
-                    </SoftBox>
-
-                    <SoftBox display={{ xs: "block", md: "none" }} p={1.25}>
-                      {salesProductSummary.map((item, index) => (
-                        <SoftBox
-                          key={`${item.productId || item.code || item.name}-${index}`}
-                          p={1.25}
-                          mb={1}
-                          borderRadius={2}
-                          bgcolor="#f8fafc"
-                          sx={{ border: "1px solid #e3e8ef" }}
-                        >
-                          <SoftBox display="flex" justifyContent="space-between" gap={1}>
-                            <SoftBox minWidth={0}>
-                              <SoftTypography variant="button" fontWeight="bold" display="block">
-                                {index + 1}. {item.name}
-                              </SoftTypography>
-                              <SoftTypography variant="caption" color="text">
-                                {[item.code, item.unit, `${item.documentCount} chứng từ`]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </SoftTypography>
-                            </SoftBox>
-                            <SoftBox
-                              px={1}
-                              py={0.45}
-                              height="fit-content"
-                              borderRadius={1.5}
-                              bgcolor={item.netQuantity > 0 ? "#e8f5e9" : "#ffebee"}
-                              flexShrink={0}
-                            >
-                              <SoftTypography
-                                variant="caption"
-                                fontWeight="bold"
-                                sx={{ color: item.netQuantity > 0 ? "#2e7d32" : "#c62828" }}
-                              >
-                                Ròng {item.netQuantity > 0 ? "+" : ""}
-                                {item.netQuantity}
-                              </SoftTypography>
-                            </SoftBox>
-                          </SoftBox>
-                          <SoftBox
-                            mt={1}
-                            display="grid"
-                            gap={0.75}
-                            sx={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
-                          >
-                            {[
-                              ["Tồn đầu", item.openingQuantity ?? "—", "#1565c0", "#e3f2fd"],
-                              ["Đã bán", item.soldQuantity, "#c62828", "#ffebee"],
-                              ["Quà tặng", item.giftQuantity, "#ef6c00", "#fff3e0"],
-                              ["Hoàn về", item.inboundQuantity, "#2e7d32", "#e8f5e9"],
-                              ["Đảo hoàn", item.returnReversedQuantity, "#ad1457", "#fce4ec"],
-                              ["Tồn cuối", item.closingQuantity ?? "—", "#1b5e20", "#dcedc8"],
-                            ].map(([label, value, color, background]) => (
-                              <SoftBox key={label} p={0.85} borderRadius={1.5} bgcolor={background}>
-                                <SoftTypography variant="caption" sx={{ color }} display="block">
-                                  {label}
-                                </SoftTypography>
-                                <SoftTypography variant="button" fontWeight="bold" sx={{ color }}>
-                                  {value}
-                                </SoftTypography>
-                              </SoftBox>
-                            ))}
-                          </SoftBox>
-                          <SoftBox display="flex" justifyContent="space-between" mt={1}>
-                            <SoftTypography variant="caption" color="text">
-                              Doanh thu hàng bán
-                            </SoftTypography>
-                            <SoftTypography variant="button" fontWeight="bold" color="info">
-                              {money(item.revenue)}
-                            </SoftTypography>
-                          </SoftBox>
-                        </SoftBox>
-                      ))}
-                    </SoftBox>
-
-                    <SoftBox display={{ xs: "none", md: "block" }} sx={{ overflowX: "auto" }}>
-                      <SoftBox
-                        component="table"
-                        sx={{ width: "100%", minWidth: 1050, borderCollapse: "collapse" }}
-                      >
-                        <SoftBox component="thead" bgcolor="#f1f5f9">
-                          <SoftBox component="tr">
-                            {[
-                              "STT",
-                              "Sản phẩm",
-                              "Tồn đầu",
-                              "Đã bán",
-                              "Quà tặng",
-                              "Hoàn về xe",
-                              "Đảo hoàn",
-                              "Biến động",
-                              "Tồn cuối",
-                              "Doanh thu",
-                            ].map((label) => (
-                              <SoftBox
-                                component="th"
-                                key={label}
-                                px={1.15}
-                                py={1.2}
-                                textAlign={label === "Sản phẩm" ? "left" : "right"}
-                                sx={{ borderBottom: "1px solid #dce2e9", whiteSpace: "nowrap" }}
-                              >
-                                <SoftTypography variant="caption" fontWeight="bold">
-                                  {label}
-                                </SoftTypography>
-                              </SoftBox>
-                            ))}
-                          </SoftBox>
-                        </SoftBox>
-                        <SoftBox component="tbody">
-                          {salesProductSummary.map((item, index) => (
-                            <SoftBox
-                              component="tr"
-                              key={`${item.productId || item.code || item.name}-${index}`}
-                              sx={{ borderBottom: "1px solid #edf0f3" }}
-                            >
-                              <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
-                                <SoftTypography variant="caption">{index + 1}</SoftTypography>
-                              </SoftBox>
-                              <SoftBox component="td" px={1.15} py={1.15} minWidth={220}>
-                                <SoftTypography variant="button" fontWeight="bold" display="block">
-                                  {item.name}
-                                </SoftTypography>
-                                <SoftTypography variant="caption" color="text">
-                                  {[item.code, item.unit, `${item.documentCount} chứng từ`]
-                                    .filter(Boolean)
-                                    .join(" · ")}
-                                </SoftTypography>
-                              </SoftBox>
-                              {[
-                                item.openingQuantity ?? "—",
-                                item.soldQuantity,
-                                item.giftQuantity,
-                                item.inboundQuantity,
-                                item.returnReversedQuantity,
-                              ].map((value, valueIndex) => (
-                                <SoftBox
-                                  component="td"
-                                  key={`${item.name}-${valueIndex}`}
-                                  px={1.15}
-                                  py={1.15}
-                                  textAlign="right"
-                                >
-                                  <SoftTypography variant="button">{value}</SoftTypography>
-                                </SoftBox>
-                              ))}
-                              <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
-                                <SoftTypography
-                                  variant="button"
-                                  fontWeight="bold"
-                                  sx={{ color: item.netQuantity > 0 ? "#2e7d32" : "#c62828" }}
-                                >
-                                  {item.netQuantity > 0 ? "+" : ""}
-                                  {item.netQuantity}
-                                </SoftTypography>
-                              </SoftBox>
-                              <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
-                                <SoftTypography variant="button" fontWeight="bold">
-                                  {item.closingQuantity ?? "—"}
-                                </SoftTypography>
-                              </SoftBox>
-                              <SoftBox component="td" px={1.15} py={1.15} textAlign="right">
-                                <SoftTypography variant="button" fontWeight="bold" color="info">
-                                  {money(item.revenue)}
-                                </SoftTypography>
-                              </SoftBox>
-                            </SoftBox>
-                          ))}
-                        </SoftBox>
-                      </SoftBox>
-                    </SoftBox>
-                  </SoftBox>
-                )}
 
                 {salesLoading && (
                   <SoftBox py={6} textAlign="center">
@@ -3316,7 +3407,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
               </SoftBox>
             )}
 
-            {detailTab === 2 && (
+            {detailTab === 3 && (
               <SoftBox>
                 <SoftBox
                   display="grid"
