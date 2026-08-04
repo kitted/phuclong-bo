@@ -341,3 +341,116 @@ input[name="tongThuong"]
     font-size: 1rem;
   }
 }
+
+/* Convert data tables to readable record cards on phones and tablets. */
+@media (max-width: 1535.95px) {
+  .admin-responsive-table {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: separate !important;
+    table-layout: auto !important;
+  }
+
+  .admin-responsive-table colgroup,
+  .admin-responsive-table thead {
+    display: none !important;
+  }
+
+  .admin-responsive-table tbody {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+  }
+
+  .admin-responsive-table tbody tr {
+    display: block !important;
+    min-width: 0;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #dfe6ee !important;
+    border-radius: 14px;
+    box-shadow: 0 3px 12px rgba(32, 58, 84, 0.06);
+  }
+
+  .admin-responsive-table tbody td {
+    display: grid !important;
+    grid-template-columns: minmax(92px, 38%) minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 42px;
+    padding: 9px 11px !important;
+    border: 0 !important;
+    border-bottom: 1px solid #edf1f5 !important;
+    white-space: normal !important;
+    text-align: right !important;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-responsive-table tbody td:last-child {
+    border-bottom: 0 !important;
+  }
+
+  .admin-responsive-table tbody td::before {
+    content: attr(data-label);
+    min-width: 0;
+    color: #718096;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: left;
+    text-transform: none;
+  }
+
+  .admin-responsive-table tbody td > * {
+    min-width: 0;
+    max-width: 100%;
+    justify-self: end;
+  }
+
+  .admin-responsive-table tbody .admin-responsive-table-actions {
+    display: flex !important;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .admin-responsive-table tbody .admin-responsive-table-actions::before {
+    display: none;
+  }
+
+  .admin-responsive-table .admin-responsive-table-full-row {
+    grid-column: 1 / -1;
+  }
+
+  .admin-responsive-table .admin-responsive-table-full-row td {
+    display: block !important;
+    padding: 24px 14px !important;
+    text-align: center !important;
+  }
+
+  .admin-responsive-table .admin-responsive-table-full-row td::before {
+    display: none;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 1199.95px) {
+  .admin-responsive-table tbody {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599.95px) {
+  .admin-responsive-table tbody {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .admin-responsive-table tbody td {
+    grid-template-columns: minmax(88px, 36%) minmax(0, 1fr);
+    min-height: 40px;
+    padding: 8px 10px !important;
+  }
+}

@@ -314,183 +314,371 @@ function NhapKho() {
         <SoftBox
           sx={{
             position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: { xs: "95%", md: 700 },
-            maxHeight: "90vh",
-            overflowY: "auto",
+            top: { xs: 0, sm: "50%" },
+            left: { xs: 0, sm: "50%" },
+            transform: { xs: "none", sm: "translate(-50%, -50%)" },
+            width: { xs: "100%", sm: "calc(100% - 32px)", md: 820 },
+            height: { xs: "100dvh", sm: "auto" },
+            maxHeight: { xs: "100dvh", sm: "92dvh" },
             bgcolor: "background.paper",
-            borderRadius: 3,
+            borderRadius: { xs: 0, sm: 3 },
             boxShadow: 24,
-            p: 4,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
           }}
         >
-          <SoftTypography variant="h5" fontWeight="bold" mb={3}>
-            Tạo phiếu nhập kho
-          </SoftTypography>
-
-          <Grid container spacing={2} mb={2}>
-            {/* SỬA Ở ĐÂY: Thêm ô nhập Mã Phiếu */}
-            <Grid item xs={6} md={4}>
-              <SoftTypography variant="caption" fontWeight="medium">
-                Mã phiếu *
-              </SoftTypography>
-              <SoftInput
-                value={form.code}
-                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                placeholder="VD: PN001"
-                fullWidth
-                autoFocus
-              />
-            </Grid>
-
-            <Grid item xs={6} md={4}>
-              <SoftTypography variant="caption" fontWeight="medium">
-                Nhà cung cấp *
-              </SoftTypography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={form.supplierId || ""}
-                  onChange={(e) => setForm((f) => ({ ...f, supplierId: e.target.value }))}
-                  displayEmpty
-                  sx={{ height: 40 }}
-                >
-                  <MenuItem value="">
-                    <em>Chọn nhà cung cấp</em>
-                  </MenuItem>
-                  {suppliers.map((s) => (
-                    <MenuItem key={s.id || s._id} value={s.id || s._id}>
-                      {s.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <SoftTypography variant="caption" fontWeight="medium">
-                Ngày nhập
-              </SoftTypography>
-              <SoftInput
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                fullWidth
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <SoftTypography variant="caption" fontWeight="medium">
-                Ghi chú
-              </SoftTypography>
-              <SoftInput
-                value={form.note}
-                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-                placeholder="Nhập lý do hoặc mã chứng từ gốc..."
-                fullWidth
-              />
-            </Grid>
-          </Grid>
-
-          {/* Dòng Hàng Hóa */}
-          <SoftTypography variant="button" fontWeight="bold" mb={1} display="block" mt={3}>
-            Danh sách hàng hóa
-          </SoftTypography>
-          {items.map((item, idx) => {
-            return (
-              <SoftBox key={idx} display="flex" gap={1} alignItems="center" mb={1.5}>
-                <SoftBox sx={{ flex: 2 }}>
-                  <Autocomplete
-                    options={products}
-                    openOnFocus
-                    autoHighlight
-                    value={
-                      products.find(
-                        (product) => String(product.id || product._id) === String(item.productId)
-                      ) || null
-                    }
-                    onChange={(_, product) =>
-                      handleItemChange(idx, "productId", product?.id || product?._id || "")
-                    }
-                    getOptionLabel={(product) =>
-                      `${product.code || ""} · ${product.name || ""} (${product.unit || ""})`
-                    }
-                    isOptionEqualToValue={(option, value) =>
-                      String(option.id || option._id) === String(value.id || value._id)
-                    }
-                    noOptionsText="Không tìm thấy sản phẩm"
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        size="small"
-                        placeholder="Tìm mã hoặc tên sản phẩm..."
-                      />
-                    )}
-                  />
-                </SoftBox>
-
-                <SoftBox sx={{ flex: 1 }}>
-                  <SoftInput
-                    type="number"
-                    value={item.qty}
-                    onChange={(e) => handleItemChange(idx, "qty", e.target.value)}
-                    placeholder="SL"
-                  />
-                </SoftBox>
-
-                <SoftBox sx={{ flex: 1 }}>
-                  <SoftInput
-                    value={numberText(item.price)}
-                    onChange={(e) => handleItemChange(idx, "price", moneyValue(e.target.value))}
-                    inputProps={{ inputMode: "numeric" }}
-                    placeholder="Giá nhập"
-                  />
-                </SoftBox>
-
-                <SoftBox sx={{ width: 100, textAlign: "right" }}>
-                  <SoftTypography variant="caption" fontWeight="bold">
-                    {fmtCurrency((Number(item.qty) || 0) * (Number(item.price) || 0))}
-                  </SoftTypography>
-                </SoftBox>
-
-                <IconButton
-                  size="small"
-                  onClick={() => handleRemoveItem(idx)}
-                  disabled={items.length === 1}
-                >
-                  <Icon sx={{ color: items.length === 1 ? "#E0E0E0" : "#EF4444" }}>
-                    remove_circle
-                  </Icon>
-                </IconButton>
-              </SoftBox>
-            );
-          })}
-
-          <SoftButton
-            variant="text"
-            color="info"
-            startIcon={<Icon>add</Icon>}
-            onClick={handleAddItem}
-            sx={{ mb: 2 }}
-          >
-            Thêm dòng sản phẩm
-          </SoftButton>
-
           <SoftBox
+            px={{ xs: 2, sm: 3 }}
+            py={{ xs: 1.5, sm: 2 }}
             display="flex"
-            justifyContent="flex-end"
-            mb={3}
-            mt={2}
-            pt={2}
-            sx={{ borderTop: "1px dashed #E0E0E0" }}
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ borderBottom: "1px solid #e8edf3", flexShrink: 0 }}
           >
-            <SoftTypography variant="h6" fontWeight="bold">
-              Tổng cộng: {fmtCurrency(totalAmount)}
-            </SoftTypography>
+            <SoftBox display="flex" alignItems="center" gap={1.25} minWidth={0}>
+              <SoftBox
+                width={44}
+                height={44}
+                borderRadius={2}
+                bgcolor="#e3f2fd"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                flexShrink={0}
+              >
+                <Icon sx={{ color: "#1565c0", fontSize: 26 }}>inventory</Icon>
+              </SoftBox>
+              <SoftBox minWidth={0}>
+                <SoftTypography variant="h5" fontWeight="bold" lineHeight={1.2}>
+                  Tạo phiếu nhập kho
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text">
+                  Chọn hàng, nhập số lượng và giá nhập thực tế
+                </SoftTypography>
+              </SoftBox>
+            </SoftBox>
+            <IconButton
+              aria-label="Đóng"
+              onClick={() => setModalOpen(false)}
+              sx={{ bgcolor: "#f0f2f5", flexShrink: 0 }}
+            >
+              <Icon>close</Icon>
+            </IconButton>
           </SoftBox>
 
-          <SoftBox display="flex" gap={2}>
+          <SoftBox
+            px={{ xs: 2, sm: 3 }}
+            py={{ xs: 2, sm: 2.5 }}
+            sx={{ overflowY: "auto", WebkitOverflowScrolling: "touch", flex: 1 }}
+          >
+            <Grid container spacing={2} mb={2}>
+              <Grid item xs={12} sm={6} md={4}>
+                <SoftTypography variant="caption" fontWeight="medium">
+                  Mã phiếu *
+                </SoftTypography>
+                <SoftInput
+                  value={form.code}
+                  onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                  placeholder="VD: PN001"
+                  fullWidth
+                  autoFocus
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={4}>
+                <SoftTypography variant="caption" fontWeight="medium">
+                  Nhà cung cấp *
+                </SoftTypography>
+                <FormControl fullWidth size="small">
+                  <Select
+                    value={form.supplierId || ""}
+                    onChange={(e) => setForm((f) => ({ ...f, supplierId: e.target.value }))}
+                    displayEmpty
+                    sx={{
+                      minHeight: 44,
+                      "& .MuiSelect-select": {
+                        py: "11px !important",
+                        lineHeight: "22px",
+                      },
+                    }}
+                  >
+                    <MenuItem value="">
+                      <em>Chọn nhà cung cấp</em>
+                    </MenuItem>
+                    {suppliers.map((s) => (
+                      <MenuItem key={s.id || s._id} value={s.id || s._id}>
+                        {s.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={4}>
+                <SoftTypography variant="caption" fontWeight="medium">
+                  Ngày nhập
+                </SoftTypography>
+                <SoftInput
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                  fullWidth
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <SoftTypography variant="caption" fontWeight="medium">
+                  Ghi chú
+                </SoftTypography>
+                <SoftInput
+                  value={form.note}
+                  onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                  placeholder="Nhập lý do hoặc mã chứng từ gốc..."
+                  fullWidth
+                />
+              </Grid>
+            </Grid>
+
+            {/* Dòng Hàng Hóa */}
+            <SoftBox
+              display="flex"
+              justifyContent="space-between"
+              alignItems="flex-end"
+              mt={3}
+              mb={1.25}
+            >
+              <SoftBox>
+                <SoftTypography variant="h6" fontWeight="bold" display="block">
+                  Hàng hóa nhập kho
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text">
+                  Mỗi sản phẩm là một thẻ để dễ kiểm tra trên màn hình nhỏ
+                </SoftTypography>
+              </SoftBox>
+              <SoftBox px={1.25} py={0.5} borderRadius={5} bgcolor="#e3f2fd" flexShrink={0}>
+                <SoftTypography variant="caption" color="info" fontWeight="bold">
+                  {items.length} dòng
+                </SoftTypography>
+              </SoftBox>
+            </SoftBox>
+            {items.map((item, idx) => {
+              const selectedProduct =
+                products.find(
+                  (product) => String(product.id || product._id) === String(item.productId)
+                ) || null;
+              const quantity = Math.max(1, Number(item.qty) || 1);
+              const lineTotal = quantity * (Number(item.price) || 0);
+              return (
+                <SoftBox
+                  key={idx}
+                  p={{ xs: 1.5, sm: 2 }}
+                  mb={1.5}
+                  borderRadius={2.5}
+                  bgcolor="#fff"
+                  sx={{
+                    border: "2px solid #d9e8f7",
+                    boxShadow: "0 4px 14px rgba(31, 78, 121, 0.06)",
+                  }}
+                >
+                  <SoftBox
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    mb={1.25}
+                  >
+                    <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                      <SoftBox
+                        width={36}
+                        height={36}
+                        borderRadius={1.5}
+                        bgcolor="#e3f2fd"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        flexShrink={0}
+                      >
+                        <Icon sx={{ color: "#1565c0" }}>inventory_2</Icon>
+                      </SoftBox>
+                      <SoftBox minWidth={0}>
+                        <SoftTypography
+                          variant="button"
+                          color="info"
+                          fontWeight="bold"
+                          display="block"
+                        >
+                          SẢN PHẨM NHẬP #{idx + 1}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text" noWrap display="block">
+                          {selectedProduct?.name || "Chưa chọn hàng hóa"}
+                        </SoftTypography>
+                      </SoftBox>
+                    </SoftBox>
+                    <IconButton
+                      size="small"
+                      aria-label={`Xóa sản phẩm ${idx + 1}`}
+                      onClick={() => handleRemoveItem(idx)}
+                      disabled={items.length === 1}
+                      sx={{ bgcolor: items.length === 1 ? "#f5f5f5" : "#ffebee" }}
+                    >
+                      <Icon sx={{ color: items.length === 1 ? "#bdbdbd" : "#d32f2f" }}>delete</Icon>
+                    </IconButton>
+                  </SoftBox>
+
+                  <SoftBox>
+                    <Autocomplete
+                      options={products}
+                      openOnFocus
+                      autoHighlight
+                      value={selectedProduct}
+                      onChange={(_, product) => {
+                        handleItemChange(idx, "productId", product?.id || product?._id || "");
+                        if (product && document.activeElement instanceof HTMLElement) {
+                          document.activeElement.blur();
+                        }
+                      }}
+                      getOptionLabel={(product) =>
+                        `${product.code || ""} · ${product.name || ""} (${product.unit || ""})`
+                      }
+                      isOptionEqualToValue={(option, value) =>
+                        String(option.id || option._id) === String(value.id || value._id)
+                      }
+                      noOptionsText="Không tìm thấy sản phẩm"
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder="Tìm mã hoặc tên sản phẩm..."
+                          sx={{
+                            "& .MuiOutlinedInput-root": {
+                              minHeight: 52,
+                              borderRadius: 2,
+                            },
+                            "& .MuiAutocomplete-input": {
+                              py: "9px !important",
+                              lineHeight: "22px",
+                            },
+                          }}
+                        />
+                      )}
+                    />
+                  </SoftBox>
+
+                  <Grid container spacing={1.25} mt={0.25} alignItems="end">
+                    <Grid item xs={12} sm={7}>
+                      <SoftTypography variant="caption" color="text" fontWeight="medium">
+                        Số lượng nhập
+                      </SoftTypography>
+                      <SoftBox display="flex" alignItems="center" gap={0.75} mt={0.4}>
+                        <IconButton
+                          onClick={() => handleItemChange(idx, "qty", Math.max(1, quantity - 1))}
+                          disabled={quantity <= 1}
+                          sx={{ width: 44, height: 44, border: "1px solid #d5dde7" }}
+                        >
+                          <Icon>remove</Icon>
+                        </IconButton>
+                        <SoftBox sx={{ width: { xs: "100%", sm: 100 } }}>
+                          <SoftInput
+                            type="number"
+                            value={item.qty}
+                            inputProps={{ min: 1, step: 1, inputMode: "numeric" }}
+                            onChange={(e) => handleItemChange(idx, "qty", e.target.value)}
+                            sx={{
+                              "& input": { textAlign: "center", fontWeight: 700, fontSize: "1rem" },
+                            }}
+                          />
+                        </SoftBox>
+                        <IconButton
+                          onClick={() => handleItemChange(idx, "qty", quantity + 1)}
+                          sx={{
+                            width: 44,
+                            height: 44,
+                            color: "#fff",
+                            bgcolor: "#1976d2",
+                            "&:hover": { bgcolor: "#1565c0" },
+                          }}
+                        >
+                          <Icon>add</Icon>
+                        </IconButton>
+                      </SoftBox>
+                    </Grid>
+                    <Grid item xs={12} sm={5}>
+                      <SoftTypography variant="caption" color="text" fontWeight="medium">
+                        Giá nhập / {selectedProduct?.unit || "đơn vị"}
+                      </SoftTypography>
+                      <SoftInput
+                        value={numberText(item.price)}
+                        onChange={(e) => handleItemChange(idx, "price", moneyValue(e.target.value))}
+                        inputProps={{ inputMode: "numeric" }}
+                        placeholder="Nhập giá"
+                        sx={{ mt: 0.4, "& input": { textAlign: "right", fontWeight: 700 } }}
+                      />
+                    </Grid>
+                  </Grid>
+
+                  <SoftBox
+                    mt={1.5}
+                    pt={1.25}
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    sx={{ borderTop: "1px dashed #ccd8e5" }}
+                  >
+                    <SoftTypography variant="caption" color="text">
+                      {numberText(quantity)} {selectedProduct?.unit || "sản phẩm"} ×{" "}
+                      {fmtCurrency(item.price)}
+                    </SoftTypography>
+                    <SoftTypography variant="button" color="info" fontWeight="bold">
+                      {fmtCurrency(lineTotal)}
+                    </SoftTypography>
+                  </SoftBox>
+                </SoftBox>
+              );
+            })}
+
+            <SoftButton
+              variant="outlined"
+              color="info"
+              startIcon={<Icon>add</Icon>}
+              onClick={handleAddItem}
+              fullWidth
+              sx={{
+                mb: 2,
+                minHeight: 52,
+                border: "2px dashed #1976d2",
+                bgcolor: "#f3f8ff",
+                fontWeight: 700,
+                "&:hover": { border: "2px solid #1976d2", bgcolor: "#eaf3ff" },
+              }}
+            >
+              Thêm sản phẩm khác
+            </SoftButton>
+
+            <SoftBox
+              display="flex"
+              justifyContent="flex-end"
+              mb={3}
+              mt={2}
+              pt={2}
+              sx={{ borderTop: "1px dashed #E0E0E0" }}
+            >
+              <SoftTypography variant="h6" fontWeight="bold">
+                Tổng cộng: {fmtCurrency(totalAmount)}
+              </SoftTypography>
+            </SoftBox>
+          </SoftBox>
+
+          <SoftBox
+            px={{ xs: 2, sm: 3 }}
+            py={1.5}
+            display="flex"
+            gap={1.25}
+            sx={{
+              borderTop: "1px solid #e8edf3",
+              bgcolor: "#fff",
+              flexShrink: 0,
+              flexDirection: { xs: "column-reverse", sm: "row" },
+            }}
+          >
             <SoftButton
               variant="outlined"
               color="secondary"

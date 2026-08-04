@@ -36,6 +36,7 @@ import Illustration from "layouts/authentication/sign-in/illustration";
 import { ToastContainer } from "react-toastify";
 import StaffMobileNav from "components/StaffMobileNav";
 import AdminTouchNavigation from "components/AdminTouchNavigation";
+import ResponsiveTableCards from "components/ResponsiveTableCards";
 import useAutoRefreshUser from "hook/useAutoRefreshUser";
 export default function App() {
   useAutoRefreshUser();
@@ -194,6 +195,7 @@ export default function App() {
       </Routes>
       {isAuthenticated && normalizedRole === "staff" && <StaffMobileNav />}
       {adminTouchActive && <AdminTouchNavigation />}
+      {isAuthenticated && <ResponsiveTableCards />}
       <ToastContainer autoClose={5000} />
     </ThemeProvider>
   );

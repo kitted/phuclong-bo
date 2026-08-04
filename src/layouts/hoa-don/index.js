@@ -3574,6 +3574,7 @@ function InvoicePaperView({ invoice }) {
   const totalQuantity = (invoice.items || []).reduce((sum, item) => sum + Number(item.qty || 0), 0);
   return (
     <SoftBox
+      data-mobile-table-scope="keep"
       maxWidth={1080}
       mx="auto"
       bgcolor="#fff"
@@ -3733,7 +3734,7 @@ function InvoicePaperView({ invoice }) {
             },
           }}
         >
-          <table>
+          <table data-mobile-table="keep">
             <InvoiceColgroup />
             <thead>
               <tr>
@@ -3778,7 +3779,7 @@ function InvoicePaperView({ invoice }) {
               )}
             </tbody>
           </table>
-          <table style={{ marginTop: -1 }}>
+          <table data-mobile-table="keep" style={{ marginTop: -1 }}>
             <InvoiceColgroup />
             <tbody>
               <tr>
