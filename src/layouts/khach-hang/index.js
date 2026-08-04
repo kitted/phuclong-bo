@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Card from "@mui/material/Card";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
@@ -625,6 +625,8 @@ function CustomerDetail({
   onDeleted,
   readOnly = false,
 }) {
+  const theme = useTheme();
+  const touchViewport = useMediaQuery(theme.breakpoints.down("xl"));
   const [customer, setCustomer] = useState(null);
   const [tab, setTab] = useState(0);
   const [interactionOpen, setInteractionOpen] = useState(false);
@@ -687,19 +689,21 @@ function CustomerDetail({
       <SoftBox
         sx={{
           position: "absolute",
-          top: { xs: readOnly ? 0 : "50%", md: "50%" },
-          left: { xs: readOnly ? 0 : "50%", md: "50%" },
+          top: { xs: 0, sm: "50%" },
+          left: { xs: 0, sm: "50%" },
           transform: {
-            xs: readOnly ? "none" : "translate(-50%, -50%)",
-            md: "translate(-50%, -50%)",
+            xs: "none",
+            sm: "translate(-50%, -50%)",
           },
-          width: { xs: readOnly ? "100%" : "95%", lg: 1000 },
-          height: { xs: readOnly ? "100%" : "88vh", md: "88vh" },
+          width: { xs: "100%", sm: "calc(100% - 32px)", xl: 1000 },
+          height: { xs: "100dvh", sm: "calc(100dvh - 32px)", xl: "88vh" },
+          maxWidth: { sm: 1000 },
           overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
           bgcolor: "#F8F9FA",
-          borderRadius: { xs: readOnly ? 0 : 3, md: 3 },
+          borderRadius: { xs: 0, sm: 3 },
           boxShadow: 24,
-          p: { xs: readOnly ? 2 : 3, md: 3 },
+          p: { xs: 1.25, sm: 2, xl: 3 },
         }}
       >
         {!customer ? (
@@ -710,7 +714,90 @@ function CustomerDetail({
           </SoftBox>
         ) : (
           <>
-            <SoftBox display="flex" justifyContent="space-between" alignItems="start">
+            {touchViewport && (
+              <SoftBox
+                bgcolor="#fff"
+                borderRadius={2.5}
+                p={{ xs: 1.5, sm: 2 }}
+                mb={1.25}
+                sx={{ border: "1px solid #dfe6ee" }}
+              >
+                <SoftBox display="flex" alignItems="flex-start" gap={1.25}>
+                  <SoftBox
+                    width={46}
+                    height={46}
+                    borderRadius="50%"
+                    bgcolor="#e7f1ff"
+                    color="#1565c0"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    flexShrink={0}
+                  >
+                    <Icon>person</Icon>
+                  </SoftBox>
+                  <SoftBox flex={1} minWidth={0}>
+                    <SoftTypography
+                      variant="h6"
+                      fontWeight="bold"
+                      sx={{ lineHeight: 1.25, overflowWrap: "anywhere" }}
+                    >
+                      {customer.name}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="text" fontWeight="bold">
+                      {customer.code || "Khách hàng chưa có mã"}
+                    </SoftTypography>
+                  </SoftBox>
+                  <IconButton
+                    onClick={onClose}
+                    aria-label="Đóng hồ sơ khách hàng"
+                    sx={{ bgcolor: "#f0f2f5", flexShrink: 0 }}
+                  >
+                    <Icon>close</Icon>
+                  </IconButton>
+                </SoftBox>
+                <SoftBox
+                  display="grid"
+                  gap={0.75}
+                  mt={1.25}
+                  sx={{ gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" } }}
+                >
+                  {[
+                    ["phone", "Điện thoại", customer.phone || "Chưa có số điện thoại"],
+                    ["mail", "Email", customer.email || "Chưa có email"],
+                  ].map(([icon, label, value]) => (
+                    <SoftBox
+                      key={label}
+                      display="flex"
+                      alignItems="center"
+                      gap={1}
+                      px={1}
+                      py={0.75}
+                      borderRadius={1.5}
+                      bgcolor="#f6f8fb"
+                      minWidth={0}
+                    >
+                      <Icon sx={{ color: "#607d8b", fontSize: 19 }}>{icon}</Icon>
+                      <SoftBox minWidth={0}>
+                        <SoftTypography variant="caption" color="text" display="block">
+                          {label}
+                        </SoftTypography>
+                        <SoftTypography
+                          variant="button"
+                          fontWeight="bold"
+                          display="block"
+                          noWrap
+                        >
+                          {value}
+                        </SoftTypography>
+                      </SoftBox>
+                    </SoftBox>
+                  ))}
+                </SoftBox>
+              </SoftBox>
+            )}
+            {!touchViewport && (
+              <SoftBox display="flex" justifyContent="space-between" alignItems="start">
               <SoftBox>
                 <SoftTypography variant="h4" fontWeight="bold">
                   {customer.name}
@@ -772,7 +859,64 @@ function CustomerDetail({
                   <Icon>close</Icon>
                 </IconButton>
               </SoftBox>
-            </SoftBox>
+              </SoftBox>
+            )}
+            {touchViewport && !readOnly && (
+              <SoftBox
+                display="grid"
+                gap={1}
+                mb={1.25}
+                sx={{ gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", sm: "repeat(5, minmax(0, 1fr))" } }}
+              >
+                {Number(customer.debt || 0) > 0 && (
+                  <SoftButton
+                    color="success"
+                    variant="gradient"
+                    startIcon={<Icon>payments</Icon>}
+                    onClick={() => setDebtPaymentOpen(true)}
+                    sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+                  >
+                    Thu công nợ
+                  </SoftButton>
+                )}
+                <SoftButton
+                  color="success"
+                  variant="outlined"
+                  startIcon={<Icon>add_comment</Icon>}
+                  onClick={() => setInteractionOpen(true)}
+                  sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+                >
+                  Tương tác
+                </SoftButton>
+                <SoftButton
+                  color="info"
+                  variant="outlined"
+                  startIcon={<Icon>edit</Icon>}
+                  onClick={() => onEdit(customer)}
+                  sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+                >
+                  Chỉnh sửa
+                </SoftButton>
+                <SoftButton
+                  color="info"
+                  variant="outlined"
+                  startIcon={<Icon>{customer.code ? "badge" : "add_card"}</Icon>}
+                  onClick={() => setCodeOpen(true)}
+                  sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+                >
+                  {customer.code ? "Đổi mã" : "Cấp mã"}
+                </SoftButton>
+                <SoftButton
+                  color="error"
+                  variant="outlined"
+                  startIcon={<Icon>delete_outline</Icon>}
+                  onClick={() => setDeleteOpen(true)}
+                  sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+                >
+                  Xóa hồ sơ
+                </SoftButton>
+              </SoftBox>
+            )}
             {customer.debtLimit > 0 && customer.debt > customer.debtLimit && (
               <SoftBox
                 mt={2}
@@ -781,15 +925,15 @@ function CustomerDetail({
               >
                 <SoftTypography variant="button" sx={{ color: "#C62828" }}>
                   <Icon sx={{ verticalAlign: "middle", mr: 1 }}>warning</Icon>Công nợ đã vượt hạn
-                  mức {money(customer.debt - customer.debtLimit)}. Cần duyệt trước khi tạo hóa đơn
-                  mới.
+                  mức {money(customer.debt - customer.debtLimit)}. Khi tiếp tục ghi nợ cần nhập lý
+                  do vượt hạn mức.
                 </SoftTypography>
               </SoftBox>
             )}
-            <Grid container spacing={2} mt={0}>
+            <Grid className="admin-summary-grid" container spacing={2} mt={0}>
               <Grid item xs={6} md={3}>
-                <Card>
-                  <SoftBox p={2}>
+                <Card className="admin-summary-card">
+                  <SoftBox className="admin-summary-content" p={2}>
                     <SoftTypography variant="caption">Tổng doanh số</SoftTypography>
                     <SoftTypography variant="h6" fontWeight="bold">
                       {money(customer.totalSpent)}
@@ -798,8 +942,8 @@ function CustomerDetail({
                 </Card>
               </Grid>
               <Grid item xs={6} md={3}>
-                <Card>
-                  <SoftBox p={2}>
+                <Card className="admin-summary-card">
+                  <SoftBox className="admin-summary-content" p={2}>
                     <SoftTypography variant="caption">Số hóa đơn</SoftTypography>
                     <SoftTypography variant="h5" fontWeight="bold">
                       {customer.orderCount}
@@ -808,8 +952,8 @@ function CustomerDetail({
                 </Card>
               </Grid>
               <Grid item xs={6} md={3}>
-                <Card>
-                  <SoftBox p={2}>
+                <Card className="admin-summary-card">
+                  <SoftBox className="admin-summary-content" p={2}>
                     <SoftTypography variant="caption">Công nợ hiện tại</SoftTypography>
                     <SoftTypography
                       variant="h6"
@@ -823,8 +967,8 @@ function CustomerDetail({
                 </Card>
               </Grid>
               <Grid item xs={6} md={3}>
-                <Card>
-                  <SoftBox p={2}>
+                <Card className="admin-summary-card">
+                  <SoftBox className="admin-summary-content" p={2}>
                     <SoftTypography variant="caption">Zalo</SoftTypography>
                     <SoftTypography
                       variant="button"
@@ -1219,6 +1363,9 @@ export default function KhachHang() {
   const [importing, setImporting] = useState(false);
   const [interactionImporting, setInteractionImporting] = useState(false);
   const [interactionExporting, setInteractionExporting] = useState(false);
+  const [dataToolsOpen, setDataToolsOpen] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [sortMode, setSortMode] = useState("NEWEST");
   const importInputRef = useRef(null);
   const interactionImportInputRef = useRef(null);
   useEffect(() => {
@@ -1226,6 +1373,24 @@ export default function KhachHang() {
     return () => clearTimeout(timer);
   }, [search]);
   useEffect(() => setPage(1), [debouncedSearch, segment, source, zalo, debtWarning]);
+  const sortedCustomers = useMemo(() => {
+    const rows = [...customers];
+    if (sortMode === "NAME_ASC")
+      return rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "vi"));
+    if (sortMode === "DEBT_DESC")
+      return rows.sort((a, b) => Number(b.debt || 0) - Number(a.debt || 0));
+    if (sortMode === "SALES_DESC")
+      return rows.sort(
+        (a, b) =>
+          Number(b.totalSpent ?? b.totalSales ?? b.revenue ?? 0) -
+          Number(a.totalSpent ?? a.totalSales ?? a.revenue ?? 0)
+      );
+    return rows.sort((a, b) => {
+      const right = new Date(b.updatedAt || b.createdAt || 0).getTime() || 0;
+      const left = new Date(a.updatedAt || a.createdAt || 0).getTime() || 0;
+      return right - left;
+    });
+  }, [customers, sortMode]);
   const load = () => {
     setLoading(true);
     Promise.all([
@@ -1433,6 +1598,7 @@ export default function KhachHang() {
         }}
       >
         <SoftBox
+          className="admin-summary-grid"
           display="flex"
           gap={{ xs: 1, md: 2 }}
           mb={{ xs: 1, md: 3 }}
@@ -1450,6 +1616,7 @@ export default function KhachHang() {
             ["Cảnh báo công nợ", summary.debtWarnings || 0, "warning", "#C62828"],
           ].map(([label, value, icon, color]) => (
             <Card
+              className="admin-summary-card"
               key={label}
               sx={{
                 flex: 1,
@@ -1459,6 +1626,7 @@ export default function KhachHang() {
               }}
             >
               <SoftBox
+                className="admin-summary-content"
                 p={{ xs: isStaff ? 1.5 : 2.5, md: 2.5 }}
                 display="flex"
                 gap={1.25}
@@ -1499,7 +1667,7 @@ export default function KhachHang() {
                 </SoftTypography>
               </SoftBox>
               {!isStaff && (
-                <SoftBox display="flex" gap={1} flexWrap="wrap">
+                <>
                   <input
                     ref={importInputRef}
                     type="file"
@@ -1507,23 +1675,6 @@ export default function KhachHang() {
                     onChange={handleImport}
                     style={{ display: "none" }}
                   />
-                  <SoftButton
-                    color="info"
-                    variant="outlined"
-                    startIcon={<Icon>upload_file</Icon>}
-                    disabled={importing}
-                    onClick={() => importInputRef.current?.click()}
-                  >
-                    {importing ? "Đang import..." : "Import khách hàng"}
-                  </SoftButton>
-                  <SoftButton
-                    color="success"
-                    variant="outlined"
-                    startIcon={<Icon>download</Icon>}
-                    onClick={handleExport}
-                  >
-                    Export khách hàng
-                  </SoftButton>
                   <input
                     ref={interactionImportInputRef}
                     type="file"
@@ -1531,15 +1682,127 @@ export default function KhachHang() {
                     onChange={handleInteractionImport}
                     style={{ display: "none" }}
                   />
-                  <SoftBox
-                    display="flex"
-                    gap={0.75}
-                    flexWrap="wrap"
-                    p={0.6}
-                    borderRadius={2}
-                    bgcolor="#f3f8ff"
-                    sx={{ border: "1px solid #bbdefb" }}
-                  >
+                  {touchViewport ? (
+                    <SoftBox width="100%">
+                      <SoftBox
+                        display="grid"
+                        gap={1}
+                        sx={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
+                      >
+                        <SoftButton
+                          color="info"
+                          variant="gradient"
+                          startIcon={<Icon>person_add</Icon>}
+                          onClick={() => {
+                            setSelected(null);
+                            setFormOpen(true);
+                          }}
+                          sx={{ minWidth: 0 }}
+                        >
+                          Thêm khách hàng
+                        </SoftButton>
+                        <SoftButton
+                          color="secondary"
+                          variant="outlined"
+                          startIcon={<Icon>tune</Icon>}
+                          onClick={() => setDataToolsOpen((value) => !value)}
+                          sx={{ minWidth: 0 }}
+                        >
+                          {dataToolsOpen ? "Đóng công cụ" : "Công cụ dữ liệu"}
+                        </SoftButton>
+                      </SoftBox>
+                      {dataToolsOpen && (
+                        <SoftBox
+                          display="grid"
+                          gap={1}
+                          mt={1}
+                          p={1}
+                          borderRadius={2}
+                          bgcolor="#f3f8ff"
+                          sx={{
+                            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                            border: "1px solid #bbdefb",
+                          }}
+                        >
+                          <SoftButton
+                            color="info"
+                            variant="outlined"
+                            startIcon={<Icon>upload_file</Icon>}
+                            disabled={importing}
+                            onClick={() => importInputRef.current?.click()}
+                            sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+                          >
+                            {importing ? "Đang nhập..." : "Nhập khách hàng"}
+                          </SoftButton>
+                          <SoftButton
+                            color="success"
+                            variant="outlined"
+                            startIcon={<Icon>download</Icon>}
+                            onClick={handleExport}
+                            sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+                          >
+                            Xuất khách hàng
+                          </SoftButton>
+                          <SoftButton
+                            color="secondary"
+                            variant="outlined"
+                            startIcon={<Icon>description</Icon>}
+                            onClick={downloadInteractionTemplate}
+                            sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+                          >
+                            File mẫu tương tác
+                          </SoftButton>
+                          <SoftButton
+                            color="info"
+                            variant="outlined"
+                            startIcon={<Icon>upload_file</Icon>}
+                            disabled={interactionImporting}
+                            onClick={() => interactionImportInputRef.current?.click()}
+                            sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+                          >
+                            {interactionImporting ? "Đang nhập..." : "Nhập tương tác"}
+                          </SoftButton>
+                          <SoftButton
+                            color="success"
+                            variant="outlined"
+                            startIcon={<Icon>download</Icon>}
+                            disabled={interactionExporting}
+                            onClick={handleInteractionExport}
+                            sx={{ minWidth: 0, px: 1, fontSize: 11, gridColumn: "1 / -1" }}
+                          >
+                            {interactionExporting ? "Đang xuất..." : "Xuất tương tác"}
+                          </SoftButton>
+                        </SoftBox>
+                      )}
+                    </SoftBox>
+                  ) : (
+                    <SoftBox display="flex" gap={1} flexWrap="wrap">
+                      <SoftButton
+                        color="info"
+                        variant="outlined"
+                        startIcon={<Icon>upload_file</Icon>}
+                        disabled={importing}
+                        onClick={() => importInputRef.current?.click()}
+                      >
+                        {importing ? "Đang import..." : "Import khách hàng"}
+                      </SoftButton>
+                      <SoftButton
+                        color="success"
+                        variant="outlined"
+                        startIcon={<Icon>download</Icon>}
+                        onClick={handleExport}
+                      >
+                        Export khách hàng
+                      </SoftButton>
+                      <SoftBox
+                        display="flex"
+                        gap={0.75}
+                        flexWrap="wrap"
+                        p={0.6}
+                        borderRadius={2}
+                        bgcolor="#f3f8ff"
+                        sx={{ border: "1px solid #bbdefb" }}
+                      >
                     <SoftButton
                       color="secondary"
                       variant="text"
@@ -1569,23 +1832,25 @@ export default function KhachHang() {
                     >
                       {interactionExporting ? "Đang export..." : "Export tương tác"}
                     </SoftButton>
-                  </SoftBox>
-                  <SoftButton
-                    color="info"
-                    variant="gradient"
-                    startIcon={<Icon>person_add</Icon>}
-                    onClick={() => {
-                      setSelected(null);
-                      setFormOpen(true);
-                    }}
-                  >
-                    Thêm khách hàng
-                  </SoftButton>
-                </SoftBox>
+                      </SoftBox>
+                      <SoftButton
+                        color="info"
+                        variant="gradient"
+                        startIcon={<Icon>person_add</Icon>}
+                        onClick={() => {
+                          setSelected(null);
+                          setFormOpen(true);
+                        }}
+                      >
+                        Thêm khách hàng
+                      </SoftButton>
+                    </SoftBox>
+                  )}
+                </>
               )}
             </SoftBox>
             <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
-              <SoftBox sx={{ flex: 1, minWidth: 230 }}>
+              <SoftBox sx={{ flex: 1, minWidth: { xs: "100%", xl: 230 } }}>
                 <SoftInput
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -1593,11 +1858,23 @@ export default function KhachHang() {
                   icon={{ component: "search", direction: "left" }}
                 />
               </SoftBox>
+              {touchViewport && (
+                <SoftButton
+                  color="secondary"
+                  variant={mobileFiltersOpen ? "gradient" : "outlined"}
+                  startIcon={<Icon>filter_alt</Icon>}
+                  onClick={() => setMobileFiltersOpen((value) => !value)}
+                  sx={{ flex: "1 1 100%" }}
+                >
+                  {mobileFiltersOpen ? "Ẩn bộ lọc" : "Bộ lọc khách hàng"}
+                </SoftButton>
+              )}
               <FormControl
                 size="small"
                 sx={{
-                  minWidth: 150,
-                  display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" },
+                  minWidth: touchViewport ? 0 : 150,
+                  flex: touchViewport ? "1 1 calc(50% - 8px)" : undefined,
+                  display: touchViewport && !mobileFiltersOpen ? "none" : "inline-flex",
                 }}
               >
                 <Select displayEmpty value={segment} onChange={(e) => setSegment(e.target.value)}>
@@ -1612,8 +1889,9 @@ export default function KhachHang() {
               <FormControl
                 size="small"
                 sx={{
-                  minWidth: 150,
-                  display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" },
+                  minWidth: touchViewport ? 0 : 150,
+                  flex: touchViewport ? "1 1 calc(50% - 8px)" : undefined,
+                  display: touchViewport && !mobileFiltersOpen ? "none" : "inline-flex",
                 }}
               >
                 <Select displayEmpty value={source} onChange={(e) => setSource(e.target.value)}>
@@ -1626,8 +1904,9 @@ export default function KhachHang() {
               <FormControl
                 size="small"
                 sx={{
-                  minWidth: 150,
-                  display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" },
+                  minWidth: touchViewport ? 0 : 150,
+                  flex: touchViewport ? "1 1 calc(50% - 8px)" : undefined,
+                  display: touchViewport && !mobileFiltersOpen ? "none" : "inline-flex",
                 }}
               >
                 <Select displayEmpty value={zalo} onChange={(e) => setZalo(e.target.value)}>
@@ -1639,8 +1918,9 @@ export default function KhachHang() {
               <FormControl
                 size="small"
                 sx={{
-                  minWidth: 190,
-                  display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" },
+                  minWidth: touchViewport ? 0 : 190,
+                  flex: touchViewport ? "1 1 calc(50% - 8px)" : undefined,
+                  display: touchViewport && !mobileFiltersOpen ? "none" : "inline-flex",
                 }}
               >
                 <Select
@@ -1653,27 +1933,81 @@ export default function KhachHang() {
                 </Select>
               </FormControl>
             </SoftBox>
+            {touchViewport && (
+              <SoftBox mb={1.5}>
+                <SoftTypography variant="caption" color="text" fontWeight="bold" display="block" mb={0.75}>
+                  Sắp xếp nhanh
+                </SoftTypography>
+                <SoftBox
+                  display="flex"
+                  gap={0.75}
+                  overflow="auto"
+                  pb={0.5}
+                  sx={{
+                    WebkitOverflowScrolling: "touch",
+                    scrollbarWidth: "none",
+                    "&::-webkit-scrollbar": { display: "none" },
+                  }}
+                >
+                  {[
+                    ["NEWEST", "Mới nhất", "schedule"],
+                    ["NAME_ASC", "Tên A–Z", "sort_by_alpha"],
+                    ["DEBT_DESC", "Nợ cao", "account_balance_wallet"],
+                    ["SALES_DESC", "Mua nhiều", "trending_up"],
+                  ].map(([value, label, icon]) => {
+                    const active = sortMode === value;
+                    return (
+                      <SoftBox
+                        key={value}
+                        component="button"
+                        type="button"
+                        onClick={() => setSortMode(value)}
+                        display="flex"
+                        alignItems="center"
+                        gap={0.6}
+                        px={1.25}
+                        py={0.8}
+                        borderRadius={2}
+                        flexShrink={0}
+                        sx={{
+                          border: `1px solid ${active ? "#1976d2" : "#dbe2ea"}`,
+                          bgcolor: active ? "#e8f2ff" : "#fff",
+                          color: active ? "#1565c0" : "#526271",
+                          fontSize: 12,
+                          fontWeight: active ? 700 : 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Icon sx={{ fontSize: 17 }}>{icon}</Icon>
+                        {label}
+                      </SoftBox>
+                    );
+                  })}
+                </SoftBox>
+              </SoftBox>
+            )}
             {(isStaff || isTouchAdmin) && (
               <SoftBox
                 display={isTouchAdmin ? "grid" : { xs: "block", md: "none" }}
                 sx={
                   isTouchAdmin
                     ? {
-                        gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          sm: "repeat(2, minmax(0, 1fr))",
+                          lg: "repeat(3, minmax(0, 1fr))",
+                        },
                         gap: 1.25,
                       }
                     : undefined
                 }
               >
-                {customers.map((item) => {
+                {sortedCustomers.map((item) => {
                   const warning = item.debtLimit > 0 && item.debt >= item.debtLimit;
                   return (
                     <SoftBox
                       key={item.id || item._id}
-                      py={1.5}
-                      display="flex"
-                      gap={1.5}
-                      alignItems="center"
+                      p={1.4}
                       onClick={() => setDetailId(item.id || item._id)}
                       sx={{
                         borderBottom: "1px solid #edf0f5",
@@ -1683,29 +2017,45 @@ export default function KhachHang() {
                           border: "1px solid #e1e8f0",
                           borderRadius: 2.5,
                           bgcolor: "#fff",
-                          minHeight: 148,
+                          minHeight: 126,
                           "&:active": { bgcolor: "#f4f8fd" },
                         }),
                       }}
                     >
-                      <SoftBox
-                        width={44}
-                        height={44}
-                        borderRadius="50%"
-                        bgcolor="#e7f3ff"
-                        color="#1877f2"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        flexShrink={0}
-                      >
-                        <Icon>person</Icon>
-                      </SoftBox>
-                      <SoftBox flex={1} minWidth={0}>
-                        <SoftBox display="flex" alignItems="center" gap={0.75}>
-                          <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
+                      <SoftBox display="flex" alignItems="flex-start" gap={1}>
+                        <SoftBox
+                          width={42}
+                          height={42}
+                          borderRadius="50%"
+                          bgcolor="#e7f3ff"
+                          color="#1877f2"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                          flexShrink={0}
+                        >
+                          <Icon>person</Icon>
+                        </SoftBox>
+                        <SoftBox flex={1} minWidth={0}>
+                          <SoftTypography
+                            variant="button"
+                            fontWeight="bold"
+                            display="block"
+                            sx={{
+                              lineHeight: 1.25,
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
                             {item.name}
                           </SoftTypography>
+                          <SoftTypography variant="caption" color="text" fontWeight="bold">
+                            {item.code || "Chưa có mã"}
+                          </SoftTypography>
+                        </SoftBox>
+                        <SoftBox display="flex" alignItems="center" gap={0.4} flexShrink={0}>
                           {item.zaloConnected && (
                             <SoftTypography
                               variant="caption"
@@ -1721,26 +2071,50 @@ export default function KhachHang() {
                               Zalo
                             </SoftTypography>
                           )}
+                          <Icon sx={{ color: "#94a3b8" }}>chevron_right</Icon>
                         </SoftBox>
-                        <SoftTypography variant="caption" color="text">
-                          {item.code || "Chưa có mã"} · {item.phone || "Chưa có SĐT"}
-                        </SoftTypography>
-                        {!item.code && (
-                          <SoftBox mt={0.5}>
-                            <UnassignedCodeTag />
-                          </SoftBox>
-                        )}
-                        <CustomerStoreTags customer={item} />
-                        <SoftTypography
-                          variant="caption"
-                          display="block"
-                          mt={0.35}
-                          sx={{ color: warning ? "#c62828" : "#65676b" }}
-                        >
-                          Công nợ {money(item.debt)} / {money(item.debtLimit)}
+                      </SoftBox>
+                      <SoftBox
+                        display="flex"
+                        alignItems="center"
+                        gap={0.7}
+                        mt={0.9}
+                        px={0.9}
+                        py={0.6}
+                        borderRadius={1.5}
+                        bgcolor="#f7f9fb"
+                        minWidth={0}
+                      >
+                        <Icon sx={{ fontSize: 17, color: "#607d8b" }}>phone</Icon>
+                        <SoftTypography variant="caption" fontWeight="bold" noWrap>
+                          {item.phone || "Chưa có số điện thoại"}
                         </SoftTypography>
                       </SoftBox>
-                      <Icon>chevron_right</Icon>
+                      <SoftBox display="flex" gap={0.5} flexWrap="wrap" mt={0.65}>
+                        {!item.code && <UnassignedCodeTag />}
+                        <CustomerStoreTags customer={item} />
+                      </SoftBox>
+                      <SoftBox
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        gap={1}
+                        mt={0.75}
+                        pt={0.7}
+                        sx={{ borderTop: "1px solid #edf1f5" }}
+                      >
+                        <SoftTypography variant="caption" color="text">
+                          Công nợ / Hạn mức
+                        </SoftTypography>
+                        <SoftTypography
+                          variant="caption"
+                          fontWeight="bold"
+                          textAlign="right"
+                          sx={{ color: warning ? "#c62828" : "#344767" }}
+                        >
+                          {money(item.debt)} / {money(item.debtLimit)}
+                        </SoftTypography>
+                      </SoftBox>
                     </SoftBox>
                   );
                 })}

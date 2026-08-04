@@ -335,15 +335,15 @@ export default function NhanVien() {
     <DashboardLayout>
       <DashboardNavbar />
       <SoftBox py={3}>
-        <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
+        <SoftBox className="admin-summary-grid" display="flex" gap={2} mb={3} flexWrap="wrap">
           {[
             ["Nhân viên Staff", summary.staff || 0, "badge", "#1565C0"],
             ["Tài khoản hoạt động", summary.active || 0, "verified_user", "#2E7D32"],
             ["Tài khoản đã khóa", summary.inactive || 0, "lock", "#C62828"],
             ["Đã từng đăng nhập", summary.loggedIn || 0, "login", "#7B1FA2"],
           ].map(([label, value, icon, color]) => (
-            <Card key={label} sx={{ flex: 1, minWidth: 190 }}>
-              <SoftBox p={2.5} display="flex" gap={2} alignItems="center">
+            <Card className="admin-summary-card" key={label} sx={{ flex: 1, minWidth: 190 }}>
+              <SoftBox className="admin-summary-content" p={2.5} display="flex" gap={2} alignItems="center">
                 <Icon sx={{ color }}>{icon}</Icon>
                 <SoftBox>
                   <SoftTypography variant="caption">{label}</SoftTypography>

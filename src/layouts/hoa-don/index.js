@@ -4269,6 +4269,7 @@ export default function HoaDon() {
         }}
       >
         <Grid
+          className="admin-summary-grid"
           container
           spacing={2}
           mb={3}
@@ -4282,8 +4283,8 @@ export default function HoaDon() {
             ["Mã kích hoạt", summary.promotionActivationCount || 0],
           ].map(([label, value]) => (
             <Grid item xs={12} sm={6} lg key={label}>
-              <Card>
-                <SoftBox p={2}>
+              <Card className="admin-summary-card">
+                <SoftBox className="admin-summary-content" p={2}>
                   <SoftTypography variant="caption" color="text">
                     {label}
                   </SoftTypography>

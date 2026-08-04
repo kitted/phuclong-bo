@@ -356,15 +356,15 @@ function TonKho() {
     <DashboardLayout>
       <DashboardNavbar />
       <SoftBox py={3}>
-        <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
+        <SoftBox className="admin-summary-grid" display="flex" gap={2} mb={3} flexWrap="wrap">
           {[
             ["Tổng sản phẩm", totalProducts, "inventory_2", "#E3F2FD", "#1565C0"],
             ["Giá trị tồn kho", fmtCurrency(totalValue), "payments", "#E8F5E9", "#388E3C"],
             ["Sắp hết hàng", lowStock, "warning_amber", "#FFF3E0", "#E65100"],
             ["Hết hàng", outOfStock, "remove_shopping_cart", "#FFEBEE", "#C62828"],
           ].map(([label, value, icon, bg, color]) => (
-            <Card key={label} sx={{ flex: 1, minWidth: 180 }}>
-              <SoftBox p={2.5} display="flex" alignItems="center" gap={2}>
+            <Card className="admin-summary-card" key={label} sx={{ flex: 1, minWidth: 180 }}>
+              <SoftBox className="admin-summary-content" p={2.5} display="flex" alignItems="center" gap={2}>
                 <SoftBox
                   sx={{
                     width: 44,

@@ -46,7 +46,8 @@ function DashboardLayout({ children, compactMobile = false }) {
           : undefined,
         minHeight: "100vh",
         position: "relative",
-        touchAction: "manipulation",
+        touchAction: "pan-y",
+        WebkitOverflowScrolling: "touch",
 
         [breakpoints.up("xl")]: {
           marginLeft: miniSidenav ? pxToRem(120) : pxToRem(274),

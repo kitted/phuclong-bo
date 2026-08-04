@@ -59,8 +59,14 @@ function Kpi({ title, value, icon, color, change }) {
   const positive =
     change?.direction === "NEGATIVE" ? change?.trend === "DOWN" : change?.trend === "UP";
   return (
-    <Card sx={{ height: "100%" }}>
-      <SoftBox p={2.25} display="flex" gap={1.5} alignItems="center">
+    <Card className="admin-summary-card" sx={{ height: "100%" }}>
+      <SoftBox
+        className="admin-summary-content"
+        p={2.25}
+        display="flex"
+        gap={1.5}
+        alignItems="center"
+      >
         <SoftBox
           width={46}
           height={46}
@@ -293,7 +299,7 @@ export default function DashboardLive() {
             Đang tổng hợp dữ liệu...
           </SoftTypography>
         )}
-        <Grid container spacing={2} mb={3}>
+        <Grid className="admin-summary-grid" container spacing={2} mb={3}>
           <Grid item xs={12} sm={6} xl={3}>
             <Kpi
               title="Doanh thu thuần"
@@ -434,7 +440,7 @@ export default function DashboardLive() {
               )}
             />
           </Grid>
-          <Grid item xs={12} md={6} xl={3}>
+          <Grid item xs={6} md={6} xl={3}>
             <Kpi
               title="Xe active / tổng xe"
               value={`${number(trucks.activeTrucks)} / ${number(trucks.totalTrucks)}`}
@@ -442,7 +448,7 @@ export default function DashboardLive() {
               color="#1565C0"
             />
           </Grid>
-          <Grid item xs={12} md={6} xl={3}>
+          <Grid item xs={6} md={6} xl={3}>
             <Kpi
               title="Khách mới / quay lại"
               value={`${number(customers.newCustomers)} / ${number(customers.returningCustomers)}`}
@@ -450,7 +456,7 @@ export default function DashboardLive() {
               color="#00897B"
             />
           </Grid>
-          <Grid item xs={12} md={6} xl={3}>
+          <Grid item xs={6} md={6} xl={3}>
             <Kpi
               title="Mã kích hoạt"
               value={number(promotions.activeActivationCodes)}
@@ -458,7 +464,7 @@ export default function DashboardLive() {
               color="#7B1FA2"
             />
           </Grid>
-          <Grid item xs={12} md={6} xl={3}>
+          <Grid item xs={6} md={6} xl={3}>
             <Kpi
               title="KPI active / hoàn thành"
               value={`${number(employees.activeKpis)} / ${number(employees.completedKpis)}`}

@@ -1535,15 +1535,15 @@ export default function KhuyenMai() {
     <DashboardLayout>
       <DashboardNavbar />
       <SoftBox py={3}>
-        <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
+        <SoftBox className="admin-summary-grid" display="flex" gap={2} mb={3} flexWrap="wrap">
           {[
             ["Tổng chương trình", summary.totalPrograms || 0, "local_offer", "#1565C0"],
             ["Đang chạy", summary.active || 0, "play_circle", "#2E7D32"],
             ["Sắp diễn ra", summary.scheduled || 0, "schedule", "#7B1FA2"],
             ["Voucher đã dùng", summary.usedVouchers || 0, "confirmation_number", "#E65100"],
           ].map(([label, value, icon, color]) => (
-            <Card key={label} sx={{ flex: 1, minWidth: 180 }}>
-              <SoftBox p={2.5} display="flex" gap={2} alignItems="center">
+            <Card className="admin-summary-card" key={label} sx={{ flex: 1, minWidth: 180 }}>
+              <SoftBox className="admin-summary-content" p={2.5} display="flex" gap={2} alignItems="center">
                 <Icon sx={{ color }}>{icon}</Icon>
                 <SoftBox>
                   <SoftTypography variant="caption">{label}</SoftTypography>

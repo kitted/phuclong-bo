@@ -264,7 +264,8 @@ export default function AdminTouchNavigation() {
       </SoftBox>
 
       <SwipeableDrawer
-        anchor="left"
+        // Theme gốc đang là RTL nên MUI đảo anchor. "right" tương ứng mép trái thực tế.
+        anchor="right"
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onOpen={() => setMenuOpen(true)}
@@ -274,15 +275,22 @@ export default function AdminTouchNavigation() {
         disableBackdropTransition={false}
         ModalProps={{
           keepMounted: true,
+          disableScrollLock: true,
           sx: { zIndex: 1450 },
         }}
         PaperProps={{
           sx: {
+            position: "fixed !important",
+            top: "0 !important",
+            right: "auto !important",
+            bottom: "0 !important",
+            left: "0 !important",
             width: phone ? "min(88vw, 380px)" : 440,
             maxWidth: "92vw",
-            height: "100dvh",
-            maxHeight: "100dvh",
-            borderRadius: 0,
+            height: "100dvh !important",
+            maxHeight: "100dvh !important",
+            margin: "0 !important",
+            borderRadius: "0 24px 24px 0 !important",
             p: { xs: 2, sm: 2.5 },
             pt: "calc(16px + env(safe-area-inset-top))",
             pb: "calc(16px + env(safe-area-inset-bottom))",
@@ -316,8 +324,12 @@ export default function AdminTouchNavigation() {
               Chọn nhanh chức năng bằng chạm hoặc bút cảm ứng
             </SoftTypography>
           </SoftBox>
-          <IconButton onClick={() => setMenuOpen(false)} sx={{ width: 46, height: 46 }}>
-            <Icon>close</Icon>
+          <IconButton
+            onClick={() => setMenuOpen(false)}
+            aria-label="Đóng menu quản trị"
+            sx={{ width: 46, height: 46, bgcolor: "#f0f2f5", color: "#455a64" }}
+          >
+            <Icon>arrow_back</Icon>
           </IconButton>
         </SoftBox>
         <Divider />

@@ -4901,6 +4901,7 @@ export default function QuanLyXe() {
         }}
       >
         <Grid
+          className="admin-summary-grid"
           container
           spacing={{ xs: isStaff ? 1 : 2, md: 2 }}
           mb={{ xs: isStaff ? 1 : 3, md: 3 }}
@@ -4912,8 +4913,12 @@ export default function QuanLyXe() {
         >
           {kpis.map(([label, value, icon, color]) => (
             <Grid item xs={isStaff ? 7 : 12} sm={6} lg={3} key={label} sx={{ flexShrink: 0 }}>
-              <Card sx={{ boxShadow: { xs: isStaff ? "none" : undefined, md: undefined } }}>
+              <Card
+                className="admin-summary-card"
+                sx={{ boxShadow: { xs: isStaff ? "none" : undefined, md: undefined } }}
+              >
                 <SoftBox
+                  className="admin-summary-content"
                   p={{ xs: isStaff ? 1.5 : 2.5, md: 2.5 }}
                   display="flex"
                   alignItems="center"
@@ -5078,7 +5083,7 @@ export default function QuanLyXe() {
               )}
             </SoftBox>
             {tab === 1 && (
-              <Grid container spacing={2} mb={3}>
+              <Grid className="admin-summary-grid" container spacing={2} mb={3}>
                 {[
                   ["Số phiếu", transferSummary.totalTransfers, "receipt_long", "#1565C0"],
                   ["Tổng số lượng", transferSummary.totalQuantity, "inventory", "#2E7D32"],
@@ -5094,6 +5099,7 @@ export default function QuanLyXe() {
                 ].map(([label, value, icon, color]) => (
                   <Grid item xs={12} sm={6} lg key={label}>
                     <SoftBox
+                      className="admin-summary-card admin-summary-content"
                       bgcolor="#F8F9FA"
                       borderRadius={2}
                       p={2}

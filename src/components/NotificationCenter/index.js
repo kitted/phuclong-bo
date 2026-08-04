@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Badge from "@mui/material/Badge";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
-import Drawer from "@mui/material/Drawer";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
+import SwipeableDrawer from "@mui/material/SwipeableDrawer";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
@@ -64,6 +66,8 @@ const formatDateTime = (value) =>
 
 export default function NotificationCenter({ light = false }) {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const phone = useMediaQuery(theme.breakpoints.down("sm"));
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
@@ -190,16 +194,41 @@ export default function NotificationCenter({ light = false }) {
           <Icon sx={{ color: light ? "#fff" : "inherit" }}>notifications</Icon>
         </Badge>
       </IconButton>
-      <Drawer
-        anchor="right"
+
+      <SwipeableDrawer
+        // Theme gốc đang là RTL nên MUI đảo anchor. "left" tương ứng mép phải thực tế.
+        anchor="left"
         open={open}
         onClose={() => setOpen(false)}
-        sx={{ zIndex: 1700 }}
+        onOpen={() => setOpen(true)}
+        swipeAreaWidth={phone ? 28 : 36}
+        hysteresis={0.28}
+        minFlingVelocity={320}
+        disableBackdropTransition={false}
+        ModalProps={{ keepMounted: true, disableScrollLock: true, sx: { zIndex: 1700 } }}
         PaperProps={{
           sx: {
-            width: { xs: "100%", sm: 430 },
-            maxWidth: "100%",
+            position: "fixed !important",
+            top: "0 !important",
+            right: "0 !important",
+            bottom: "0 !important",
+            left: "auto !important",
+            width: phone ? "min(92vw, 400px)" : 430,
+            maxWidth: "94vw",
+            height: "100dvh !important",
+            maxHeight: "100dvh !important",
+            margin: "0 !important",
+            borderRadius: "24px 0 0 24px !important",
             bgcolor: "#f0f2f5",
+            pt: "env(safe-area-inset-top)",
+            pb: "env(safe-area-inset-bottom)",
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            boxShadow: "-14px 0 40px rgba(20, 42, 65, 0.2)",
+            transition: theme.transitions.create("transform", {
+              duration: theme.transitions.duration.standard,
+              easing: theme.transitions.easing.easeInOut,
+            }),
           },
         }}
       >
@@ -215,8 +244,12 @@ export default function NotificationCenter({ light = false }) {
           gap={1}
           sx={{ borderBottom: "1px solid #e4e6eb" }}
         >
-          <IconButton onClick={() => setOpen(false)}>
-            <Icon>arrow_back</Icon>
+          <IconButton
+            onClick={() => setOpen(false)}
+            aria-label="Đóng thông báo"
+            sx={{ bgcolor: "#f0f2f5", color: "#455a64" }}
+          >
+            <Icon>arrow_forward</Icon>
           </IconButton>
           <SoftBox flex={1}>
             <SoftTypography variant="h6" fontWeight="bold">
@@ -321,7 +354,7 @@ export default function NotificationCenter({ light = false }) {
               </SoftBox>
             );
           })}
-      </Drawer>
+      </SwipeableDrawer>
     </>
   );
 }

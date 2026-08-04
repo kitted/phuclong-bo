@@ -261,11 +261,11 @@ export default function AuditLogs() {
     <DashboardLayout>
       <DashboardNavbar />
       <SoftBox py={3}>
-        <Grid container spacing={2} mb={3}>
+        <Grid className="admin-summary-grid" container spacing={2} mb={3}>
           {cards.map(([label, value, icon, color]) => (
             <Grid item xs={12} sm={6} lg key={label}>
-              <Card>
-                <SoftBox p={2} display="flex" gap={1.5} alignItems="center">
+              <Card className="admin-summary-card">
+                <SoftBox className="admin-summary-content" p={2} display="flex" gap={1.5} alignItems="center">
                   <Icon sx={{ color }}>{icon}</Icon>
                   <SoftBox>
                     <SoftTypography variant="caption" color="text">

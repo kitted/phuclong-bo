@@ -155,11 +155,21 @@ input[name="tongThuong"]
 @media (max-width: 1535.95px) {
   body.admin-touch-ui {
     background: #f3f6f9;
-    overscroll-behavior-y: none;
+    min-height: 100dvh;
+    height: auto;
+    overflow-y: auto;
+    overscroll-behavior-y: auto;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
     -webkit-tap-highlight-color: transparent;
   }
 
-  body.admin-touch-ui,
+  body.admin-touch-ui #root {
+    min-height: 100dvh;
+    height: auto;
+    overflow-y: visible;
+  }
+
   body.admin-touch-ui button,
   body.admin-touch-ui a,
   body.admin-touch-ui input,
@@ -230,6 +240,65 @@ input[name="tongThuong"]
   body.admin-touch-ui .admin-touch-header + * {
     scroll-margin-top: 84px;
   }
+
+  /* Compact summary/KPI cards on admin phone and tablet layouts only. */
+  body.admin-touch-ui .admin-summary-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px !important;
+    width: 100% !important;
+    margin: 0 0 16px !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.admin-touch-ui .admin-summary-grid > * {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    flex: none !important;
+  }
+
+  body.admin-touch-ui .admin-summary-card {
+    width: 100%;
+    height: 100% !important;
+    min-width: 0 !important;
+    border-radius: 14px !important;
+  }
+
+  body.admin-touch-ui .admin-summary-content {
+    min-height: 82px;
+    padding: 12px 14px !important;
+    gap: 10px !important;
+    align-items: center !important;
+  }
+
+  body.admin-touch-ui .admin-summary-content > .MuiIcon-root {
+    flex: 0 0 auto;
+    font-size: 22px !important;
+  }
+
+  body.admin-touch-ui .admin-summary-content .MuiTypography-caption {
+    display: block;
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+
+  body.admin-touch-ui .admin-summary-content .MuiTypography-h5,
+  body.admin-touch-ui .admin-summary-content .MuiTypography-h6 {
+    margin-top: 3px;
+    font-size: 1.12rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 899.95px) {
+  body.admin-touch-ui .admin-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 599.95px) {
@@ -245,5 +314,30 @@ input[name="tongThuong"]
 
   body.admin-touch-ui table {
     min-width: 680px;
+  }
+
+  body.admin-touch-ui .admin-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+  }
+
+  body.admin-touch-ui .admin-summary-content {
+    min-height: 74px;
+    padding: 10px 11px !important;
+    gap: 8px !important;
+  }
+
+  body.admin-touch-ui .admin-summary-content > .MuiIcon-root {
+    font-size: 20px !important;
+  }
+
+  body.admin-touch-ui .admin-summary-content .MuiTypography-caption {
+    font-size: 0.68rem;
+  }
+
+  body.admin-touch-ui .admin-summary-content .MuiTypography-h5,
+  body.admin-touch-ui .admin-summary-content .MuiTypography-h6 {
+    font-size: 1rem;
   }
 }

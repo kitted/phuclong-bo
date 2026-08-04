@@ -162,11 +162,11 @@ function SummaryCards({ summary }) {
     ([, value]) => typeof value === "number" || typeof value?.value === "number"
   );
   return (
-    <Grid container spacing={2}>
+    <Grid className="admin-summary-grid" container spacing={2}>
       {rows.slice(0, 12).map(([key, value]) => (
         <Grid item xs={12} sm={6} lg={3} key={key}>
-          <Card sx={{ height: "100%" }}>
-            <SoftBox p={2}>
+          <Card className="admin-summary-card" sx={{ height: "100%" }}>
+            <SoftBox className="admin-summary-content" p={2}>
               <SoftTypography variant="caption" color="text">
                 {labels[key] || key}
               </SoftTypography>
@@ -708,7 +708,7 @@ export default function ReportsLive() {
                     {customerPeriodLabel} · Chạm vào một thẻ để lọc danh sách
                   </SoftTypography>
                 </SoftBox>
-                <Grid container spacing={1.5}>
+                <Grid className="admin-summary-grid" container spacing={1.5}>
                   {[
                     [
                       "ALL",
@@ -736,6 +736,7 @@ export default function ReportsLive() {
                     return (
                       <Grid item xs={12} sm={4} key={value}>
                         <SoftBox
+                          className="admin-summary-card admin-summary-content"
                           component="button"
                           type="button"
                           onClick={() => setCustomerPurchaseStatus(value)}
