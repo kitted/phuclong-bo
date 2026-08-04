@@ -28,6 +28,7 @@ import { downloadBlob, exportExcel, readExcelFile } from "utils/excel";
 import { DebtPaymentHistory, DebtPaymentModal } from "./debt-payment";
 import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
+import QuickSortBar from "components/QuickSortBar";
 import { mergeUniqueItems } from "utils/infiniteList";
 import CustomerDebtHistory from "./debt-history";
 
@@ -782,12 +783,7 @@ function CustomerDetail({
                         <SoftTypography variant="caption" color="text" display="block">
                           {label}
                         </SoftTypography>
-                        <SoftTypography
-                          variant="button"
-                          fontWeight="bold"
-                          display="block"
-                          noWrap
-                        >
+                        <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
                           {value}
                         </SoftTypography>
                       </SoftBox>
@@ -798,67 +794,67 @@ function CustomerDetail({
             )}
             {!touchViewport && (
               <SoftBox display="flex" justifyContent="space-between" alignItems="start">
-              <SoftBox>
-                <SoftTypography variant="h4" fontWeight="bold">
-                  {customer.name}
-                </SoftTypography>
-                <SoftTypography variant="button" color="text">
-                  {customer.code || "Chưa có mã"} · {customer.phone || "Chưa có SĐT"} ·{" "}
-                  {customer.email || "Chưa có email"}
-                </SoftTypography>
-              </SoftBox>
-              <SoftBox display="flex" gap={1}>
-                {!readOnly && Number(customer.debt || 0) > 0 && (
-                  <SoftButton
-                    size="small"
-                    color="success"
-                    variant="gradient"
-                    startIcon={<Icon>payments</Icon>}
-                    onClick={() => setDebtPaymentOpen(true)}
-                  >
-                    Thu công nợ
-                  </SoftButton>
-                )}
-                {!readOnly && (
-                  <SoftButton
-                    size="small"
-                    color="success"
-                    variant="outlined"
-                    startIcon={<Icon>add_comment</Icon>}
-                    onClick={() => setInteractionOpen(true)}
-                  >
-                    Ghi nhận tương tác
-                  </SoftButton>
-                )}
-                {!readOnly && (
-                  <SoftButton
-                    size="small"
-                    color="info"
-                    variant="outlined"
-                    startIcon={<Icon>edit</Icon>}
-                    onClick={() => onEdit(customer)}
-                  >
-                    Chỉnh sửa
-                  </SoftButton>
-                )}
-                {!readOnly && (
-                  <Tooltip title={customer.code ? "Đổi mã khách hàng" : "Cấp mã khách hàng"}>
-                    <IconButton color="info" onClick={() => setCodeOpen(true)}>
-                      <Icon>{customer.code ? "badge" : "add_card"}</Icon>
-                    </IconButton>
-                  </Tooltip>
-                )}
-                {!readOnly && (
-                  <Tooltip title="Xóa khách hàng">
-                    <IconButton color="error" onClick={() => setDeleteOpen(true)}>
-                      <Icon>delete_outline</Icon>
-                    </IconButton>
-                  </Tooltip>
-                )}
-                <IconButton onClick={onClose}>
-                  <Icon>close</Icon>
-                </IconButton>
-              </SoftBox>
+                <SoftBox>
+                  <SoftTypography variant="h4" fontWeight="bold">
+                    {customer.name}
+                  </SoftTypography>
+                  <SoftTypography variant="button" color="text">
+                    {customer.code || "Chưa có mã"} · {customer.phone || "Chưa có SĐT"} ·{" "}
+                    {customer.email || "Chưa có email"}
+                  </SoftTypography>
+                </SoftBox>
+                <SoftBox display="flex" gap={1}>
+                  {!readOnly && Number(customer.debt || 0) > 0 && (
+                    <SoftButton
+                      size="small"
+                      color="success"
+                      variant="gradient"
+                      startIcon={<Icon>payments</Icon>}
+                      onClick={() => setDebtPaymentOpen(true)}
+                    >
+                      Thu công nợ
+                    </SoftButton>
+                  )}
+                  {!readOnly && (
+                    <SoftButton
+                      size="small"
+                      color="success"
+                      variant="outlined"
+                      startIcon={<Icon>add_comment</Icon>}
+                      onClick={() => setInteractionOpen(true)}
+                    >
+                      Ghi nhận tương tác
+                    </SoftButton>
+                  )}
+                  {!readOnly && (
+                    <SoftButton
+                      size="small"
+                      color="info"
+                      variant="outlined"
+                      startIcon={<Icon>edit</Icon>}
+                      onClick={() => onEdit(customer)}
+                    >
+                      Chỉnh sửa
+                    </SoftButton>
+                  )}
+                  {!readOnly && (
+                    <Tooltip title={customer.code ? "Đổi mã khách hàng" : "Cấp mã khách hàng"}>
+                      <IconButton color="info" onClick={() => setCodeOpen(true)}>
+                        <Icon>{customer.code ? "badge" : "add_card"}</Icon>
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {!readOnly && (
+                    <Tooltip title="Xóa khách hàng">
+                      <IconButton color="error" onClick={() => setDeleteOpen(true)}>
+                        <Icon>delete_outline</Icon>
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  <IconButton onClick={onClose}>
+                    <Icon>close</Icon>
+                  </IconButton>
+                </SoftBox>
               </SoftBox>
             )}
             {touchViewport && !readOnly && (
@@ -866,7 +862,12 @@ function CustomerDetail({
                 display="grid"
                 gap={1}
                 mb={1.25}
-                sx={{ gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", sm: "repeat(5, minmax(0, 1fr))" } }}
+                sx={{
+                  gridTemplateColumns: {
+                    xs: "repeat(2, minmax(0, 1fr))",
+                    sm: "repeat(5, minmax(0, 1fr))",
+                  },
+                }}
               >
                 {Number(customer.debt || 0) > 0 && (
                   <SoftButton
@@ -1342,9 +1343,7 @@ export default function KhachHang() {
   const isStaff = currentUser?.role === "staff";
   const theme = useTheme();
   const touchViewport = useMediaQuery(theme.breakpoints.down("xl"));
-  const isTouchAdmin =
-    String(currentUser?.role || "").toLowerCase() === "admin" &&
-    touchViewport;
+  const isTouchAdmin = String(currentUser?.role || "").toLowerCase() === "admin" && touchViewport;
   const [customers, setCustomers] = useState([]);
   const [summary, setSummary] = useState({});
   const [search, setSearch] = useState("");
@@ -1803,35 +1802,35 @@ export default function KhachHang() {
                         bgcolor="#f3f8ff"
                         sx={{ border: "1px solid #bbdefb" }}
                       >
-                    <SoftButton
-                      color="secondary"
-                      variant="text"
-                      size="small"
-                      startIcon={<Icon>description</Icon>}
-                      onClick={downloadInteractionTemplate}
-                    >
-                      File mẫu tương tác
-                    </SoftButton>
-                    <SoftButton
-                      color="info"
-                      variant="outlined"
-                      size="small"
-                      startIcon={<Icon>upload_file</Icon>}
-                      disabled={interactionImporting}
-                      onClick={() => interactionImportInputRef.current?.click()}
-                    >
-                      {interactionImporting ? "Đang import..." : "Import tương tác"}
-                    </SoftButton>
-                    <SoftButton
-                      color="success"
-                      variant="outlined"
-                      size="small"
-                      startIcon={<Icon>download</Icon>}
-                      disabled={interactionExporting}
-                      onClick={handleInteractionExport}
-                    >
-                      {interactionExporting ? "Đang export..." : "Export tương tác"}
-                    </SoftButton>
+                        <SoftButton
+                          color="secondary"
+                          variant="text"
+                          size="small"
+                          startIcon={<Icon>description</Icon>}
+                          onClick={downloadInteractionTemplate}
+                        >
+                          File mẫu tương tác
+                        </SoftButton>
+                        <SoftButton
+                          color="info"
+                          variant="outlined"
+                          size="small"
+                          startIcon={<Icon>upload_file</Icon>}
+                          disabled={interactionImporting}
+                          onClick={() => interactionImportInputRef.current?.click()}
+                        >
+                          {interactionImporting ? "Đang import..." : "Import tương tác"}
+                        </SoftButton>
+                        <SoftButton
+                          color="success"
+                          variant="outlined"
+                          size="small"
+                          startIcon={<Icon>download</Icon>}
+                          disabled={interactionExporting}
+                          onClick={handleInteractionExport}
+                        >
+                          {interactionExporting ? "Đang export..." : "Export tương tác"}
+                        </SoftButton>
                       </SoftBox>
                       <SoftButton
                         color="info"
@@ -1933,59 +1932,19 @@ export default function KhachHang() {
                 </Select>
               </FormControl>
             </SoftBox>
-            {touchViewport && (
-              <SoftBox mb={1.5}>
-                <SoftTypography variant="caption" color="text" fontWeight="bold" display="block" mb={0.75}>
-                  Sắp xếp nhanh
-                </SoftTypography>
-                <SoftBox
-                  display="flex"
-                  gap={0.75}
-                  overflow="auto"
-                  pb={0.5}
-                  sx={{
-                    WebkitOverflowScrolling: "touch",
-                    scrollbarWidth: "none",
-                    "&::-webkit-scrollbar": { display: "none" },
-                  }}
-                >
-                  {[
-                    ["NEWEST", "Mới nhất", "schedule"],
-                    ["NAME_ASC", "Tên A–Z", "sort_by_alpha"],
-                    ["DEBT_DESC", "Nợ cao", "account_balance_wallet"],
-                    ["SALES_DESC", "Mua nhiều", "trending_up"],
-                  ].map(([value, label, icon]) => {
-                    const active = sortMode === value;
-                    return (
-                      <SoftBox
-                        key={value}
-                        component="button"
-                        type="button"
-                        onClick={() => setSortMode(value)}
-                        display="flex"
-                        alignItems="center"
-                        gap={0.6}
-                        px={1.25}
-                        py={0.8}
-                        borderRadius={2}
-                        flexShrink={0}
-                        sx={{
-                          border: `1px solid ${active ? "#1976d2" : "#dbe2ea"}`,
-                          bgcolor: active ? "#e8f2ff" : "#fff",
-                          color: active ? "#1565c0" : "#526271",
-                          fontSize: 12,
-                          fontWeight: active ? 700 : 600,
-                          cursor: "pointer",
-                        }}
-                      >
-                        <Icon sx={{ fontSize: 17 }}>{icon}</Icon>
-                        {label}
-                      </SoftBox>
-                    );
-                  })}
-                </SoftBox>
-              </SoftBox>
-            )}
+            <SoftBox mb={1.5}>
+              <QuickSortBar
+                value={sortMode}
+                onChange={setSortMode}
+                compact
+                options={[
+                  { value: "NEWEST", label: "Mới cập nhật", icon: "schedule" },
+                  { value: "NAME_ASC", label: "Tên A–Z", icon: "sort_by_alpha" },
+                  { value: "DEBT_DESC", label: "Công nợ cao", icon: "account_balance_wallet" },
+                  { value: "SALES_DESC", label: "Mua nhiều", icon: "trending_up" },
+                ]}
+              />
+            </SoftBox>
             {(isStaff || isTouchAdmin) && (
               <SoftBox
                 display={isTouchAdmin ? "grid" : { xs: "block", md: "none" }}
@@ -2123,9 +2082,7 @@ export default function KhachHang() {
             <SoftBox
               sx={{
                 overflowX: "auto",
-                display: isTouchAdmin
-                  ? "none"
-                  : { xs: isStaff ? "none" : "block", md: "block" },
+                display: isTouchAdmin ? "none" : { xs: isStaff ? "none" : "block", md: "block" },
               }}
             >
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -2168,7 +2125,7 @@ export default function KhachHang() {
                       </td>
                     </tr>
                   )}
-                  {customers.map((item) => {
+                  {sortedCustomers.map((item) => {
                     const warning = item.debtLimit > 0 && item.debt >= item.debtLimit;
                     return (
                       <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}>

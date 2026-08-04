@@ -12,6 +12,7 @@ import SoftButton from "components/SoftButton";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
 import MobileLoadMore from "components/MobileLoadMore";
+import QuickSortBar from "components/QuickSortBar";
 import { ReportsService } from "services/analyticsService";
 import { downloadBlob } from "utils/excel";
 import { toast } from "react-toastify";
@@ -574,43 +575,20 @@ export default function ReportsLive() {
                 <SoftTypography variant="caption" color="text" display="block" mb={0.5}>
                   Loại kỳ báo cáo
                 </SoftTypography>
-                <SoftBox display="flex" gap={1} flexWrap="wrap">
-                  {[
-                    ["WEEK", "Tuần", "date_range"],
-                    ["MONTH", "Tháng", "calendar_month"],
-                    ["QUARTER", "Quý", "view_week"],
-                    ["YEAR", "Năm", "event"],
-                    ["CUSTOM", "Từ ngày - đến ngày", "edit_calendar"],
-                  ].map(([value, label, icon]) => {
-                    const selected = period === value;
-                    return (
-                      <SoftBox
-                        key={value}
-                        component="button"
-                        type="button"
-                        onClick={() => changePeriod(value)}
-                        px={1.5}
-                        py={1}
-                        borderRadius={2}
-                        display="flex"
-                        alignItems="center"
-                        gap={0.75}
-                        bgcolor={selected ? "#E3F2FD" : "#fff"}
-                        sx={{
-                          border: `1.5px solid ${selected ? "#1976D2" : "#dfe4ea"}`,
-                          color: selected ? "#1565C0" : "#67748E",
-                          cursor: "pointer",
-                          font: "inherit",
-                          fontSize: 13,
-                          fontWeight: 700,
-                        }}
-                      >
-                        <Icon sx={{ fontSize: 18 }}>{icon}</Icon>
-                        {label}
-                      </SoftBox>
-                    );
-                  })}
-                </SoftBox>
+                <QuickSortBar
+                  label=""
+                  value={period}
+                  onChange={changePeriod}
+                  mobileColumns={2}
+                  compact
+                  options={[
+                    { value: "WEEK", label: "Tuần", icon: "date_range" },
+                    { value: "MONTH", label: "Tháng", icon: "calendar_month" },
+                    { value: "QUARTER", label: "Quý", icon: "view_week" },
+                    { value: "YEAR", label: "Năm", icon: "event" },
+                    { value: "CUSTOM", label: "Tùy ngày", icon: "edit_calendar" },
+                  ]}
+                />
               </SoftBox>
               {period !== "CUSTOM" ? (
                 <SoftBox width={180}>

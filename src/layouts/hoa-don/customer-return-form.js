@@ -72,10 +72,7 @@ export function InvoiceBusinessTypeSwitch({ value, onChange }) {
     },
   ];
   return (
-    <SoftBox
-      display="grid"
-      sx={{ gridTemplateColumns: { xs: "1fr 1fr", sm: "1fr 1fr" }, gap: 1 }}
-    >
+    <SoftBox display="grid" sx={{ gridTemplateColumns: { xs: "1fr 1fr", sm: "1fr 1fr" }, gap: 1 }}>
       {options.map((option) => {
         const active = value === option.value;
         return (
@@ -320,7 +317,9 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
   }, [settlementMode, totalReturnAmount, currentDebt]);
 
   const updateItem = (index, patch) =>
-    setItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+    setItems((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
+    );
   const chooseProduct = (index, product) => {
     const price = Number(product?.sellPrice ?? product?.price ?? product?.salePrice ?? 0);
     updateItem(index, {
@@ -359,44 +358,44 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
   };
 
   const buildPayload = () => ({
-        customerId: getId(customer),
-        destinationTruckId: getId(truck),
-        items: items.map((item) => ({
-          productId: item.type === "CATALOG" ? getId(item.product) : undefined,
-          manualProduct:
-            item.type === "MANUAL"
-              ? {
-                  code: item.manualCode.trim() || undefined,
-                  name: item.manualName.trim(),
-                  unit: item.manualUnit.trim() || "Cái",
-                }
-              : undefined,
-          qty: Number(item.qty),
-          previousUnitPrice: Number(item.previousUnitPrice || 0) || undefined,
-          returnUnitPrice: Number(item.returnUnitPrice || 0),
-          condition: item.condition,
-          note: item.note.trim() || undefined,
-        })),
-        settlement: {
-          debtReductionAmount: Number(debtReductionAmount || 0),
-          refunds: [
-            Number(cashRefundAmount || 0) > 0
-              ? { method: "CASH", amount: Number(cashRefundAmount) }
-              : null,
-            Number(bankRefundAmount || 0) > 0
-              ? {
-                  method: "BANK_TRANSFER",
-                  amount: Number(bankRefundAmount),
-                  referenceCode: bankReferenceCode.trim() || undefined,
-                }
-              : null,
-          ].filter(Boolean),
-        },
-        reason: reason.trim(),
-        priceAdjustmentReason: priceChanged ? priceAdjustmentReason.trim() : undefined,
-        note: note.trim() || undefined,
-        idempotencyKey,
-      });
+    customerId: getId(customer),
+    destinationTruckId: getId(truck),
+    items: items.map((item) => ({
+      productId: item.type === "CATALOG" ? getId(item.product) : undefined,
+      manualProduct:
+        item.type === "MANUAL"
+          ? {
+              code: item.manualCode.trim() || undefined,
+              name: item.manualName.trim(),
+              unit: item.manualUnit.trim() || "Cái",
+            }
+          : undefined,
+      qty: Number(item.qty),
+      previousUnitPrice: Number(item.previousUnitPrice || 0) || undefined,
+      returnUnitPrice: Number(item.returnUnitPrice || 0),
+      condition: item.condition,
+      note: item.note.trim() || undefined,
+    })),
+    settlement: {
+      debtReductionAmount: Number(debtReductionAmount || 0),
+      refunds: [
+        Number(cashRefundAmount || 0) > 0
+          ? { method: "CASH", amount: Number(cashRefundAmount) }
+          : null,
+        Number(bankRefundAmount || 0) > 0
+          ? {
+              method: "BANK_TRANSFER",
+              amount: Number(bankRefundAmount),
+              referenceCode: bankReferenceCode.trim() || undefined,
+            }
+          : null,
+      ].filter(Boolean),
+    },
+    reason: reason.trim(),
+    priceAdjustmentReason: priceChanged ? priceAdjustmentReason.trim() : undefined,
+    note: note.trim() || undefined,
+    idempotencyKey,
+  });
 
   const openReview = async () => {
     const message = validationMessage();
@@ -490,11 +489,27 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
             </SoftTypography>
           </SoftBox>
           <SoftBox mt={2.5} p={2} borderRadius={2} bgcolor="#f7f9fc">
-            <SummaryRow label="Giá trị hàng hoàn" value={createdReturn.returnAmount ?? totalReturnAmount} strong />
-            <SummaryRow label="Đã trừ công nợ" value={createdReturn.debtReductionAmount ?? debtReductionAmount} />
-            <SummaryRow label="Đã hoàn khách" value={createdReturn.refundAmount ?? cashRefundAmount + bankRefundAmount} />
+            <SummaryRow
+              label="Giá trị hàng hoàn"
+              value={createdReturn.returnAmount ?? totalReturnAmount}
+              strong
+            />
+            <SummaryRow
+              label="Đã trừ công nợ"
+              value={createdReturn.debtReductionAmount ?? debtReductionAmount}
+            />
+            <SummaryRow
+              label="Đã hoàn khách"
+              value={createdReturn.refundAmount ?? cashRefundAmount + bankRefundAmount}
+            />
           </SoftBox>
-          <SoftButton variant="gradient" color="success" fullWidth sx={{ mt: 2.5 }} onClick={onClose}>
+          <SoftButton
+            variant="gradient"
+            color="success"
+            fullWidth
+            sx={{ mt: 2.5 }}
+            onClick={onClose}
+          >
             Hoàn tất
           </SoftButton>
         </SoftBox>
@@ -597,7 +612,9 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                     options={trucks}
                     loading={trucksLoading}
                     filterOptions={(values) => values}
-                    isOptionEqualToValue={(left, right) => String(getId(left)) === String(getId(right))}
+                    isOptionEqualToValue={(left, right) =>
+                      String(getId(left)) === String(getId(right))
+                    }
                     getOptionLabel={(option) =>
                       [option.name || option.code, option.licensePlate].filter(Boolean).join(" · ")
                     }
@@ -629,7 +646,12 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                       bgcolor="#fff"
                       sx={{ border: "2px solid #f0d6b5" }}
                     >
-                      <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={1.25}>
+                      <SoftBox
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        mb={1.25}
+                      >
                         <SoftTypography variant="button" color="warning" fontWeight="bold">
                           SẢN PHẨM HOÀN #{index + 1}
                         </SoftTypography>
@@ -637,13 +659,21 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                           <IconButton
                             color="error"
                             size="small"
-                            onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                            onClick={() =>
+                              setItems((current) =>
+                                current.filter((_, itemIndex) => itemIndex !== index)
+                              )
+                            }
                           >
                             <Icon>remove_circle</Icon>
                           </IconButton>
                         )}
                       </SoftBox>
-                      <SoftBox display="grid" sx={{ gridTemplateColumns: "1fr 1fr", gap: 1 }} mb={1.25}>
+                      <SoftBox
+                        display="grid"
+                        sx={{ gridTemplateColumns: "1fr 1fr", gap: 1 }}
+                        mb={1.25}
+                      >
                         {[
                           ["CATALOG", "inventory_2", "Hàng công ty"],
                           ["MANUAL", "edit_note", "Ngoài danh mục"],
@@ -663,67 +693,125 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                         })}
                       </SoftBox>
                       {item.type === "CATALOG" ? (
-                        <ProductSelector value={item.product} onChange={(product) => chooseProduct(index, product)} />
+                        <ProductSelector
+                          value={item.product}
+                          onChange={(product) => chooseProduct(index, product)}
+                        />
                       ) : (
                         <Grid container spacing={1.25}>
                           <Grid item xs={12} sm={7}>
                             <SoftInput
                               value={item.manualName}
-                              onChange={(event) => updateItem(index, { manualName: event.target.value })}
+                              onChange={(event) =>
+                                updateItem(index, { manualName: event.target.value })
+                              }
                               placeholder="Tên sản phẩm ngoài danh mục *"
                             />
                           </Grid>
                           <Grid item xs={6} sm={3}>
                             <SoftInput
                               value={item.manualCode}
-                              onChange={(event) => updateItem(index, { manualCode: event.target.value })}
+                              onChange={(event) =>
+                                updateItem(index, { manualCode: event.target.value })
+                              }
                               placeholder="Mã (nếu có)"
                             />
                           </Grid>
                           <Grid item xs={6} sm={2}>
                             <SoftInput
                               value={item.manualUnit}
-                              onChange={(event) => updateItem(index, { manualUnit: event.target.value })}
+                              onChange={(event) =>
+                                updateItem(index, { manualUnit: event.target.value })
+                              }
                               placeholder="ĐVT"
                             />
                           </Grid>
                         </Grid>
                       )}
                       <Grid container spacing={1.25} mt={0.1}>
-                        <Grid item xs={4} sm={2}>
-                          <SoftTypography variant="caption" color="text">Số lượng *</SoftTypography>
-                          <SoftInput
-                            type="number"
-                            inputProps={{ min: 1, step: 1 }}
-                            value={item.qty}
-                            onChange={(event) => updateItem(index, { qty: Number(event.target.value) })}
-                          />
+                        <Grid item xs={12} sm={4}>
+                          <SoftTypography variant="caption" color="text">
+                            Số lượng *
+                          </SoftTypography>
+                          <SoftBox display="flex" alignItems="center" gap={0.75} mt={0.4}>
+                            <IconButton
+                              disabled={Number(item.qty || 1) <= 1}
+                              onClick={() =>
+                                updateItem(index, { qty: Math.max(1, Number(item.qty || 1) - 1) })
+                              }
+                              sx={{ width: 42, height: 42, border: "1px solid #d5dde7" }}
+                            >
+                              <Icon>remove</Icon>
+                            </IconButton>
+                            <SoftBox flex={1} minWidth={70}>
+                              <SoftInput
+                                type="number"
+                                inputProps={{
+                                  min: 1,
+                                  step: 1,
+                                  style: { textAlign: "center", fontWeight: 700 },
+                                }}
+                                value={item.qty}
+                                onChange={(event) =>
+                                  updateItem(index, { qty: Number(event.target.value) })
+                                }
+                              />
+                            </SoftBox>
+                            <IconButton
+                              onClick={() => updateItem(index, { qty: Number(item.qty || 0) + 1 })}
+                              sx={{
+                                width: 42,
+                                height: 42,
+                                color: "#fff",
+                                bgcolor: "#ed6c02",
+                                "&:hover": { bgcolor: "#e65100" },
+                              }}
+                            >
+                              <Icon>add</Icon>
+                            </IconButton>
+                          </SoftBox>
                         </Grid>
-                        <Grid item xs={8} sm={3.5}>
-                          <SoftTypography variant="caption" color="text">Giá bán trước (nếu biết)</SoftTypography>
+                        <Grid item xs={12} sm={4}>
+                          <SoftTypography variant="caption" color="text">
+                            Giá bán trước (nếu biết)
+                          </SoftTypography>
                           <SoftInput
                             inputMode="numeric"
                             value={item.previousUnitPrice || ""}
-                            onChange={(event) => updateItem(index, { previousUnitPrice: numericValue(event.target.value) })}
+                            onChange={(event) =>
+                              updateItem(index, {
+                                previousUnitPrice: numericValue(event.target.value),
+                              })
+                            }
                             placeholder="0"
                           />
                         </Grid>
-                        <Grid item xs={8} sm={3.5}>
-                          <SoftTypography variant="caption" color="text">Giá nhận hoàn *</SoftTypography>
+                        <Grid item xs={12} sm={4}>
+                          <SoftTypography variant="caption" color="text">
+                            Giá nhận hoàn *
+                          </SoftTypography>
                           <SoftInput
                             inputMode="numeric"
                             value={item.returnUnitPrice || ""}
-                            onChange={(event) => updateItem(index, { returnUnitPrice: numericValue(event.target.value) })}
+                            onChange={(event) =>
+                              updateItem(index, {
+                                returnUnitPrice: numericValue(event.target.value),
+                              })
+                            }
                             placeholder="0"
                           />
                         </Grid>
-                        <Grid item xs={4} sm={3}>
-                          <SoftTypography variant="caption" color="text">Tình trạng</SoftTypography>
+                        <Grid item xs={12} sm={4}>
+                          <SoftTypography variant="caption" color="text">
+                            Tình trạng
+                          </SoftTypography>
                           <TextField
                             select
                             fullWidth
                             value={item.condition}
-                            onChange={(event) => updateItem(index, { condition: event.target.value })}
+                            onChange={(event) =>
+                              updateItem(index, { condition: event.target.value })
+                            }
                           >
                             <MenuItem value="GOOD">Hàng tốt</MenuItem>
                             <MenuItem value="DAMAGED">Hư hỏng</MenuItem>
@@ -732,13 +820,24 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                           </TextField>
                         </Grid>
                       </Grid>
-                      <SoftBox mt={1.25} display="flex" justifyContent="space-between" alignItems="center" gap={1}>
+                      <SoftBox
+                        mt={1.25}
+                        display="flex"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        gap={1}
+                      >
                         <SoftInput
                           value={item.note}
                           onChange={(event) => updateItem(index, { note: event.target.value })}
                           placeholder="Ghi chú tình trạng sản phẩm..."
                         />
-                        <SoftTypography variant="button" color="warning" fontWeight="bold" whiteSpace="nowrap">
+                        <SoftTypography
+                          variant="button"
+                          color="warning"
+                          fontWeight="bold"
+                          whiteSpace="nowrap"
+                        >
                           {money(Number(item.qty || 0) * Number(item.returnUnitPrice || 0))}
                         </SoftTypography>
                       </SoftBox>
@@ -774,18 +873,17 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                   bgcolor="#fafbfc"
                   sx={{ border: "1px solid #e5e7eb", position: { md: "sticky" }, top: 0 }}
                 >
-                  <SoftBox display="flex" justifyContent="space-between" alignItems="center" mb={1.25}>
+                  <SoftBox
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    mb={1.25}
+                  >
                     <SoftTypography variant="h6" fontWeight="bold">
                       4. Xử lý tiền hoàn
                     </SoftTypography>
                     {settlementMode === "AUTO" && (
-                      <SoftBox
-                        px={1}
-                        py={0.35}
-                        borderRadius={5}
-                        bgcolor="#e0f2f1"
-                        color="#00796b"
-                      >
+                      <SoftBox px={1} py={0.35} borderRadius={5} bgcolor="#e0f2f1" color="#00796b">
                         <SoftTypography variant="caption" color="inherit" fontWeight="bold">
                           TỰ ĐỘNG
                         </SoftTypography>
@@ -814,10 +912,17 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                           <SoftBox display="flex" gap={1.25} alignItems="center">
                             <Icon>{option.icon}</Icon>
                             <SoftBox>
-                              <SoftTypography variant="button" color="inherit" fontWeight="bold" display="block">
+                              <SoftTypography
+                                variant="button"
+                                color="inherit"
+                                fontWeight="bold"
+                                display="block"
+                              >
                                 {option.title}
                               </SoftTypography>
-                              <SoftTypography variant="caption" color="text">{option.subtitle}</SoftTypography>
+                              <SoftTypography variant="caption" color="text">
+                                {option.subtitle}
+                              </SoftTypography>
                             </SoftBox>
                           </SoftBox>
                         </SoftBox>
@@ -827,17 +932,23 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
 
                   <Grid container spacing={1.25} mt={0.5}>
                     <Grid item xs={12}>
-                      <SoftTypography variant="caption" color="text">Trừ công nợ</SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        Trừ công nợ
+                      </SoftTypography>
                       <SoftInput
                         inputMode="numeric"
                         disabled={settlementMode !== "MIXED"}
                         value={debtReductionAmount || ""}
-                        onChange={(event) => setDebtReductionAmount(numericValue(event.target.value))}
+                        onChange={(event) =>
+                          setDebtReductionAmount(numericValue(event.target.value))
+                        }
                         placeholder="0"
                       />
                     </Grid>
                     <Grid item xs={6}>
-                      <SoftTypography variant="caption" color="text">Hoàn tiền mặt</SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        Hoàn tiền mặt
+                      </SoftTypography>
                       <SoftInput
                         inputMode="numeric"
                         disabled={settlementMode !== "MIXED"}
@@ -847,7 +958,9 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                       />
                     </Grid>
                     <Grid item xs={6}>
-                      <SoftTypography variant="caption" color="text">Hoàn chuyển khoản</SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        Hoàn chuyển khoản
+                      </SoftTypography>
                       <SoftInput
                         inputMode="numeric"
                         disabled={settlementMode !== "MIXED"}
@@ -869,12 +982,31 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
 
                   <SoftBox mt={2} p={1.5} borderRadius={1.5} bgcolor="#fff">
                     <SummaryRow label="Giá tham khảo trước" value={referenceAmount} />
-                    <SummaryRow label="Giá trị nhận hoàn" value={totalReturnAmount} color="warning" strong />
+                    <SummaryRow
+                      label="Giá trị nhận hoàn"
+                      value={totalReturnAmount}
+                      color="warning"
+                      strong
+                    />
                     <SummaryRow label="Trừ công nợ" value={debtReductionAmount} color="success" />
-                    <SummaryRow label="Hoàn cho khách" value={cashRefundAmount + bankRefundAmount} color="info" />
-                    <SummaryRow label="Công nợ sau hoàn" value={customerDebtAfter} color={customerDebtAfter > 0 ? "error" : "success"} />
+                    <SummaryRow
+                      label="Hoàn cho khách"
+                      value={cashRefundAmount + bankRefundAmount}
+                      color="info"
+                    />
+                    <SummaryRow
+                      label="Công nợ sau hoàn"
+                      value={customerDebtAfter}
+                      color={customerDebtAfter > 0 ? "error" : "success"}
+                    />
                     {totalSettlement !== totalReturnAmount && (
-                      <SoftTypography variant="caption" color="error" fontWeight="bold" display="block" mt={1}>
+                      <SoftTypography
+                        variant="caption"
+                        color="error"
+                        fontWeight="bold"
+                        display="block"
+                        mt={1}
+                      >
                         Còn lệch {money(totalReturnAmount - totalSettlement)} chưa được xử lý
                       </SoftTypography>
                     )}
@@ -912,7 +1044,9 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
             <SoftBox maxWidth={760} mx="auto">
               <SoftBox textAlign="center" mb={2.5}>
                 <Icon sx={{ fontSize: 44, color: "#ed6c02" }}>fact_check</Icon>
-                <SoftTypography variant="h5" fontWeight="bold">Kiểm tra phiếu hoàn hàng</SoftTypography>
+                <SoftTypography variant="h5" fontWeight="bold">
+                  Kiểm tra phiếu hoàn hàng
+                </SoftTypography>
                 <SoftTypography variant="caption" color="text">
                   Hàng và công nợ chỉ thay đổi sau khi xác nhận cuối
                 </SoftTypography>
@@ -920,24 +1054,46 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
               <SoftBox p={2} borderRadius={2} bgcolor="#f7f9fc" mb={2}>
                 {[
                   ["Khách hàng", [customer?.code, customer?.name].filter(Boolean).join(" · ")],
-                  ["Xe nhận hàng", [truck?.name || truck?.code, truck?.licensePlate].filter(Boolean).join(" · ")],
+                  [
+                    "Xe nhận hàng",
+                    [truck?.name || truck?.code, truck?.licensePlate].filter(Boolean).join(" · "),
+                  ],
                   ["Lý do", reason],
                 ].map(([label, value]) => (
-                  <SoftBox key={label} display="flex" justifyContent="space-between" gap={2} py={0.5}>
-                    <SoftTypography variant="caption" color="text">{label}</SoftTypography>
-                    <SoftTypography variant="button" fontWeight="bold" textAlign="right">{value}</SoftTypography>
+                  <SoftBox
+                    key={label}
+                    display="flex"
+                    justifyContent="space-between"
+                    gap={2}
+                    py={0.5}
+                  >
+                    <SoftTypography variant="caption" color="text">
+                      {label}
+                    </SoftTypography>
+                    <SoftTypography variant="button" fontWeight="bold" textAlign="right">
+                      {value}
+                    </SoftTypography>
                   </SoftBox>
                 ))}
               </SoftBox>
               {items.map((item, index) => (
-                <SoftBox key={index} p={1.5} mb={1} borderRadius={1.5} sx={{ border: "1px solid #f0d6b5" }}>
+                <SoftBox
+                  key={index}
+                  p={1.5}
+                  mb={1}
+                  borderRadius={1.5}
+                  sx={{ border: "1px solid #f0d6b5" }}
+                >
                   <SoftBox display="flex" justifyContent="space-between" gap={2}>
                     <SoftBox>
                       <SoftTypography variant="button" fontWeight="bold" display="block">
                         {item.type === "CATALOG" ? item.product?.name : item.manualName}
                       </SoftTypography>
                       <SoftTypography variant="caption" color="text">
-                        {numberText(item.qty)} {item.type === "CATALOG" ? item.product?.unit : item.manualUnit} × {money(item.returnUnitPrice)} · {item.type === "MANUAL" ? "Chờ phân loại" : "Hàng công ty"}
+                        {numberText(item.qty)}{" "}
+                        {item.type === "CATALOG" ? item.product?.unit : item.manualUnit} ×{" "}
+                        {money(item.returnUnitPrice)} ·{" "}
+                        {item.type === "MANUAL" ? "Chờ phân loại" : "Hàng công ty"}
                       </SoftTypography>
                     </SoftBox>
                     <SoftTypography variant="button" color="warning" fontWeight="bold">
@@ -956,12 +1112,20 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                 <SummaryRow label="Trừ công nợ" value={debtReductionAmount} color="success" />
                 <SummaryRow label="Hoàn tiền mặt" value={cashRefundAmount} />
                 <SummaryRow label="Hoàn chuyển khoản" value={bankRefundAmount} />
-                <SummaryRow label="Công nợ sau hoàn" value={customerDebtAfter} color={customerDebtAfter > 0 ? "error" : "success"} />
+                <SummaryRow
+                  label="Công nợ sau hoàn"
+                  value={customerDebtAfter}
+                  color={customerDebtAfter > 0 ? "error" : "success"}
+                />
               </SoftBox>
               {note.trim() && (
                 <SoftBox mt={1.5} p={1.5} borderRadius={1.5} bgcolor="#fff8e1">
-                  <SoftTypography variant="caption" color="text" display="block">Ghi chú</SoftTypography>
-                  <SoftTypography variant="button" sx={{ whiteSpace: "pre-wrap" }}>{note}</SoftTypography>
+                  <SoftTypography variant="caption" color="text" display="block">
+                    Ghi chú
+                  </SoftTypography>
+                  <SoftTypography variant="button" sx={{ whiteSpace: "pre-wrap" }}>
+                    {note}
+                  </SoftTypography>
                 </SoftBox>
               )}
             </SoftBox>

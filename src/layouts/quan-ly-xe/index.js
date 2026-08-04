@@ -25,6 +25,7 @@ import { toast } from "react-toastify";
 import { useSelector } from "react-redux";
 import StaffMobileHeader from "components/StaffMobileHeader";
 import MobileLoadMore from "components/MobileLoadMore";
+import QuickSortBar from "components/QuickSortBar";
 import CustomerReturnService from "services/customerReturnService";
 import { mergeUniqueItems } from "utils/infiniteList";
 
@@ -367,7 +368,7 @@ function TruckModal({ open, onClose, truck, onSaved }) {
 }
 
 function TransferModal({ open, onClose, truck, type, onSaved }) {
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState([{ productId: "", qty: 1 }]);
   const [products, setProducts] = useState([]);
   const [productSearch, setProductSearch] = useState("");
   const [code, setCode] = useState("");
@@ -378,7 +379,7 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
   const isLoad = type === "LOAD";
   useEffect(() => {
     if (!open || !truck) return;
-    setItems([]);
+    setItems([{ productId: "", qty: 1 }]);
     setProducts([]);
     setProductSearch("");
     setCode("");
@@ -871,7 +872,7 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
   const [destinationSearch, setDestinationSearch] = useState("");
   const [destinations, setDestinations] = useState([]);
   const [products, setProducts] = useState([]);
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState([{ productId: "", qty: 1 }]);
   const [productSearch, setProductSearch] = useState("");
   const [transferDate, setTransferDate] = useState(todayValue());
   const [note, setNote] = useState("");
@@ -882,7 +883,7 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
     if (!open || !sourceTruck) return;
     setDestination(null);
     setDestinationSearch("");
-    setItems([]);
+    setItems([{ productId: "", qty: 1 }]);
     setProductSearch("");
     setTransferDate(todayValue());
     setNote("");
@@ -939,18 +940,10 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
     if (!productId) return;
     setPreview(null);
     setItems((current) => {
-      const existingIndex = current.findIndex(
-        (item) => String(item.productId) === String(productId)
-      );
-      if (existingIndex >= 0) {
-        const currentQuantity = Number(current[existingIndex].qty || 0);
-        const stock = Number(product.stock || 0);
-        if (stock > 0 && currentQuantity >= stock) {
-          toast.warning(`${product.name || "Sản phẩm"} chỉ còn ${stock} ${product.unit || ""}`);
-          return current;
-        }
+      const emptyIndex = current.findIndex((item) => !item.productId);
+      if (emptyIndex >= 0) {
         return current.map((item, index) =>
-          index === existingIndex ? { ...item, qty: currentQuantity + 1, product } : item
+          index === emptyIndex ? { ...item, productId, product } : item
         );
       }
       return [...current, { productId, qty: 1, product }];
@@ -959,10 +952,7 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   };
   const changeQty = (index, value) => {
-    const product = selectedProduct(items[index] || {});
-    const stock = Number(product.stock || 0);
-    const quantity = Math.max(1, Math.floor(Number(value) || 1));
-    change(index, "qty", stock > 0 ? Math.min(quantity, stock) : quantity);
+    change(index, "qty", value === "" ? "" : Math.max(1, Math.floor(Number(value) || 1)));
   };
   const payload = () => ({
     destinationTruckId: getId(destination),
@@ -1226,7 +1216,7 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
                       SẢN PHẨM CHUYỂN #{index + 1}
                     </SoftTypography>
                     <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
-                      {product.name || "Sản phẩm"}
+                      {product.name || "Chưa chọn sản phẩm"}
                     </SoftTypography>
                     <SoftTypography variant="caption" color="text">
                       Còn trên xe nguồn: <b>{stock}</b> {product.unit || ""}
@@ -1265,7 +1255,7 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
                     <SoftBox width={84}>
                       <SoftInput
                         type="number"
-                        inputProps={{ min: 1, max: stock || undefined, step: 1 }}
+                        inputProps={{ min: 1, step: 1 }}
                         value={item.qty}
                         onChange={(event) => changeQty(index, event.target.value)}
                         sx={{ "& input": { textAlign: "center", fontWeight: 700 } }}
@@ -1273,7 +1263,6 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
                     </SoftBox>
                     <IconButton
                       onClick={() => changeQty(index, quantity + 1)}
-                      disabled={stock > 0 && quantity >= stock}
                       sx={{
                         width: 42,
                         height: 42,
@@ -1290,6 +1279,26 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
               </SoftBox>
             );
           })}
+          <SoftButton
+            variant="outlined"
+            color="info"
+            startIcon={<Icon>add</Icon>}
+            fullWidth
+            onClick={() => {
+              setItems((current) => [...current, { productId: "", qty: 1 }]);
+              setPreview(null);
+            }}
+            sx={{
+              mt: 0.5,
+              minHeight: 52,
+              border: "2px dashed #1976d2",
+              bgcolor: "#f3f8ff",
+              fontWeight: 700,
+              "&:hover": { border: "2px solid #1976d2", bgcolor: "#eaf3ff" },
+            }}
+          >
+            Thêm dòng sản phẩm
+          </SoftButton>
         </SoftBox>
         <SoftTypography variant="caption" display="block" mt={1}>
           Ghi chú
@@ -2677,52 +2686,18 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
 
             {detailTab === 1 && (
               <SoftBox>
-                <SoftBox
-                  display="flex"
-                  gap={1}
-                  pb={1}
-                  sx={{ overflowX: "auto", scrollbarWidth: "none" }}
-                >
-                  {[
-                    ["DAY", "Theo ngày", "today"],
-                    ["WEEK", "Theo tuần", "date_range"],
-                    ["ALL", "Tất cả", "history"],
-                  ].map(([value, label, icon]) => {
-                    const selected = salesPeriod === value;
-                    return (
-                      <SoftBox
-                        component="button"
-                        type="button"
-                        key={value}
-                        onClick={() => setSalesPeriod(value)}
-                        px={1.5}
-                        py={1}
-                        minWidth={112}
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        gap={0.75}
-                        sx={{
-                          border: `2px solid ${selected ? "#1976d2" : "#dce2e9"}`,
-                          borderRadius: 2,
-                          bgcolor: selected ? "#e3f2fd" : "#fff",
-                          color: selected ? "#0d47a1" : "#5f6b7a",
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        <Icon sx={{ fontSize: 20 }}>{icon}</Icon>
-                        <SoftTypography
-                          variant="button"
-                          fontWeight="bold"
-                          sx={{ color: "inherit" }}
-                        >
-                          {label}
-                        </SoftTypography>
-                      </SoftBox>
-                    );
-                  })}
-                </SoftBox>
+                <QuickSortBar
+                  label="Xem lịch sử theo"
+                  value={salesPeriod}
+                  onChange={setSalesPeriod}
+                  mobileColumns={3}
+                  compact
+                  options={[
+                    { value: "DAY", label: "Ngày", icon: "today" },
+                    { value: "WEEK", label: "Tuần", icon: "date_range" },
+                    { value: "ALL", label: "Tất cả", icon: "history" },
+                  ]}
+                />
 
                 <Grid container spacing={1.25} mt={0.25} mb={2}>
                   {salesPeriod === "DAY" && (
@@ -2744,16 +2719,17 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                     </Grid>
                   )}
                   <Grid item xs={12} sm={salesPeriod === "ALL" ? 12 : 6}>
-                    <FormControl fullWidth size="small">
-                      <Select
-                        value={salesSort}
-                        onChange={(event) => setSalesSort(event.target.value)}
-                        sx={{ bgcolor: "#fff", minHeight: 40 }}
-                      >
-                        <MenuItem value="desc">Mới nhất trước</MenuItem>
-                        <MenuItem value="asc">Cũ nhất trước</MenuItem>
-                      </Select>
-                    </FormControl>
+                    <QuickSortBar
+                      label="Thứ tự hiển thị"
+                      value={salesSort}
+                      onChange={setSalesSort}
+                      color="#1565c0"
+                      compact
+                      options={[
+                        { value: "desc", label: "Mới nhất", icon: "south" },
+                        { value: "asc", label: "Cũ nhất", icon: "north" },
+                      ]}
+                    />
                   </Grid>
                 </Grid>
 
@@ -4206,48 +4182,26 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                       ))}
                     </Grid>
 
-                    <SoftBox
-                      display="flex"
-                      gap={0.75}
-                      mb={1.5}
-                      pb={0.5}
-                      sx={{ overflowX: "auto", scrollbarWidth: "none" }}
-                    >
-                      {[
-                        ["ALL", "Tất cả"],
-                        ...Object.entries(STOCK_CHECK_STATUSES).map(([value, meta]) => [
-                          value,
-                          meta.label,
-                        ]),
-                      ].map(([value, label]) => {
-                        const active = stockCheckFilter === value;
-                        const count =
-                          value === "ALL"
-                            ? stockCheckItems.length
-                            : stockCheckItems.filter((item) => item.status === value).length;
-                        return (
-                          <SoftBox
-                            component="button"
-                            type="button"
-                            key={value}
-                            onClick={() => setStockCheckFilter(value)}
-                            px={1.25}
-                            py={0.8}
-                            minWidth="max-content"
-                            sx={{
-                              border: active ? "2px solid #1976d2" : "1px solid #dce2e9",
-                              borderRadius: 2,
-                              bgcolor: active ? "#e3f2fd" : "#fff",
-                              color: active ? "#0d47a1" : "#5f6b7a",
-                              fontSize: 12,
-                              fontWeight: 700,
-                              cursor: "pointer",
-                            }}
-                          >
-                            {label} ({count})
-                          </SoftBox>
-                        );
-                      })}
+                    <SoftBox mb={1.5}>
+                      <QuickSortBar
+                        label="Lọc nhanh kết quả"
+                        value={stockCheckFilter}
+                        onChange={setStockCheckFilter}
+                        compact
+                        options={[
+                          ["ALL", "Tất cả"],
+                          ...Object.entries(STOCK_CHECK_STATUSES).map(([value, meta]) => [
+                            value,
+                            meta.label,
+                          ]),
+                        ].map(([value, label]) => {
+                          const count =
+                            value === "ALL"
+                              ? stockCheckItems.length
+                              : stockCheckItems.filter((item) => item.status === value).length;
+                          return { value, label: `${label} (${count})` };
+                        })}
+                      />
                     </SoftBox>
 
                     <SoftBox display={{ xs: "block", md: "none" }}>
@@ -4920,6 +4874,7 @@ export default function QuanLyXe() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [truckSort, setTruckSort] = useState("NEWEST");
   const [transferType, setTransferType] = useState("");
   const [transferTruckId, setTransferTruckId] = useState("");
   const [transferFrom, setTransferFrom] = useState("");
@@ -4941,7 +4896,7 @@ export default function QuanLyXe() {
   useEffect(() => {
     setPage(1);
     setTransferPage(1);
-  }, [debouncedSearch, status, transferType, transferTruckId, transferFrom, transferTo]);
+  }, [debouncedSearch, status, truckSort, transferType, transferTruckId, transferFrom, transferTo]);
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -4953,8 +4908,9 @@ export default function QuanLyXe() {
               status: status || undefined,
               page,
               limit: 12,
-              sortBy: "createdAt",
-              sortOrder: "desc",
+              sortBy:
+                truckSort === "CODE_ASC" ? "code" : truckSort === "NAME_ASC" ? "name" : "createdAt",
+              sortOrder: truckSort === "NEWEST" ? "desc" : "asc",
             }),
             TruckService.getSummary(),
           ])
@@ -5004,6 +4960,7 @@ export default function QuanLyXe() {
     transferPage,
     debouncedSearch,
     status,
+    truckSort,
     transferType,
     transferTruckId,
     transferFrom,
@@ -5295,6 +5252,26 @@ export default function QuanLyXe() {
                 </>
               )}
             </SoftBox>
+            {tab === 0 && (
+              <SoftBox mb={2}>
+                <QuickSortBar
+                  value={truckSort}
+                  onChange={(value) => {
+                    setTruckSort(value);
+                    setPage(1);
+                    setTrucks([]);
+                  }}
+                  color="#1565c0"
+                  mobileColumns={3}
+                  compact
+                  options={[
+                    { value: "NEWEST", label: "Mới nhất", icon: "schedule" },
+                    { value: "CODE_ASC", label: "Mã xe A–Z", icon: "tag" },
+                    { value: "NAME_ASC", label: "Tên xe A–Z", icon: "sort_by_alpha" },
+                  ]}
+                />
+              </SoftBox>
+            )}
             {tab === 1 && (
               <Grid className="admin-summary-grid" container spacing={2} mb={3}>
                 {[

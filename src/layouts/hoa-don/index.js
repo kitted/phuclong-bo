@@ -24,6 +24,7 @@ import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
+import QuickSortBar from "components/QuickSortBar";
 import { InvoiceService, ProductService, TruckService } from "services/warehouseService";
 import { CustomerService, DebtPaymentService } from "services/crmService";
 import EmployeeService from "services/employeeService";
@@ -69,12 +70,12 @@ const dateValue = (value) => {
   ).padStart(2, "0")}`;
 };
 const invoicePeriodOptions = [
-  { value: "DAY", label: "Ngày" },
-  { value: "WEEK", label: "Tuần" },
-  { value: "MONTH", label: "Tháng" },
-  { value: "QUARTER", label: "Quý" },
-  { value: "YEAR", label: "Năm" },
-  { value: "CUSTOM", label: "Từ ngày–đến ngày" },
+  { value: "DAY", label: "Ngày", icon: "today" },
+  { value: "WEEK", label: "Tuần", icon: "date_range" },
+  { value: "MONTH", label: "Tháng", icon: "calendar_month" },
+  { value: "QUARTER", label: "Quý", icon: "view_week" },
+  { value: "YEAR", label: "Năm", icon: "event" },
+  { value: "CUSTOM", label: "Tùy ngày", icon: "edit_calendar" },
 ];
 const invoicePeriodRange = (period, anchorValue, customFrom, customTo) => {
   if (period === "CUSTOM") return { from: customFrom, to: customTo };
@@ -169,15 +170,13 @@ const customerReturnToInvoice = (document = {}) => {
   );
   const refunds = document.refunds || settlement.refunds || [];
   const refundAmount = Number(
-    document.refundAmount ??
-      refunds.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+    document.refundAmount ?? refunds.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
   );
   return {
     ...document,
     documentType: "CUSTOMER_RETURN",
     date: documentOccurredAt(document),
-    customerId:
-      (typeof document.customerId === "object" ? document.customerId : null) ||
+    customerId: (typeof document.customerId === "object" ? document.customerId : null) ||
       document.customerSnapshot || {
         id: document.customerId,
         code: document.customerCode,
@@ -206,12 +205,8 @@ const customerReturnToInvoice = (document = {}) => {
     returnAmount,
     debtReductionAmount,
     refundAmount,
-    customerDebtBefore: Number(
-      document.customerDebtBefore ?? settlement.customerDebtBefore ?? 0
-    ),
-    customerDebtAfter: Number(
-      document.customerDebtAfter ?? settlement.customerDebtAfter ?? 0
-    ),
+    customerDebtBefore: Number(document.customerDebtBefore ?? settlement.customerDebtBefore ?? 0),
+    customerDebtAfter: Number(document.customerDebtAfter ?? settlement.customerDebtAfter ?? 0),
     paymentStatus: "PAID",
   };
 };
@@ -345,13 +340,31 @@ function Field({ label, children, xs = 12, md = 6 }) {
 }
 
 function SectionTitle({ step, title, subtitle, accent = false }) {
+  const tones = {
+    1: { color: "#1565c0", background: "#eef6ff", border: "#90caf9" },
+    2: { color: "#2e7d32", background: "#f0f9f1", border: "#a5d6a7" },
+    3: { color: "#e65100", background: "#fff7ed", border: "#ffcc80" },
+    4: { color: "#7b1fa2", background: "#faf5ff", border: "#ce93d8" },
+  };
+  const tone = tones[Number(step)] || tones[1];
   return (
-    <SoftBox display="flex" gap={1.25} alignItems="center" mt={2.5} mb={1.25}>
+    <SoftBox
+      display="flex"
+      gap={1.25}
+      alignItems="center"
+      mt={2.5}
+      mb={1.25}
+      px={1.5}
+      py={1.15}
+      borderRadius={2}
+      bgcolor={tone.background}
+      sx={{ borderLeft: `5px solid ${tone.border}` }}
+    >
       <SoftBox
         width={30}
         height={30}
         borderRadius="50%"
-        bgcolor="success"
+        bgcolor={tone.color}
         color="#fff"
         display="flex"
         alignItems="center"
@@ -367,7 +380,7 @@ function SectionTitle({ step, title, subtitle, accent = false }) {
           variant={accent ? "h5" : "button"}
           fontWeight="bold"
           display="block"
-          sx={{ color: accent ? "#1565c0" : "inherit", lineHeight: 1.2 }}
+          sx={{ color: tone.color, lineHeight: 1.2 }}
         >
           {title}
         </SoftTypography>
@@ -1567,11 +1580,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
             <SoftTypography variant="h5" fontWeight="bold">
               {isAdmin ? "Tạo hóa đơn bán hàng" : "Bán hàng nhanh"}
             </SoftTypography>
-            {isAdmin ? (
-              <SoftTypography variant="caption" color="text">
-                Nhập thông tin đơn hàng bên trái và kiểm tra thanh toán bên phải
-              </SoftTypography>
-            ) : (
+            {!isAdmin && (
               <SoftTypography variant="caption" color="text">
                 {authUser?.employeeCode || "NV"} · {authUser?.fullName || authUser?.username}
               </SoftTypography>
@@ -1583,6 +1592,49 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
         </SoftBox>
         <SoftBox px={{ xs: 2, md: 0 }} py={{ xs: 1.25, md: 1.5 }}>
           <InvoiceBusinessTypeSwitch value="SALE" onChange={setDocumentMode} />
+          <SoftBox
+            mt={1.25}
+            p={1.25}
+            display="flex"
+            alignItems="center"
+            gap={1.25}
+            borderRadius={2}
+            bgcolor="#eef6ff"
+            sx={{ border: "1px solid #90caf9" }}
+          >
+            <SoftBox
+              width={40}
+              height={40}
+              borderRadius={1.5}
+              bgcolor="#1565c0"
+              color="#fff"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              flexShrink={0}
+            >
+              <Icon>event</Icon>
+            </SoftBox>
+            <SoftBox flex={1} minWidth={0}>
+              <SoftTypography variant="caption" fontWeight="bold" display="block" mb={0.4}>
+                Ngày tạo hóa đơn
+              </SoftTypography>
+              <SoftInput
+                type="date"
+                value={form.date}
+                onChange={(event) => set("date", event.target.value)}
+                sx={{ bgcolor: "#fff" }}
+              />
+            </SoftBox>
+            <SoftTypography
+              variant="caption"
+              color="info"
+              fontWeight="bold"
+              sx={{ display: { xs: "none", sm: "block" } }}
+            >
+              Mã hóa đơn được tạo tự động
+            </SoftTypography>
+          </SoftBox>
         </SoftBox>
         {!isAdmin && (
           <SoftBox
@@ -1675,25 +1727,19 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                 title="Khách hàng"
                 subtitle="Tìm nhanh theo tên hoặc số điện thoại"
               />
-              <Grid container spacing={2} mt={0}>
-                {isAdmin && (
-                  <>
-                    <Field label="Mã hóa đơn">
-                      <SoftInput
-                        value={form.code}
-                        onChange={(e) => set("code", e.target.value.toUpperCase())}
-                        placeholder="Để trống để tự sinh"
-                      />
-                    </Field>
-                    <Field label="Ngày hóa đơn *">
-                      <SoftInput
-                        type="date"
-                        value={form.date}
-                        onChange={(e) => set("date", e.target.value)}
-                      />
-                    </Field>
-                  </>
-                )}
+              <Grid
+                container
+                spacing={2}
+                mt={0}
+                p={{ xs: 1, sm: 1.5 }}
+                sx={{
+                  ml: "0 !important",
+                  width: "100% !important",
+                  bgcolor: "#f8fbff",
+                  border: "1px solid #d6e9fb",
+                  borderRadius: 2,
+                }}
+              >
                 <Grid item xs={12}>
                   <SoftTypography variant="caption" fontWeight="bold">
                     Chọn loại khách hàng
@@ -2107,8 +2153,9 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
               />
               <SoftBox
                 p={{ xs: isAdmin ? 2 : 1.5, md: 2 }}
-                border="1px solid #E5E7EB"
                 borderRadius={2}
+                bgcolor="#f4fbf5"
+                sx={{ border: "1px solid #b7dfba" }}
               >
                 <SoftTypography variant="button" fontWeight="bold">
                   Nguồn xuất hàng
@@ -2274,17 +2321,12 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                   gap={1}
                   alignItems={{ xs: "stretch", sm: "center" }}
                   mb={1.5}
-                  p={{ xs: 1.5, sm: isAdmin ? 0 : 1.5 }}
+                  p={{ xs: 1.5, sm: 1.5 }}
                   sx={{
-                    border: isAdmin
-                      ? { xs: "1px solid #eee", sm: "none" }
-                      : item.product
-                      ? "2px solid #1976d2"
-                      : "2px dashed #b7c8dc",
+                    border: item.product ? "2px solid #ffb74d" : "2px dashed #d7b98e",
                     borderRadius: 2,
-                    bgcolor: !isAdmin && item.product ? "#f4f9ff" : "#fff",
-                    boxShadow:
-                      !isAdmin && item.product ? "0 5px 16px rgba(25,118,210,.12)" : "none",
+                    bgcolor: item.product ? "#fffaf2" : "#fff",
+                    boxShadow: item.product ? "0 5px 16px rgba(230,81,0,.1)" : "none",
                   }}
                 >
                   <SoftBox sx={{ flex: 3 }}>
@@ -2385,24 +2427,33 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                       </SoftBox>
                     )}
                     {item.product && (
-                      <SoftBox mt={1} display="flex" justifyContent="flex-end">
+                      <SoftBox mt={0.75} display="flex" justifyContent="flex-start">
                         <FormControlLabel
-                          label="Nhập giá khác"
-                          labelPlacement="start"
+                          label="Bán giá khác"
+                          labelPlacement="end"
                           sx={{
                             m: 0,
-                            gap: 0.5,
+                            gap: 0.25,
+                            px: 0.75,
+                            py: 0.25,
+                            borderRadius: 5,
+                            alignItems: "center",
+                            bgcolor: item.customPriceEnabled ? "#faf5ff" : "#f8fafc",
+                            border: item.customPriceEnabled
+                              ? "2px solid #ab47bc"
+                              : "1px solid #d9e1ea",
+                            cursor: "pointer",
                             "& .MuiFormControlLabel-label": {
                               fontSize: 12,
-                              fontWeight: 700,
-                              color: item.customPriceEnabled ? "#7b1fa2" : "#667085",
+                              fontWeight: 800,
+                              color: item.customPriceEnabled ? "#7b1fa2" : "#475467",
                             },
                           }}
                           control={
-                            <Radio
+                            <Checkbox
                               size="small"
                               checked={Boolean(item.customPriceEnabled)}
-                              onClick={() =>
+                              onChange={() =>
                                 updateItem(index, {
                                   customPriceEnabled: !item.customPriceEnabled,
                                   customPrice: !item.customPriceEnabled
@@ -2410,6 +2461,10 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                                     : 0,
                                 })
                               }
+                              sx={{
+                                color: "#98a2b3",
+                                "&.Mui-checked": { color: "#8e24aa" },
+                              }}
                             />
                           }
                         />
@@ -2418,54 +2473,62 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                     {item.product && item.customPriceEnabled && (
                       <SoftBox
                         mt={0.75}
-                        p={1.25}
+                        p={1}
                         borderRadius={1.5}
                         bgcolor="#faf5ff"
+                        display="flex"
+                        alignItems={{ xs: "stretch", sm: "center" }}
+                        flexDirection={{ xs: "column", sm: "row" }}
+                        gap={1}
                         sx={{ border: "1px solid #ce93d8" }}
                       >
-                        <SoftTypography
-                          variant="caption"
-                          fontWeight="bold"
-                          sx={{ color: "#7b1fa2" }}
-                          display="block"
-                          mb={0.5}
-                        >
-                          Giá bán riêng trong hóa đơn này
-                        </SoftTypography>
-                        <SoftInput
-                          value={numberText(item.customPrice)}
-                          onChange={(event) =>
-                            updateItem(index, {
-                              customPrice: moneyValue(event.target.value),
-                            })
-                          }
-                          inputProps={{ inputMode: "numeric" }}
-                        />
-                        <SoftTypography variant="caption" color="text" display="block" mt={0.5}>
-                          Giá niêm yết: {money(unitPriceFor(item.product))}
-                        </SoftTypography>
+                        <SoftBox flex={1} minWidth={0}>
+                          <SoftTypography
+                            variant="caption"
+                            fontWeight="bold"
+                            sx={{ color: "#7b1fa2" }}
+                            display="block"
+                          >
+                            Giá bán trong hóa đơn này
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text" display="block">
+                            Niêm yết {money(unitPriceFor(item.product))}
+                          </SoftTypography>
+                        </SoftBox>
+                        <SoftBox sx={{ width: { xs: "100%", sm: 190 }, flexShrink: 0 }}>
+                          <SoftInput
+                            value={numberText(item.customPrice)}
+                            onChange={(event) =>
+                              updateItem(index, {
+                                customPrice: moneyValue(event.target.value),
+                              })
+                            }
+                            inputProps={{ inputMode: "numeric" }}
+                            sx={{ "& input": { textAlign: "right", fontWeight: 800 } }}
+                          />
+                        </SoftBox>
                       </SoftBox>
                     )}
                   </SoftBox>
-                  <SoftBox sx={{ width: { xs: "100%", sm: isAdmin ? 190 : 150 }, flexShrink: 0 }}>
-                    <SoftBox display="flex" alignItems="center" gap={1}>
-                      <SoftTypography
-                        variant="caption"
-                        sx={{ display: { xs: "block", sm: "none" }, minWidth: 65 }}
+                  <SoftBox sx={{ width: { xs: "100%", sm: 250 }, flexShrink: 0 }}>
+                    <SoftTypography variant="caption" fontWeight="bold" display="block" mb={0.5}>
+                      Số lượng
+                    </SoftTypography>
+                    <SoftBox display="flex" alignItems="center" gap={0.75}>
+                      <IconButton
+                        disabled={Number(item.qty || 1) <= 1}
+                        onClick={() =>
+                          updateItem(index, { qty: Math.max(1, Number(item.qty || 1) - 1) })
+                        }
+                        sx={{
+                          border: "1px solid #dbe1e8",
+                          bgcolor: "#fff",
+                          flexShrink: 0,
+                        }}
                       >
-                        Số lượng
-                      </SoftTypography>
-                      {!isAdmin && (
-                        <IconButton
-                          onClick={() =>
-                            updateItem(index, { qty: Math.max(1, Number(item.qty || 1) - 1) })
-                          }
-                          sx={{ border: "1px solid #dbe1e8", flexShrink: 0 }}
-                        >
-                          <Icon>remove</Icon>
-                        </IconButton>
-                      )}
-                      <SoftBox sx={{ width: { xs: isAdmin ? "100%" : 74, sm: 72 } }}>
+                        <Icon>remove</Icon>
+                      </IconButton>
+                      <SoftBox sx={{ width: 74, flexShrink: 0 }}>
                         <SoftInput
                           type="number"
                           inputProps={{
@@ -2477,20 +2540,25 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                           onChange={(e) => updateItem(index, { qty: e.target.value })}
                         />
                       </SoftBox>
-                      {!isAdmin && (
-                        <IconButton
-                          disabled={!item.product || remainingStockFor(item.product) <= 0}
-                          onClick={() => updateItem(index, { qty: Number(item.qty || 0) + 1 })}
-                          sx={{ border: "1px solid #dbe1e8", flexShrink: 0 }}
-                        >
-                          <Icon>add</Icon>
-                        </IconButton>
-                      )}
+                      <IconButton
+                        disabled={!item.product || remainingStockFor(item.product) <= 0}
+                        onClick={() => updateItem(index, { qty: Number(item.qty || 0) + 1 })}
+                        sx={{
+                          color: "#fff",
+                          bgcolor: "#1976d2",
+                          flexShrink: 0,
+                          "&:hover": { bgcolor: "#1565c0" },
+                          "&.Mui-disabled": { bgcolor: "#e0e0e0" },
+                        }}
+                      >
+                        <Icon>add</Icon>
+                      </IconButton>
                       <IconButton
                         disabled={items.length === 1}
                         onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
+                        sx={{ bgcolor: "#ffebee", flexShrink: 0 }}
                       >
-                        <Icon color="error">remove_circle</Icon>
+                        <Icon color="error">delete</Icon>
                       </IconButton>
                     </SoftBox>
                     {item.product && (
@@ -3107,30 +3175,67 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
                   {previewError}
                 </SoftTypography>
               )}
-              <Grid container spacing={2} mt={1}>
-                <Field label="Tiền mặt">
-                  <SoftInput
-                    value={numberText(form.cashAmount)}
-                    onChange={(e) => set("cashAmount", moneyValue(e.target.value))}
-                    inputProps={{ inputMode: "numeric" }}
-                  />
-                </Field>
-                <Field label="Chuyển khoản">
-                  <SoftInput
-                    value={numberText(form.bankAmount)}
-                    onChange={(e) => set("bankAmount", moneyValue(e.target.value))}
-                    inputProps={{ inputMode: "numeric" }}
-                  />
-                </Field>
-                {Number(form.bankAmount) > 0 && (
-                  <Field label="Mã giao dịch" md={12}>
+              <SoftBox
+                mt={1.5}
+                p={{ xs: 1.5, sm: 2 }}
+                borderRadius={2}
+                bgcolor="#fff8e1"
+                sx={{
+                  border: "2px solid #ffb300",
+                  boxShadow: "0 6px 18px rgba(255,179,0,.14)",
+                }}
+              >
+                <SoftBox display="flex" alignItems="center" gap={1} mb={1}>
+                  <SoftBox
+                    width={38}
+                    height={38}
+                    borderRadius={1.5}
+                    bgcolor="#f57c00"
+                    color="#fff"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    flexShrink={0}
+                  >
+                    <Icon>payments</Icon>
+                  </SoftBox>
+                  <SoftBox>
+                    <SoftTypography variant="button" fontWeight="bold" display="block">
+                      Nhập số tiền khách thanh toán
+                    </SoftTypography>
+                    <SoftTypography variant="caption" sx={{ color: "#8a4b00" }}>
+                      Kiểm tra tiền mặt và chuyển khoản trước khi tạo hóa đơn
+                    </SoftTypography>
+                  </SoftBox>
+                </SoftBox>
+                <Grid container spacing={1.25}>
+                  <Field label="Tiền mặt">
                     <SoftInput
-                      value={form.referenceCode}
-                      onChange={(e) => set("referenceCode", e.target.value)}
+                      value={numberText(form.cashAmount)}
+                      onChange={(e) => set("cashAmount", moneyValue(e.target.value))}
+                      inputProps={{ inputMode: "numeric" }}
+                      sx={{ bgcolor: "#fff", "& input": { fontWeight: 800, fontSize: 17 } }}
                     />
                   </Field>
-                )}
-              </Grid>
+                  <Field label="Chuyển khoản">
+                    <SoftInput
+                      value={numberText(form.bankAmount)}
+                      onChange={(e) => set("bankAmount", moneyValue(e.target.value))}
+                      inputProps={{ inputMode: "numeric" }}
+                      sx={{ bgcolor: "#fff", "& input": { fontWeight: 800, fontSize: 17 } }}
+                    />
+                  </Field>
+                  {Number(form.bankAmount) > 0 && (
+                    <Field label="Mã giao dịch" md={12}>
+                      <SoftInput
+                        value={form.referenceCode}
+                        onChange={(e) => set("referenceCode", e.target.value)}
+                        sx={{ bgcolor: "#fff" }}
+                      />
+                    </Field>
+                  )}
+                </Grid>
+              </SoftBox>
               {form.paymentMode === "PAY_WITH_DEBT" && (
                 <SoftBox
                   mt={2}
@@ -4100,9 +4205,7 @@ export default function HoaDon() {
   const isStaff = String(currentUser?.role || "").toLowerCase() === "staff";
   const theme = useTheme();
   const touchViewport = useMediaQuery(theme.breakpoints.down("xl"));
-  const isTouchAdmin =
-    String(currentUser?.role || "").toLowerCase() === "admin" &&
-    touchViewport;
+  const isTouchAdmin = String(currentUser?.role || "").toLowerCase() === "admin" && touchViewport;
   const canViewAllCompanyInvoices = Boolean(
     currentUser?.canViewAllInvoices || currentUser?.permissions?.viewAllInvoices
   );
@@ -4179,9 +4282,7 @@ export default function HoaDon() {
       customerReturnRequest,
     ])
       .then(([listResponse, summaryResponse, returnResponse]) => {
-        const invoiceDocuments = listOf(listResponse)
-          .map(normalizeInvoiceDocument)
-          .filter(Boolean);
+        const invoiceDocuments = listOf(listResponse).map(normalizeInvoiceDocument).filter(Boolean);
         const returnDocuments = returnResponse
           ? listOf(returnResponse).map(customerReturnToInvoice).filter(Boolean)
           : [];
@@ -4201,7 +4302,8 @@ export default function HoaDon() {
             Number(invoiceMeta.totalPages || 1),
             Number(returnMeta.totalPages || 1)
           ),
-          total: Number(invoiceMeta.total || invoiceMeta.totalItems || 0) +
+          total:
+            Number(invoiceMeta.total || invoiceMeta.totalItems || 0) +
             Number(returnMeta.total || returnMeta.totalItems || 0),
         });
         setSummary(summaryResponse.data?.data || {});
@@ -4343,8 +4445,19 @@ export default function HoaDon() {
                 </SoftButton>
               </SoftBox>
             </SoftBox>
-            <SoftBox display="flex" gap={2} mb={3} flexWrap="wrap">
-              <SoftBox sx={{ flex: 1, minWidth: 230 }}>
+            <SoftBox
+              mb={2}
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "repeat(2, minmax(0, 1fr))",
+                  md: isStaff ? "minmax(260px, 1fr) 220px" : "minmax(260px, 1fr) 220px 220px",
+                },
+                gap: { xs: 1, md: 1.5 },
+                alignItems: "center",
+              }}
+            >
+              <SoftBox sx={{ gridColumn: { xs: "1 / -1", md: "auto" }, minWidth: 0 }}>
                 <SoftInput
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
@@ -4353,7 +4466,7 @@ export default function HoaDon() {
                 />
               </SoftBox>
               {!isStaff && (
-                <FormControl size="small" sx={{ minWidth: 210 }}>
+                <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
                   <Select
                     displayEmpty
                     value={salespersonId}
@@ -4370,8 +4483,9 @@ export default function HoaDon() {
               )}
               <FormControl
                 size="small"
+                fullWidth
                 sx={{
-                  minWidth: 190,
+                  minWidth: 0,
                   display: { xs: isStaff ? "none" : "inline-flex", md: "inline-flex" },
                 }}
               >
@@ -4389,52 +4503,21 @@ export default function HoaDon() {
             </SoftBox>
             <SoftBox
               mb={3}
-              p={{ xs: 1.25, md: 1.5 }}
+              p={{ xs: 1, md: 1.5 }}
               border="1px solid #e1e7ef"
               borderRadius={2}
               bgcolor="#f8fafc"
             >
+              <QuickSortBar
+                label="Xem nhanh theo thời gian"
+                options={invoicePeriodOptions}
+                value={period}
+                onChange={setPeriod}
+                mobileColumns={3}
+                compact
+              />
               <SoftBox
-                display="flex"
-                gap={1}
-                pb={0.5}
-                sx={{
-                  overflowX: "auto",
-                  scrollbarWidth: "none",
-                  scrollSnapType: "x mandatory",
-                  "&::-webkit-scrollbar": { display: "none" },
-                }}
-              >
-                {invoicePeriodOptions.map((option) => {
-                  const active = period === option.value;
-                  return (
-                    <SoftBox
-                      key={option.value}
-                      component="button"
-                      type="button"
-                      onClick={() => setPeriod(option.value)}
-                      px={1.5}
-                      py={1}
-                      sx={{
-                        minWidth: option.value === "CUSTOM" ? 150 : 82,
-                        flexShrink: 0,
-                        scrollSnapAlign: "start",
-                        border: active ? "2px solid #1976d2" : "1px solid #d7dee8",
-                        borderRadius: 1.5,
-                        bgcolor: active ? "#e7f3ff" : "#fff",
-                        color: active ? "#1565c0" : "#52606d",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {option.label}
-                    </SoftBox>
-                  );
-                })}
-              </SoftBox>
-              <SoftBox
-                mt={1.25}
+                mt={1}
                 display="flex"
                 gap={1}
                 alignItems={{ xs: "stretch", sm: "center" }}
@@ -4526,10 +4609,17 @@ export default function HoaDon() {
                     </SoftBox>
                   </>
                 )}
-                <SoftTypography variant="caption" color="text" ml={{ sm: "auto" }}>
-                  Đang xem: <strong>{shortDate(selectedRange.from)}</strong> đến{" "}
-                  <strong>{shortDate(selectedRange.to)}</strong>
-                </SoftTypography>
+                <SoftBox
+                  ml={{ sm: "auto" }}
+                  px={1.25}
+                  py={0.65}
+                  borderRadius={1.5}
+                  bgcolor="#eaf4ff"
+                  color="#1565c0"
+                  sx={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}
+                >
+                  {shortDate(selectedRange.from)} – {shortDate(selectedRange.to)}
+                </SoftBox>
               </SoftBox>
             </SoftBox>
             {(isStaff || isTouchAdmin) && (
@@ -4726,9 +4816,7 @@ export default function HoaDon() {
             <SoftBox
               sx={{
                 overflowX: "auto",
-                display: isTouchAdmin
-                  ? "none"
-                  : { xs: isStaff ? "none" : "block", md: "block" },
+                display: isTouchAdmin ? "none" : { xs: isStaff ? "none" : "block", md: "block" },
               }}
             >
               <table style={{ width: "100%", borderCollapse: "collapse" }}>

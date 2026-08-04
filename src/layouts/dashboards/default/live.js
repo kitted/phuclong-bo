@@ -2,15 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import Card from "@mui/material/Card";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
-import MenuItem from "@mui/material/MenuItem";
-import FormControl from "@mui/material/FormControl";
-import Select from "@mui/material/Select";
 import { useSelector } from "react-redux";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
+import QuickSortBar from "components/QuickSortBar";
 import { DashboardAnalyticsService } from "services/analyticsService";
 import { toast } from "react-toastify";
 import { Doughnut, Line } from "react-chartjs-2";
@@ -246,52 +244,54 @@ export default function DashboardLive() {
             </SoftTypography>
           </SoftBox>
           <SoftBox
-            display="flex"
-            gap={1}
-            flexWrap="wrap"
-            width={{ xs: "100%", md: "auto" }}
+            width={{ xs: "100%", md: 560 }}
+            p={{ xs: 1, sm: 1.25 }}
+            borderRadius={2}
+            bgcolor="#f8fafc"
+            border="1px solid #e1e7ef"
           >
-            <FormControl size="small" sx={{ minWidth: 145, flex: { xs: 1, sm: "none" } }}>
-              <Select value={period} onChange={(event) => setPeriod(event.target.value)}>
-                {[
-                  ["WEEK", "Tuần"],
-                  ["MONTH", "Tháng"],
-                  ["QUARTER", "Quý"],
-                  ["YEAR", "Năm"],
-                  ["CUSTOM", "Tùy chỉnh"],
-                ].map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {period !== "CUSTOM" ? (
-              <SoftBox width={{ xs: "100%", sm: 180 }}>
-                <SoftInput
-                  type="date"
-                  value={anchor}
-                  onChange={(event) => setAnchor(event.target.value)}
-                />
-              </SoftBox>
-            ) : (
-              <>
+            <QuickSortBar
+              label="Kỳ tổng hợp"
+              value={period}
+              onChange={setPeriod}
+              mobileColumns={2}
+              compact
+              options={[
+                { value: "WEEK", label: "Tuần", icon: "date_range" },
+                { value: "MONTH", label: "Tháng", icon: "calendar_month" },
+                { value: "QUARTER", label: "Quý", icon: "view_week" },
+                { value: "YEAR", label: "Năm", icon: "event" },
+                { value: "CUSTOM", label: "Tùy ngày", icon: "edit_calendar" },
+              ]}
+            />
+            <SoftBox display="flex" gap={1} mt={1} flexWrap="wrap">
+              {period !== "CUSTOM" ? (
                 <SoftBox width={{ xs: "100%", sm: 180 }}>
                   <SoftInput
                     type="date"
-                    value={custom.from}
-                    onChange={(event) => setCustom({ ...custom, from: event.target.value })}
+                    value={anchor}
+                    onChange={(event) => setAnchor(event.target.value)}
                   />
                 </SoftBox>
-                <SoftBox width={{ xs: "100%", sm: 180 }}>
-                  <SoftInput
-                    type="date"
-                    value={custom.to}
-                    onChange={(event) => setCustom({ ...custom, to: event.target.value })}
-                  />
-                </SoftBox>
-              </>
-            )}
+              ) : (
+                <>
+                  <SoftBox width={{ xs: "100%", sm: 180 }}>
+                    <SoftInput
+                      type="date"
+                      value={custom.from}
+                      onChange={(event) => setCustom({ ...custom, from: event.target.value })}
+                    />
+                  </SoftBox>
+                  <SoftBox width={{ xs: "100%", sm: 180 }}>
+                    <SoftInput
+                      type="date"
+                      value={custom.to}
+                      onChange={(event) => setCustom({ ...custom, to: event.target.value })}
+                    />
+                  </SoftBox>
+                </>
+              )}
+            </SoftBox>
           </SoftBox>
         </SoftBox>
         {loading && (

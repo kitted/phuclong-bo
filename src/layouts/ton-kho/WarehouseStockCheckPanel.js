@@ -13,6 +13,7 @@ import { createExcelFile, downloadBlob } from "utils/excel";
 import { toast } from "react-toastify";
 import { useSelector } from "react-redux";
 import MobileLoadMore from "components/MobileLoadMore";
+import QuickSortBar from "components/QuickSortBar";
 import { mergeUniqueItems } from "utils/infiniteList";
 
 const STATUSES = {
@@ -1402,35 +1403,23 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
               </Grid>
             ))}
           </Grid>
-          <SoftBox display="flex" gap={0.6} mb={1.2} sx={{ overflowX: "auto" }}>
-            {["ALL", ...Object.keys(STATUSES)].map((value) => {
-              const active = resultFilter === value;
-              const count =
-                value === "ALL"
-                  ? resultItems.length
-                  : resultItems.filter((item) => item.status === value).length;
-              return (
-                <SoftBox
-                  component="button"
-                  type="button"
-                  key={value}
-                  onClick={() => setResultFilter(value)}
-                  px={1.1}
-                  py={0.7}
-                  minWidth="max-content"
-                  sx={{
-                    border: active ? "2px solid #1976d2" : "1px solid #dce2e9",
-                    borderRadius: 2,
-                    bgcolor: active ? "#e3f2fd" : "#fff",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  {value === "ALL" ? "Tất cả" : STATUSES[value].label} ({count})
-                </SoftBox>
-              );
-            })}
+          <SoftBox mb={1.2}>
+            <QuickSortBar
+              label="Lọc nhanh kết quả"
+              value={resultFilter}
+              onChange={setResultFilter}
+              compact
+              options={["ALL", ...Object.keys(STATUSES)].map((value) => {
+                const count =
+                  value === "ALL"
+                    ? resultItems.length
+                    : resultItems.filter((item) => item.status === value).length;
+                return {
+                  value,
+                  label: `${value === "ALL" ? "Tất cả" : STATUSES[value].label} (${count})`,
+                };
+              })}
+            />
           </SoftBox>
           <SoftBox
             display="grid"

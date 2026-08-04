@@ -69,13 +69,9 @@ function DataTable({ entriesPerPage, canSearch, showTotalEntries, table, isSorte
 
   // A function that sets the sorted value for the table
   const setSortedValue = (column) => {
-    let sortedValue;
-    if (isSorted && column.sorted) {
-      sortedValue = column.isSortedDesc ? "desc" : "asce";
-    } else {
-      sortedValue = false;
-    }
-    return sortedValue;
+    if (!isSorted || !column.canSort) return false;
+    if (!column.isSorted) return "none";
+    return column.isSortedDesc ? "desc" : "asc";
   };
 
   const visibleRows = rows.slice(0, visibleCount);
@@ -178,7 +174,19 @@ function DataTable({ entriesPerPage, canSearch, showTotalEntries, table, isSorte
                     return (
                       <DataTableHeadCell
                         key={key}
-                        {...column.getHeaderProps(isSorted && column.getSortByToggleProps())}
+                        {...column.getHeaderProps(
+                          isSorted && column.canSort ? column.getSortByToggleProps() : undefined
+                        )}
+                        aria-sort={
+                          column.isSorted
+                            ? column.isSortedDesc
+                              ? "descending"
+                              : "ascending"
+                            : "none"
+                        }
+                        onClickCapture={() => {
+                          if (isSorted && column.canSort) setVisibleCount(batchSize);
+                        }}
                         width={column.width ? column.width : "auto"}
                         align={column.align ? column.align : "left"}
                         sorted={setSortedValue(column)}

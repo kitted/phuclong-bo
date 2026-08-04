@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import SoftBox from "./SoftBox";
 import SoftTypography from "./SoftTypography";
 import MobileLoadMore from "./MobileLoadMore";
+import QuickSortBar from "./QuickSortBar";
 export default function TableCommon({
   loading,
   paginationData,
@@ -19,6 +20,10 @@ export default function TableCommon({
 
   const [totalPage, setTotalPage] = useState(0);
   const containerRef = useRef();
+  const sortableColumns = headerGroups
+    .flatMap((group) => group.headers)
+    .filter((column) => isSorted && column.canSort);
+  const activeSortColumn = sortableColumns.find((column) => column.isSorted);
 
   useEffect(() => {
     setPageSize(paginationData.size);
@@ -30,17 +35,35 @@ export default function TableCommon({
   }, [paginationData.count, paginationData.size]);
 
   const setSortedValue = (column) => {
-    let sortedValue;
-    if (isSorted && column.sorted) {
-      sortedValue = column.isSortedDesc ? "desc" : "asce";
-    } else {
-      sortedValue = false;
-    }
-    return sortedValue;
+    if (!isSorted || !column.canSort) return false;
+    if (!column.isSorted) return "none";
+    return column.isSortedDesc ? "desc" : "asc";
   };
 
   return (
     <TableContainer sx={{ boxShadow: "none" }} ref={containerRef}>
+      {sortableColumns.length > 0 && (
+        <SoftBox display={{ xs: "block", xl: "none" }} px={2} pt={1.5}>
+          <QuickSortBar
+            value={activeSortColumn?.id || "NONE"}
+            compact
+            onChange={(columnId) => {
+              const column = sortableColumns.find((item) => item.id === columnId);
+              if (!column) return;
+              column.toggleSortBy(column.isSorted ? !column.isSortedDesc : false);
+              setPaginationData?.((current) => ({ ...current, page: 1 }));
+            }}
+            options={sortableColumns.map((column) => ({
+              value: column.id,
+              label:
+                typeof column.Header === "string"
+                  ? `${column.Header}${column.isSorted ? (column.isSortedDesc ? " ↓" : " ↑") : ""}`
+                  : column.id,
+              icon: column.isSorted ? (column.isSortedDesc ? "south" : "north") : "swap_vert",
+            }))}
+          />
+        </SoftBox>
+      )}
       {loading && rows.length === 0 ? (
         <SoftBox
           display="flex"
@@ -87,7 +110,20 @@ export default function TableCommon({
                       return (
                         <DataTableHeadCell
                           key={key}
-                          {...column.getHeaderProps(isSorted && column.getSortByToggleProps())}
+                          {...column.getHeaderProps(
+                            isSorted && column.canSort ? column.getSortByToggleProps() : undefined
+                          )}
+                          aria-sort={
+                            column.isSorted
+                              ? column.isSortedDesc
+                                ? "descending"
+                                : "ascending"
+                              : "none"
+                          }
+                          onClickCapture={() => {
+                            if (!isSorted || !column.canSort) return;
+                            setPaginationData?.((current) => ({ ...current, page: 1 }));
+                          }}
                           width={column.width ? column.width : "auto"}
                           align={"center"}
                           sorted={setSortedValue(column)}

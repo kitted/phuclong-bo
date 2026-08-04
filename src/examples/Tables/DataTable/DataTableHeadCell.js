@@ -51,8 +51,8 @@ function DataTableHeadCell({ width, children, sorted, align, ...rest }) {
             <SoftBox
               position="absolute"
               top={-6}
-              color={sorted === "asce" ? "text" : "secondary"}
-              opacity={sorted === "asce" ? 1 : 0.5}
+              color={sorted === "asc" ? "text" : "secondary"}
+              opacity={sorted === "asc" ? 1 : 0.5}
             >
               <Icon>arrow_drop_up</Icon>
             </SoftBox>
@@ -82,7 +82,7 @@ DataTableHeadCell.defaultProps = {
 DataTableHeadCell.propTypes = {
   width: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   children: PropTypes.node.isRequired,
-  sorted: PropTypes.oneOf([false, "none", "asce", "desc"]),
+  sorted: PropTypes.oneOf([false, "none", "asc", "desc"]),
   align: PropTypes.oneOf(["left", "right", "center"]),
 };
 
