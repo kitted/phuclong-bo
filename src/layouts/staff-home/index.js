@@ -8,6 +8,9 @@ import DialogTitle from "@mui/material/DialogTitle";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import LinearProgress from "@mui/material/LinearProgress";
+import L from "leaflet";
+import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import SoftBox from "components/SoftBox";
@@ -16,6 +19,7 @@ import SoftTypography from "components/SoftTypography";
 import { DashboardAnalyticsService } from "services/analyticsService";
 import EmployeeKpiService from "services/employeeKpiService";
 import { InvoiceService } from "services/warehouseService";
+import { CustomerService } from "services/crmService";
 import { CreateInvoiceModal } from "layouts/hoa-don";
 import { toast } from "react-toastify";
 import StaffAccountMenu from "components/StaffAccountMenu";
@@ -86,6 +90,74 @@ const invoiceCustomer = (invoice = {}) => {
 };
 const invoiceReceivedAmount = (invoice = {}) =>
   Number(invoice.receivedAmount ?? invoice.totalReceivedAmount ?? invoice.paidAmount ?? 0);
+const coordinate = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+const mapCustomer = (customer = {}) => {
+  const location = customer.storeLocation || customer.location || {};
+  const latitude = coordinate(location.latitude ?? location.lat);
+  const longitude = coordinate(location.longitude ?? location.lng ?? location.lon);
+  if (latitude === null || longitude === null) return null;
+  const image = customer.storefrontImage || customer.storeImage || {};
+  return {
+    ...customer,
+    latitude,
+    longitude,
+    code: customer.code || customer.customerCode || "Chưa có mã",
+    name: customer.name || customer.fullName || "Khách hàng",
+    imageUrl: image.secureUrl || image.secure_url || image.url || customer.storefrontImageUrl || "",
+  };
+};
+const distanceKm = (from, to) => {
+  if (!from || !to) return null;
+  const radians = (value) => (value * Math.PI) / 180;
+  const latitude = radians(to.latitude - from.latitude);
+  const longitude = radians(to.longitude - from.longitude);
+  const a =
+    Math.sin(latitude / 2) ** 2 +
+    Math.cos(radians(from.latitude)) *
+      Math.cos(radians(to.latitude)) *
+      Math.sin(longitude / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+const escapeHtml = (value = "") =>
+  String(value).replace(
+    /[&<>'"]/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character])
+  );
+const customerMapColor = (customer = {}) =>
+  String(customer.source || customer.customerSource || "").toUpperCase() === "LEGACY"
+    ? "#22c55e"
+    : "#ef4444";
+const customerMapIcon = (customer) =>
+  L.divIcon({
+    className: "customer-live-map-marker",
+    iconSize: [60, 74],
+    iconAnchor: [30, 37],
+    html: `<div class="customer-live-map-marker__dot" style="background:${customerMapColor(
+      customer
+    )}"></div><span class="customer-live-map-marker__name">${escapeHtml(customer.name)}</span>`,
+  });
+const currentLocationIcon = () =>
+  L.divIcon({
+    className: "customer-live-map-current",
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    html: '<span class="customer-live-map-current__dot"></span>',
+  });
+
+function MiniMapViewport({ currentLocation }) {
+  const map = useMap();
+  useEffect(() => {
+    if (currentLocation) {
+      map.setView([currentLocation.latitude, currentLocation.longitude], 14, { animate: true });
+    }
+  }, [currentLocation, map]);
+  return null;
+}
 
 const KPI_META = {
   PROMOTION_ACTIVATION_COUNT: { label: "Mã kích hoạt", icon: "confirmation_number", money: false },
@@ -129,6 +201,207 @@ function Stat({ label, value, color = "#1c1e21" }) {
         {value}
       </SoftTypography>
     </SoftBox>
+  );
+}
+
+function CustomerNavigationPreview({ onOpenNavigator, onOpenStoreProfile }) {
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!window.matchMedia("(max-width: 899px)").matches) return undefined;
+    let active = true;
+    const loadCustomers = async () => {
+      try {
+        const firstResponse = await CustomerService.getAll({ page: 1, limit: 100 });
+        const firstItems = listOf(firstResponse);
+        const totalPages = Math.max(1, Number(firstResponse.data?.meta?.totalPages || 1));
+        const remaining = await Promise.all(
+          Array.from({ length: Math.max(totalPages - 1, 0) }, (_, index) =>
+            CustomerService.getAll({ page: index + 2, limit: 100 })
+          )
+        );
+        if (active) {
+          setCustomers(
+            [...firstItems, ...remaining.flatMap((response) => listOf(response))]
+              .map(mapCustomer)
+              .filter(Boolean)
+          );
+        }
+      } catch (_) {
+        if (active) setCustomers([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    loadCustomers();
+    if (!navigator.geolocation) {
+      return () => {
+        active = false;
+      };
+    }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        if (active) setCurrentLocation({ latitude: coords.latitude, longitude: coords.longitude });
+      },
+      () => {
+        // The preview remains usable when the user does not grant GPS permission.
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 15000 }
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const nearbyCustomers = useMemo(() => {
+    if (!currentLocation) return customers.slice(0, 3);
+    return customers
+      .map((customer) => ({ ...customer, distance: distanceKm(currentLocation, customer) }))
+      .filter((customer) => customer.distance !== null && customer.distance <= 2)
+      .sort((left, right) => left.distance - right.distance)
+      .slice(0, 3);
+  }, [currentLocation, customers]);
+
+  return (
+    <Card
+      sx={{
+        display: { xs: "block", md: "none" },
+        borderRadius: 0,
+        boxShadow: "none",
+        mb: 1,
+        overflow: "hidden",
+      }}
+    >
+      <SoftBox p={1.5}>
+        <SoftBox mb={1.25}>
+          <SoftBox>
+            <SoftTypography variant="button" fontWeight="bold" display="block">
+              Điểm bán gần bạn
+            </SoftTypography>
+            <SoftTypography variant="caption" color="text">
+              Bản đồ khách hàng trong bán kính 2 km
+            </SoftTypography>
+          </SoftBox>
+        </SoftBox>
+        <SoftButton
+          fullWidth
+          color="success"
+          variant="outlined"
+          startIcon={<Icon>add_location_alt</Icon>}
+          onClick={onOpenStoreProfile}
+          sx={{ minHeight: 48, mb: 1.25, fontSize: "13px" }}
+        >
+          Thêm vị trí khách hàng
+        </SoftButton>
+
+        <SoftBox
+          component="button"
+          type="button"
+          width="100%"
+          height={220}
+          p={0}
+          onClick={onOpenNavigator}
+          sx={{
+            position: "relative",
+            overflow: "hidden",
+            border: 0,
+            borderRadius: 3,
+            cursor: "pointer",
+            textAlign: "left",
+            bgcolor: "#dce7ef",
+            boxShadow: "inset 0 0 0 1px #ffffff80, 0 8px 22px #15263a35",
+            "&:active": { transform: "scale(.985)" },
+            "& .leaflet-container": {
+              height: "100%",
+              width: "100%",
+              zIndex: 1,
+              fontFamily: "inherit",
+            },
+            "& .leaflet-control-attribution": { display: "none" },
+            "& .leaflet-tile-pane": { filter: "saturate(.82) contrast(1.05)" },
+            "& .customer-live-map-marker": { background: "transparent", border: 0 },
+            "& .customer-live-map-marker__dot": {
+              width: 16,
+              height: 16,
+              mx: "auto",
+              borderRadius: "50%",
+              border: "3px solid #fff",
+              boxShadow: "0 3px 10px #17243d55",
+            },
+            "& .customer-live-map-marker__name": {
+              display: "block",
+              maxWidth: 76,
+              mt: 0.3,
+              px: 0.4,
+              py: 0.15,
+              overflow: "hidden",
+              borderRadius: 0.75,
+              bgcolor: "#ffffffeb",
+              color: "#17243d",
+              fontSize: "9px",
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+              textOverflow: "ellipsis",
+              boxShadow: "0 2px 8px #17243d35",
+            },
+            "& .customer-live-map-current": { background: "transparent", border: 0 },
+            "& .customer-live-map-current__dot": {
+              display: "block",
+              width: 20,
+              height: 20,
+              borderRadius: "50%",
+              bgcolor: "#ef4444",
+              border: "4px solid #fff",
+              boxShadow: "0 2px 9px #17243d80",
+            },
+          }}
+        >
+          <MapContainer
+            center={
+              currentLocation
+                ? [currentLocation.latitude, currentLocation.longitude]
+                : [10.0452, 105.7469]
+            }
+            zoom={14}
+            zoomControl={false}
+            dragging={false}
+            scrollWheelZoom={false}
+            doubleClickZoom={false}
+            touchZoom={false}
+            attributionControl={false}
+          >
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <MiniMapViewport currentLocation={currentLocation} />
+            {currentLocation && (
+              <Marker
+                position={[currentLocation.latitude, currentLocation.longitude]}
+                icon={currentLocationIcon()}
+              />
+            )}
+            {nearbyCustomers.map((customer) => (
+              <Marker
+                key={customer.id || customer._id}
+                position={[customer.latitude, customer.longitude]}
+                icon={customerMapIcon(customer)}
+              />
+            ))}
+          </MapContainer>
+          <SoftBox position="absolute" zIndex={3} right={14} bottom={14} textAlign="right">
+            <SoftTypography
+              variant="caption"
+              color="dark"
+              fontWeight="bold"
+              display="block"
+              sx={{ bgcolor: "#ffffffed", px: 0.8, py: 0.35, borderRadius: 1 }}
+            >
+              {loading ? "Đang tải điểm bán..." : `${nearbyCustomers.length} cửa tiệm gần bạn`}
+            </SoftTypography>
+          </SoftBox>
+        </SoftBox>
+      </SoftBox>
+    </Card>
   );
 }
 
@@ -321,61 +594,10 @@ export default function StaffHome() {
           </SoftBox>
         </SoftBox>
 
-        <Card
-          sx={{
-            display: { xs: "block", md: "none" },
-            borderRadius: 0,
-            boxShadow: "none",
-            mb: 1,
-            overflow: "hidden",
-          }}
-        >
-          <SoftBox p={2}>
-            <SoftBox display="flex" alignItems="center" gap={1.25} mb={1.5}>
-              <SoftBox
-                width={46}
-                height={46}
-                borderRadius={2}
-                bgcolor="#e8f5e9"
-                color="#2e7d32"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                flexShrink={0}
-              >
-                <Icon sx={{ fontSize: "27px !important" }}>add_location_alt</Icon>
-              </SoftBox>
-              <SoftBox flex={1} minWidth={0}>
-                <SoftTypography variant="button" fontWeight="bold" display="block">
-                  Đang ghé cửa tiệm khách hàng?
-                </SoftTypography>
-                <SoftTypography variant="caption" color="text" display="block">
-                  Cập nhật GPS và ảnh bảng hiệu ngay tại điểm bán
-                </SoftTypography>
-              </SoftBox>
-            </SoftBox>
-            <SoftButton
-              fullWidth
-              color="success"
-              variant="gradient"
-              startIcon={<Icon>my_location</Icon>}
-              onClick={() => setCustomerLocationOpen(true)}
-              sx={{ minHeight: 50, fontSize: 14 }}
-            >
-              Vị trí & ảnh cửa tiệm
-            </SoftButton>
-            <SoftButton
-              fullWidth
-              color="info"
-              variant="outlined"
-              startIcon={<Icon>map</Icon>}
-              onClick={() => setCustomerMapOpen(true)}
-              sx={{ minHeight: 46, fontSize: 13, mt: 1 }}
-            >
-              Bản đồ & tuyến đường khách hàng
-            </SoftButton>
-          </SoftBox>
-        </Card>
+        <CustomerNavigationPreview
+          onOpenNavigator={() => setCustomerMapOpen(true)}
+          onOpenStoreProfile={() => setCustomerLocationOpen(true)}
+        />
 
         <Card
           sx={{
