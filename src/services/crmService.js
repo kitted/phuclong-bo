@@ -31,6 +31,9 @@ export const CustomerService = {
     AxiosInstance.patch(`/admin/customers/${id}/code`, { code, reason }),
   remove: (id, reason) =>
     AxiosInstance.delete(`/admin/customers/${id}`, { data: { reason } }),
+  getDeleted: (params = {}) => AxiosInstance.get("/admin/customers/deleted/list", { params }),
+  getDeletedById: (id) => AxiosInstance.get(`/admin/customers/deleted/${id}`),
+  restore: (id) => AxiosInstance.post(`/admin/customers/${id}/restore`),
   addInteraction: (id, payload) =>
     AxiosInstance.post(`/admin/customers/${id}/interactions`, payload),
   importExcel: (rows) => AxiosInstance.post("/admin/customers/import", { rows }),

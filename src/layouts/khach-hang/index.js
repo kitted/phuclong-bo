@@ -617,6 +617,199 @@ function DeleteCustomerModal({ open, customer, onClose, onDeleted }) {
   );
 }
 
+function DeletedCustomersModal({ open, onClose, onRestored }) {
+  const [items, setItems] = useState([]);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ totalPages: 1, totalItems: 0 });
+  const [loading, setLoading] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [restoringId, setRestoringId] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    if (!open) return;
+    setPage(1);
+    setItems([]);
+    setDetail(null);
+  }, [open, debouncedSearch]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let active = true;
+    setLoading(true);
+    CustomerService.getDeleted({
+      search: debouncedSearch || undefined,
+      page,
+      limit: 20,
+    })
+      .then((response) => {
+        if (!active) return;
+        const payload = response.data?.data;
+        const rows = Array.isArray(payload) ? payload : payload?.items || payload?.docs || [];
+        setItems((current) => (page === 1 ? rows : mergeUniqueItems(current, rows)));
+        setMeta(response.data?.meta || payload?.meta || { totalPages: 1, totalItems: rows.length });
+      })
+      .catch((error) => {
+        if (active) toast.error(error.response?.data?.message || "Không thể tải thùng rác khách hàng");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, debouncedSearch, page, refreshKey]);
+
+  const openDetail = async (customer) => {
+    const id = customer.id || customer._id;
+    setDetail(customer);
+    setDetailLoading(true);
+    try {
+      const response = await CustomerService.getDeletedById(id);
+      setDetail(response.data?.data || customer);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể tải chi tiết khách đã xóa");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const restore = async (customer) => {
+    const id = customer.id || customer._id;
+    if (!window.confirm(`Khôi phục khách hàng “${customer.name}”?`)) return;
+    setRestoringId(id);
+    try {
+      const response = await CustomerService.restore(id);
+      const restoreMeta = response.data?.meta || {};
+      if (restoreMeta.codeRestored === false) {
+        toast.warning(
+          `Đã khôi phục khách hàng nhưng mã ${restoreMeta.previousCode || "cũ"} đang được sử dụng. Khách hàng hiện chưa có mã.`
+        );
+      } else {
+        toast.success(
+          restoreMeta.previousCode
+            ? `Đã khôi phục khách hàng và mã ${restoreMeta.previousCode}`
+            : "Đã khôi phục khách hàng"
+        );
+      }
+      setItems((current) => current.filter((item) => (item.id || item._id) !== id));
+      setDetail((current) => ((current?.id || current?._id) === id ? null : current));
+      setRefreshKey((value) => value + 1);
+      await onRestored?.();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể khôi phục khách hàng");
+    } finally {
+      setRestoringId("");
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose}>
+      <SoftBox
+        sx={{
+          position: "absolute",
+          inset: { xs: 0, sm: "4vh 3vw" },
+          width: { xs: "100%", sm: "94vw", lg: 1080 },
+          maxWidth: "100%",
+          height: { xs: "100dvh", sm: "92vh" },
+          mx: { lg: "auto" },
+          left: { lg: "50%" },
+          transform: { lg: "translateX(-50%)" },
+          bgcolor: "#f7f9fc",
+          borderRadius: { xs: 0, sm: 3 },
+          boxShadow: 24,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <SoftBox
+          px={{ xs: 1.5, sm: 2.5 }}
+          py={1.5}
+          bgcolor="#fff"
+          display="flex"
+          alignItems="center"
+          justifyContent="space-between"
+          gap={1}
+          sx={{ borderBottom: "1px solid #e5eaf0" }}
+        >
+          <SoftBox display="flex" alignItems="center" gap={1.25} minWidth={0}>
+            <SoftBox width={42} height={42} borderRadius={2} bgcolor="#ffebee" color="#c62828" display="flex" alignItems="center" justifyContent="center"><Icon>delete_outline</Icon></SoftBox>
+            <SoftBox minWidth={0}>
+              <SoftTypography variant="h5" fontWeight="bold">Thùng rác khách hàng</SoftTypography>
+              <SoftTypography variant="caption" color="text">{meta.totalItems || items.length} hồ sơ đã xóa · có thể truy xuất và khôi phục</SoftTypography>
+            </SoftBox>
+          </SoftBox>
+          <IconButton onClick={onClose}><Icon>close</Icon></IconButton>
+        </SoftBox>
+
+        <SoftBox p={{ xs: 1.25, sm: 2 }} overflow="auto" flex={1}>
+          <SoftInput
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Tìm mã cũ, tên hoặc số điện thoại..."
+            icon={{ component: "search", direction: "left" }}
+          />
+
+          {detail && (
+            <SoftBox mt={1.5} p={{ xs: 1.5, sm: 2 }} bgcolor="#fff" borderRadius={2.5} sx={{ border: "1px solid #dbe4ee" }}>
+              <SoftBox display="flex" justifyContent="space-between" alignItems="flex-start" gap={1}>
+                <SoftBox minWidth={0}>
+                  <SoftTypography variant="button" fontWeight="bold" display="block">{detail.name}</SoftTypography>
+                  <SoftTypography variant="caption" color="text">Mã trước khi xóa: {detail.deletedCode || detail.code || "Chưa có mã"}</SoftTypography>
+                </SoftBox>
+                <IconButton size="small" onClick={() => setDetail(null)}><Icon>close</Icon></IconButton>
+              </SoftBox>
+              {detailLoading ? <SoftTypography variant="caption">Đang tải chi tiết...</SoftTypography> : (
+                <Grid container spacing={1} mt={0.25}>
+                  <Grid item xs={12} sm={6}><SoftTypography variant="caption" color="text">Liên hệ</SoftTypography><SoftTypography variant="button" display="block">{detail.phone || "Không có số điện thoại"}{detail.email ? ` · ${detail.email}` : ""}</SoftTypography></Grid>
+                  <Grid item xs={12} sm={6}><SoftTypography variant="caption" color="text">Thời điểm xóa</SoftTypography><SoftTypography variant="button" display="block">{dateTime(detail.deletedAt || detail.updatedAt)}</SoftTypography></Grid>
+                  <Grid item xs={12}><SoftTypography variant="caption" color="text">Lý do xóa</SoftTypography><SoftTypography variant="button" display="block">{detail.deleteReason || detail.deletionReason || detail.deletedReason || "Không có ghi chú"}</SoftTypography></Grid>
+                </Grid>
+              )}
+              <SoftButton color="success" variant="gradient" fullWidth sx={{ mt: 1.5, minHeight: 46 }} disabled={restoringId === (detail.id || detail._id)} onClick={() => restore(detail)} startIcon={<Icon>restore</Icon>}>
+                {restoringId === (detail.id || detail._id) ? "Đang khôi phục..." : "Khôi phục khách hàng này"}
+              </SoftButton>
+            </SoftBox>
+          )}
+
+          <SoftBox mt={1.5} display="grid" gap={1} sx={{ gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" } }}>
+            {items.map((item) => {
+              const id = item.id || item._id;
+              return (
+                <SoftBox key={id} p={1.5} bgcolor="#fff" borderRadius={2.5} sx={{ border: "1px solid #e1e8f0" }}>
+                  <SoftBox display="flex" gap={1.25} alignItems="flex-start">
+                    <SoftBox width={40} height={40} borderRadius="50%" bgcolor="#f1f3f5" color="#78909c" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>person_off</Icon></SoftBox>
+                    <SoftBox flex={1} minWidth={0}>
+                      <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>{item.name}</SoftTypography>
+                      <SoftTypography variant="caption" color="text" display="block">{item.deletedCode || item.code || "Chưa có mã"} · {item.phone || "Không có SĐT"}</SoftTypography>
+                      <SoftTypography variant="caption" color="text" display="block">Đã xóa: {dateTime(item.deletedAt || item.updatedAt)}</SoftTypography>
+                    </SoftBox>
+                  </SoftBox>
+                  <SoftBox display="flex" gap={1} mt={1.25}>
+                    <SoftButton color="secondary" variant="outlined" fullWidth size="small" onClick={() => openDetail(item)}>Chi tiết</SoftButton>
+                    <SoftButton color="success" variant="outlined" fullWidth size="small" disabled={restoringId === id} onClick={() => restore(item)}>{restoringId === id ? "Đang khôi phục" : "Khôi phục"}</SoftButton>
+                  </SoftBox>
+                </SoftBox>
+              );
+            })}
+          </SoftBox>
+          {!loading && items.length === 0 && <SoftBox py={6} textAlign="center"><Icon sx={{ fontSize: 52, color: "#b0bec5" }}>delete_sweep</Icon><SoftTypography variant="button" color="text" display="block">Không có khách hàng đã xóa</SoftTypography></SoftBox>}
+          <MobileLoadMore loading={loading} hasMore={page < Number(meta.totalPages || 1)} onLoadMore={() => setPage((value) => value + 1)} />
+        </SoftBox>
+      </SoftBox>
+    </Modal>
+  );
+}
+
 function CustomerDetail({
   customerId,
   open,
@@ -1363,6 +1556,7 @@ export default function KhachHang() {
   const [interactionImporting, setInteractionImporting] = useState(false);
   const [interactionExporting, setInteractionExporting] = useState(false);
   const [dataToolsOpen, setDataToolsOpen] = useState(false);
+  const [deletedCustomersOpen, setDeletedCustomersOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [sortMode, setSortMode] = useState("NEWEST");
   const importInputRef = useRef(null);
@@ -1701,13 +1895,22 @@ export default function KhachHang() {
                           Thêm khách hàng
                         </SoftButton>
                         <SoftButton
+                          color="error"
+                          variant="outlined"
+                          startIcon={<Icon>delete_outline</Icon>}
+                          onClick={() => setDeletedCustomersOpen(true)}
+                          sx={{ minWidth: 0 }}
+                        >
+                          Thùng rác
+                        </SoftButton>
+                        <SoftButton
                           color="secondary"
                           variant="outlined"
                           startIcon={<Icon>tune</Icon>}
                           onClick={() => setDataToolsOpen((value) => !value)}
-                          sx={{ minWidth: 0 }}
+                          sx={{ minWidth: 0, gridColumn: "1 / -1" }}
                         >
-                          {dataToolsOpen ? "Đóng công cụ" : "Công cụ dữ liệu"}
+                          {dataToolsOpen ? "Đóng công cụ dữ liệu" : "Mở công cụ dữ liệu"}
                         </SoftButton>
                       </SoftBox>
                       {dataToolsOpen && (
@@ -1832,6 +2035,14 @@ export default function KhachHang() {
                           {interactionExporting ? "Đang export..." : "Export tương tác"}
                         </SoftButton>
                       </SoftBox>
+                      <SoftButton
+                        color="error"
+                        variant="outlined"
+                        startIcon={<Icon>delete_outline</Icon>}
+                        onClick={() => setDeletedCustomersOpen(true)}
+                      >
+                        Thùng rác
+                      </SoftButton>
                       <SoftButton
                         color="info"
                         variant="gradient"
@@ -2243,6 +2454,13 @@ export default function KhachHang() {
           setFormOpen(true);
         }}
       />
+      {!isStaff && (
+        <DeletedCustomersModal
+          open={deletedCustomersOpen}
+          onClose={() => setDeletedCustomersOpen(false)}
+          onRestored={() => refresh()}
+        />
+      )}
     </DashboardLayout>
   );
 }
