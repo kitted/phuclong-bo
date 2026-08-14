@@ -23,6 +23,9 @@ import AuditLogs from "layouts/audit-logs";
 import StaffHome from "layouts/staff-home";
 import ThuCongNo from "layouts/thu-cong-no";
 import BackupData from "layouts/backup-data";
+import DailyOperations from "layouts/nghiep-vu-ngay";
+import QuickNotes from "layouts/quick-notes";
+import WebsiteAdmin from "layouts/website-admin";
 
 const routes = [
   {
@@ -42,6 +45,36 @@ const routes = [
     permission: ["staff"],
   },
   // ─── Dashboard ────────────────────────────────────────────────────────────
+  {
+    type: "collapse",
+    name: "Quản lý website",
+    key: "website-admin",
+    icon: <Document size="12px" />,
+    route: "/website-admin",
+    noCollapse: true,
+    component: <WebsiteAdmin />,
+    permission: ["admin"],
+  },
+  {
+    type: "collapse",
+    name: "Note nhanh cho sale",
+    key: "quick-notes",
+    icon: <Document size="12px" />,
+    route: "/quick-notes",
+    noCollapse: true,
+    component: <QuickNotes />,
+    permission: ["admin"],
+  },
+  {
+    type: "collapse",
+    name: "Nghiệp vụ trong ngày",
+    key: "nghiep-vu-ngay",
+    icon: <Document size="12px" />,
+    route: "/nghiep-vu-ngay",
+    noCollapse: true,
+    component: <DailyOperations />,
+    permission: ["admin"],
+  },
   {
     type: "collapse",
     name: "Tổng quan",

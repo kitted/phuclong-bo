@@ -63,6 +63,13 @@ const today = () => {
     value.getDate()
   ).padStart(2, "0")}`;
 };
+const occurredAtWithCurrentTime = (date) => {
+  const now = new Date();
+  const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
+  return `${date || today()}T${time}+07:00`;
+};
 const dateValue = (value) => {
   const date = value instanceof Date ? value : new Date(value);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
@@ -1067,7 +1074,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       try {
         setSubmitting(true);
         const response = await DebtPaymentService.create(getId(customer), {
-          date: `${form.date}T00:00:00+07:00`,
+          date: occurredAtWithCurrentTime(form.date),
           payments: debtPayments,
           invoiceIds: [],
           note: form.note.trim() || undefined,
@@ -1102,7 +1109,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
         });
       const response = await InvoiceService.create({
         code: form.code.trim() || undefined,
-        date: `${form.date}T00:00:00+07:00`,
+        date: occurredAtWithCurrentTime(form.date),
         customerId: getId(customer) || undefined,
         newCustomer: createsUnassignedCustomer
           ? {

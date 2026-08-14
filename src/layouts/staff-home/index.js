@@ -25,6 +25,7 @@ import { toast } from "react-toastify";
 import StaffAccountMenu from "components/StaffAccountMenu";
 import NotificationCenter from "components/NotificationCenter";
 import QuickCustomerLocation from "./quick-customer-location";
+import QuickNoteService from "services/quickNoteService";
 
 const CustomerRouteMap = lazy(() => import("./customer-route-map"));
 
@@ -164,7 +165,27 @@ const KPI_META = {
   PRODUCT_REVENUE: { label: "Doanh thu sản phẩm", icon: "inventory_2", money: true },
   TOTAL_REVENUE: { label: "Tổng doanh thu", icon: "payments", money: true },
   INVOICE_COUNT: { label: "Số hóa đơn", icon: "receipt_long", money: false },
+  PRODUCT_QUANTITY: { label: "Số lượng sản phẩm", icon: "inventory_2", money: false },
 };
+
+function PinnedQuickNote({ note }) {
+  if (!note) return null;
+  return (
+    <Card sx={{ borderRadius: 0, boxShadow: "none", mb: 1, overflow: "hidden" }}>
+      <SoftBox p={1.75} sx={{ background: "linear-gradient(135deg, #fff8e1, #fff3cd)", borderLeft: "5px solid #ffb300" }}>
+        <SoftBox display="flex" gap={1.25} alignItems="flex-start">
+          <SoftBox width={42} height={42} borderRadius={2} bgcolor="#ffb300" color="#fff" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>push_pin</Icon></SoftBox>
+          <SoftBox minWidth={0} flex={1}>
+            <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "#e65100", textTransform: "uppercase" }}>Lưu ý từ quản lý</SoftTypography>
+            <SoftTypography variant="button" fontWeight="bold" display="block">{note.title}</SoftTypography>
+            <SoftTypography variant="body2" mt={.5} sx={{ color: "#5d4037", whiteSpace: "pre-wrap" }}>{note.content}</SoftTypography>
+            {note.updatedAt || note.createdAt ? <SoftTypography variant="caption" color="text" display="block" mt={.75}>Cập nhật {formatDateTime(note.updatedAt || note.createdAt)}</SoftTypography> : null}
+          </SoftBox>
+        </SoftBox>
+      </SoftBox>
+    </Card>
+  );
+}
 
 function FeedHeader({ user, subtitle }) {
   const name = user?.fullName || user?.name || user?.username || "Nhân viên";
@@ -498,6 +519,7 @@ export default function StaffHome() {
   const [kpis, setKpis] = useState([]);
   const [overview, setOverview] = useState({});
   const [invoices, setInvoices] = useState([]);
+  const [pinnedNote, setPinnedNote] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const params = useMemo(
     () => ({
@@ -516,11 +538,13 @@ export default function StaffHome() {
         DashboardAnalyticsService.overview(params),
         InvoiceService.getAll({ page: 1, limit: 3, sortBy: "date", sortOrder: "desc" }),
         EmployeeKpiService.getAll({ status: "ACTIVE", page: 1, limit: 20 }),
+        QuickNoteService.getLatestPinned(),
       ];
-      const [overviewResult, invoiceResult, kpiResult] = await Promise.allSettled(requests);
+      const [overviewResult, invoiceResult, kpiResult, noteResult] = await Promise.allSettled(requests);
       if (overviewResult.status === "fulfilled") setOverview(unwrap(overviewResult.value) || {});
       if (invoiceResult.status === "fulfilled") setInvoices(listOf(invoiceResult.value));
       const baseKpis = kpiResult.status === "fulfilled" ? listOf(kpiResult.value) : [];
+      setPinnedNote(noteResult.status === "fulfilled" ? unwrap(noteResult.value) || null : null);
       const detailed = await Promise.all(
         baseKpis.map(async (kpi) => {
           try {
@@ -598,6 +622,8 @@ export default function StaffHome() {
           onOpenNavigator={() => setCustomerMapOpen(true)}
           onOpenStoreProfile={() => setCustomerLocationOpen(true)}
         />
+
+        <PinnedQuickNote note={pinnedNote} />
 
         <Card
           sx={{

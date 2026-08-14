@@ -368,7 +368,7 @@ function TruckModal({ open, onClose, truck, onSaved }) {
 }
 
 function TransferModal({ open, onClose, truck, type, onSaved }) {
-  const [items, setItems] = useState([{ productId: "", qty: 1 }]);
+  const [items, setItems] = useState([]);
   const [products, setProducts] = useState([]);
   const [productSearch, setProductSearch] = useState("");
   const [code, setCode] = useState("");
@@ -379,7 +379,7 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
   const isLoad = type === "LOAD";
   useEffect(() => {
     if (!open || !truck) return;
-    setItems([{ productId: "", qty: 1 }]);
+    setItems([]);
     setProducts([]);
     setProductSearch("");
     setCode("");
@@ -906,7 +906,7 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
   const [destinationSearch, setDestinationSearch] = useState("");
   const [destinations, setDestinations] = useState([]);
   const [products, setProducts] = useState([]);
-  const [items, setItems] = useState([{ productId: "", qty: 1 }]);
+  const [items, setItems] = useState([]);
   const [productSearch, setProductSearch] = useState("");
   const [transferDate, setTransferDate] = useState(todayValue());
   const [note, setNote] = useState("");
@@ -917,7 +917,7 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
     if (!open || !sourceTruck) return;
     setDestination(null);
     setDestinationSearch("");
-    setItems([{ productId: "", qty: 1 }]);
+    setItems([]);
     setProductSearch("");
     setTransferDate(todayValue());
     setNote("");

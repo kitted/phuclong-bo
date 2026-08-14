@@ -45,6 +45,7 @@ function NhapKho() {
   const [detailModal, setDetailModal] = useState(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [changingStatus, setChangingStatus] = useState(false);
 
   // SỬA Ở ĐÂY: Thêm trường `code` vào state form mặc định
   const [form, setForm] = useState({
@@ -157,12 +158,18 @@ function NhapKho() {
   };
 
   const statusBadge = (status) => {
+    const normalized = String(status || "").toUpperCase();
     const map = {
-      completed: { label: "Hoàn thành", bg: "#E8F5E9", color: "#388E3C" },
-      pending: { label: "Chờ duyệt", bg: "#FFF3E0", color: "#E65100" },
-      cancelled: { label: "Đã hủy", bg: "#FFEBEE", color: "#D32F2F" },
+      RECEIVED: { label: "Đã nhận vào kho", bg: "#E8F5E9", color: "#388E3C" },
+      PENDING: { label: "Chờ nhận hàng", bg: "#FFF3E0", color: "#E65100" },
+      RETURNED: { label: "Đã hoàn nhà cung cấp", bg: "#FFEBEE", color: "#D32F2F" },
+      COMPLETED: { label: "Đã nhận vào kho", bg: "#E8F5E9", color: "#388E3C" },
     };
-    const s = map[status] || { label: status || "Không rõ", bg: "#F5F5F5", color: "#9E9E9E" };
+    const s = map[normalized] || {
+      label: status || "Không rõ",
+      bg: "#F5F5F5",
+      color: "#9E9E9E",
+    };
     return (
       <span
         style={{
@@ -177,6 +184,27 @@ function NhapKho() {
         {s.label}
       </span>
     );
+  };
+
+  const changeImportStatus = async (status) => {
+    if (!detailModal) return;
+    const action = status === "RECEIVED" ? "nhận hàng vào kho" : "hoàn hàng cho nhà cung cấp";
+    if (!window.confirm(`Xác nhận ${action}? Thao tác này sẽ cập nhật tồn kho.`)) return;
+    try {
+      setChangingStatus(true);
+      const response = await ImportService.changeStatus(
+        detailModal.id || detailModal._id,
+        status
+      );
+      const updated = response?.data?.data ?? response?.data;
+      setDetailModal(updated || { ...detailModal, status });
+      toast.success(status === "RECEIVED" ? "Đã nhận hàng vào kho" : "Đã hoàn nhà cung cấp");
+      await load();
+    } catch (error) {
+      toast.error(error.response?.data?.message || `Không thể ${action}`);
+    } finally {
+      setChangingStatus(false);
+    }
   };
 
   return (
@@ -694,7 +722,7 @@ function NhapKho() {
               disabled={submitting}
               fullWidth
             >
-              {submitting ? "Đang lưu..." : "Xác nhận nhập kho"}
+              {submitting ? "Đang lưu..." : "Tạo phiếu chờ nhận hàng"}
             </SoftButton>
           </SoftBox>
         </SoftBox>
@@ -784,6 +812,32 @@ function NhapKho() {
                   </SoftBox>
                 );
               })}
+            </SoftBox>
+            <SoftBox mt={3} display="flex" gap={1} flexDirection={{ xs: "column", sm: "row" }}>
+              {String(detailModal.status || "").toUpperCase() === "PENDING" && (
+                <SoftButton
+                  fullWidth
+                  variant="gradient"
+                  color="success"
+                  disabled={changingStatus}
+                  onClick={() => changeImportStatus("RECEIVED")}
+                >
+                  <Icon>inventory</Icon>&nbsp;Xác nhận đã nhận hàng
+                </SoftButton>
+              )}
+              {["RECEIVED", "COMPLETED"].includes(
+                String(detailModal.status || "").toUpperCase()
+              ) && (
+                <SoftButton
+                  fullWidth
+                  variant="outlined"
+                  color="error"
+                  disabled={changingStatus}
+                  onClick={() => changeImportStatus("RETURNED")}
+                >
+                  <Icon>assignment_return</Icon>&nbsp;Hoàn nhà cung cấp
+                </SoftButton>
+              )}
             </SoftBox>
 
             <SoftBox display="flex" justifyContent="flex-end" mt={2} pt={2}>

@@ -360,6 +360,11 @@ export const ImportService = {
   delete: async (id) => {
     return await AxiosInstance.delete(`/admin/imports/${id}`);
   },
+  changeStatus: async (id, status, note) =>
+    AxiosInstance.patch(`/admin/imports/${id}/status`, {
+      status,
+      ...(note ? { note } : {}),
+    }),
 };
 
 // ─── EXPORTS ──────────────────────────────────────────────────────────────────

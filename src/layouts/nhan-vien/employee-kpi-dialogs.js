@@ -26,6 +26,7 @@ const METRICS = {
   PRODUCT_REVENUE: "Doanh thu nhóm sản phẩm",
   TOTAL_REVENUE: "Tổng doanh thu",
   INVOICE_COUNT: "Số hóa đơn",
+  PRODUCT_QUANTITY: "Số lượng sản phẩm bán ra",
 };
 const MONEY_METRICS = ["PRODUCT_REVENUE", "TOTAL_REVENUE"];
 const newTarget = () => ({
@@ -36,6 +37,9 @@ const newTarget = () => ({
   productId: "",
   categoryId: "",
   productType: "",
+  referencePrice: "",
+  revenueTarget: "",
+  note: "",
 });
 const rowsOf = (response) => {
   const value = response?.data?.data;
@@ -208,6 +212,9 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
     to: "",
     note: "",
     status: "ACTIVE",
+    cycleType: "FIXED_RANGE",
+    startDay: 10,
+    endDay: 9,
     targets: [newTarget()],
   });
   const [promotions, setPromotions] = useState([]);
@@ -226,10 +233,16 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
             to: String(kpi.to || "").slice(0, 10),
             note: kpi.note || "",
             status: kpi.status || "DRAFT",
+            cycleType: kpi.cycleType || "FIXED_RANGE",
+            startDay: kpi.startDay || 10,
+            endDay: kpi.endDay || 9,
             targets: (kpi.targets || []).map((target) => ({
               ...newTarget(),
               ...target,
               targetValue: target.targetValue || "",
+              referencePrice: target.referenceUnitPrice || "",
+              revenueTarget: target.revenueTarget || "",
+              note: target.note || "",
               promotionId:
                 target.promotionId?.id || target.promotionId?._id || target.promotionId || "",
               productId:
@@ -257,6 +270,9 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
             to: "",
             note: "",
             status: "ACTIVE",
+            cycleType: "FIXED_RANGE",
+            startDay: 10,
+            endDay: 9,
             targets: [newTarget()],
           }
     );
@@ -317,7 +333,7 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
     if (
       form.targets.some(
         (target) =>
-          target.metric === "PRODUCT_REVENUE" &&
+          ["PRODUCT_REVENUE", "PRODUCT_QUANTITY"].includes(target.metric) &&
           ((target.scopeMode === "PRODUCT" && !target.productId) ||
             (target.scopeMode === "CATEGORY" && !target.categoryId) ||
             (target.scopeMode === "PRODUCT_TYPE" && !target.productType.trim()))
@@ -330,15 +346,23 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
       ...(target.metric === "PROMOTION_ACTIVATION_COUNT" && target.promotionId
         ? { promotionId: target.promotionId }
         : {}),
-      ...(target.metric === "PRODUCT_REVENUE" && target.categoryId
+      ...(["PRODUCT_REVENUE", "PRODUCT_QUANTITY"].includes(target.metric) && target.categoryId
         ? { categoryIds: [target.categoryId] }
         : {}),
-      ...(target.metric === "PRODUCT_REVENUE" && target.productId
+      ...(["PRODUCT_REVENUE", "PRODUCT_QUANTITY"].includes(target.metric) && target.productId
         ? { productIds: [target.productId] }
         : {}),
-      ...(target.metric === "PRODUCT_REVENUE" && target.productType.trim()
+      ...(["PRODUCT_REVENUE", "PRODUCT_QUANTITY"].includes(target.metric) &&
+      target.productType.trim()
         ? { productType: target.productType.trim() }
         : {}),
+      ...(Number(target.referencePrice) > 0
+        ? { referenceUnitPrice: Number(target.referencePrice) }
+        : {}),
+      ...(Number(target.revenueTarget) > 0
+        ? { revenueTarget: Number(target.revenueTarget) }
+        : {}),
+      ...(target.note?.trim() ? { note: target.note.trim() } : {}),
     }));
     try {
       setSaving(true);
@@ -350,6 +374,10 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
         targets,
         status: form.status,
         note: form.note.trim() || undefined,
+        cycleType: form.cycleType,
+        ...(form.cycleType === "CUSTOM_MONTHLY"
+          ? { startDay: Number(form.startDay), endDay: Number(form.endDay) }
+          : {}),
       };
       if (kpi) {
         const updatePayload = { ...payload };
@@ -377,6 +405,26 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
           {employee?.employeeCode} · {employee?.fullName || employee?.username}
         </SoftTypography>
         <Grid container spacing={2} mt={1}>
+          <Grid item xs={12}>
+            <SoftTypography variant="caption">Cách tính kỳ KPI</SoftTypography>
+            <SoftInput
+              select
+              value={form.cycleType}
+              onChange={(event) => setForm({ ...form, cycleType: event.target.value })}
+            >
+              <MenuItem value="FIXED_RANGE">Theo khoảng ngày đã chọn</MenuItem>
+              <MenuItem value="CUSTOM_MONTHLY">Chu kỳ tháng ngày 10 đến ngày 9</MenuItem>
+            </SoftInput>
+          </Grid>
+          {form.cycleType === "CUSTOM_MONTHLY" && (
+            <Grid item xs={12}>
+              <SoftBox p={1.5} borderRadius={2} bgcolor="#fff8e1">
+                <SoftTypography variant="button" fontWeight="bold" sx={{ color: "#e65100" }}>
+                  Chu kỳ áp dụng: ngày {form.startDay} tháng này đến ngày {form.endDay} tháng sau
+                </SoftTypography>
+              </SoftBox>
+            </Grid>
+          )}
           <Grid item xs={12}>
             <SoftTypography variant="caption">Tên kỳ KPI (để trống để tự sinh)</SoftTypography>
             <SoftInput
@@ -502,6 +550,8 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
                     "Tính tổng doanh thu hóa đơn do nhân viên phụ trách."}
                   {target.metric === "INVOICE_COUNT" &&
                     "Đếm tổng số hóa đơn do nhân viên phụ trách."}
+                  {target.metric === "PRODUCT_QUANTITY" &&
+                    "Cộng số lượng hàng bán phù hợp; không tính dòng quà tặng."}
                 </SoftTypography>
               </Grid>
               {target.metric === "PROMOTION_ACTIVATION_COUNT" && (
@@ -556,7 +606,7 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
                   />
                 </Grid>
               )}
-              {target.metric === "PRODUCT_REVENUE" && (
+              {["PRODUCT_REVENUE", "PRODUCT_QUANTITY"].includes(target.metric) && (
                 <>
                   <Grid item xs={12}>
                     <SoftTypography variant="caption">Tính doanh thu theo *</SoftTypography>
@@ -638,6 +688,32 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
                       />
                     </Grid>
                   )}
+                  <Grid item xs={12} sm={6}>
+                    <SoftTypography variant="caption">Giá tham khảo</SoftTypography>
+                    <SoftInput
+                      type="number"
+                      value={target.referencePrice}
+                      onChange={(event) => setTarget(index, "referencePrice", event.target.value)}
+                      placeholder="Không bắt buộc"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <SoftTypography variant="caption">Doanh thu mục tiêu kèm theo</SoftTypography>
+                    <SoftInput
+                      type="number"
+                      value={target.revenueTarget}
+                      onChange={(event) => setTarget(index, "revenueTarget", event.target.value)}
+                      placeholder="Không bắt buộc"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <SoftTypography variant="caption">Ghi chú chỉ tiêu/ngoại lệ</SoftTypography>
+                    <SoftInput
+                      value={target.note}
+                      onChange={(event) => setTarget(index, "note", event.target.value)}
+                      placeholder="Ví dụ: không quy đổi hàng trả khác..."
+                    />
+                  </Grid>
                 </>
               )}
             </Grid>
