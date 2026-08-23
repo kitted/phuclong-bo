@@ -430,6 +430,9 @@ function SearchSelect({
         }
       }}
       options={options}
+      // Danh sách đã được backend lọc theo mã, tên và barcode. Không để MUI
+      // lọc lần hai theo getOptionLabel (nhãn hiển thị có thể không chứa mã).
+      filterOptions={(items) => items}
       disabled={disabled}
       disableClearable={disableClearable}
       openOnFocus
@@ -691,44 +694,52 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       setProductOptions([]);
       return undefined;
     }
+    let active = true;
     const timer = setTimeout(() => {
       setProductsLoading(true);
       const request =
         form.sourceType === "truck"
           ? TruckService.getTruckAvailableProducts(getId(truck), {
-              search: productSearch || undefined,
+              search: productSearch.trim() || undefined,
               page: 1,
               limit: 20,
             })
-          : ProductService.getAll({ search: productSearch || undefined, page: 1, limit: 20 });
+          : ProductService.getAll({ search: productSearch.trim() || undefined, page: 1, limit: 20 });
       request
-        .then((response) => setProductOptions(listOf(response)))
-        .catch(() => setProductOptions([]))
-        .finally(() => setProductsLoading(false));
+        .then((response) => active && setProductOptions(listOf(response)))
+        .catch(() => active && setProductOptions([]))
+        .finally(() => active && setProductsLoading(false));
     }, 350);
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [open, form.sourceType, truck, productSearch, productOptionsRefresh]);
   useEffect(() => {
     if (!open || !gifts.length || (form.sourceType === "truck" && !truck)) {
       setGiftOptions([]);
       return undefined;
     }
+    let active = true;
     const timer = setTimeout(() => {
       setGiftOptionsLoading(true);
       const request =
         form.sourceType === "truck"
           ? TruckService.getTruckAvailableProducts(getId(truck), {
-              search: giftSearch || undefined,
+              search: giftSearch.trim() || undefined,
               page: 1,
               limit: 20,
             })
-          : ProductService.getAll({ search: giftSearch || undefined, page: 1, limit: 20 });
+          : ProductService.getAll({ search: giftSearch.trim() || undefined, page: 1, limit: 20 });
       request
-        .then((response) => setGiftOptions(listOf(response)))
-        .catch(() => setGiftOptions([]))
-        .finally(() => setGiftOptionsLoading(false));
+        .then((response) => active && setGiftOptions(listOf(response)))
+        .catch(() => active && setGiftOptions([]))
+        .finally(() => active && setGiftOptionsLoading(false));
     }, 300);
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [open, gifts.length, form.sourceType, truck, giftSearch, giftOptionsRefresh]);
   const previewItems = useMemo(
     () =>

@@ -36,6 +36,93 @@ const listOf = (response) => {
 const numberText = (value) => new Intl.NumberFormat("vi-VN").format(Number(value) || 0);
 const moneyValue = (value) => Number(String(value || "").replace(/[^0-9]/g, "")) || 0;
 
+function RemoteProductSelect({ value, onSelect }) {
+  const [search, setSearch] = useState("");
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(() => {
+      setLoading(true);
+      ProductService.getAll({ search: search.trim() || undefined, page: 1, limit: 30 })
+        .then((response) => {
+          if (!active) return;
+          const rows = listOf(response);
+          setOptions(
+            [...rows].sort((a, b) =>
+              String(a.code || a.name || "").localeCompare(
+                String(b.code || b.name || ""),
+                "vi",
+                { numeric: true }
+              )
+            )
+          );
+        })
+        .catch(() => active && setOptions([]))
+        .finally(() => active && setLoading(false));
+    }, search ? 300 : 0);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [search]);
+
+  return (
+    <Autocomplete
+      options={options}
+      value={value || null}
+      loading={loading}
+      openOnFocus
+      autoHighlight
+      filterOptions={(items) => items}
+      onOpen={() => setSearch("")}
+      onInputChange={(_, nextValue, reason) => {
+        if (reason === "input" || reason === "clear") setSearch(nextValue);
+      }}
+      onChange={(_, product) => {
+        onSelect(product);
+        if (product && document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      }}
+      getOptionLabel={(product) =>
+        `${product.code || ""} · ${product.name || ""} (${product.unit || ""})`
+      }
+      isOptionEqualToValue={(option, selected) =>
+        String(option.id || option._id) === String(selected.id || selected._id)
+      }
+      noOptionsText={search.trim() ? "Không tìm thấy mã hoặc tên này" : "Chưa có sản phẩm"}
+      loadingText="Đang tìm sản phẩm..."
+      renderOption={(props, product) => (
+        <li {...props} key={product.id || product._id}>
+          <SoftBox py={0.35} minWidth={0}>
+            <SoftTypography variant="button" fontWeight="bold" display="block">
+              {product.name || "Sản phẩm"}
+            </SoftTypography>
+            <SoftTypography variant="caption" color="text">
+              {[product.code, product.barcode, product.unit].filter(Boolean).join(" · ")}
+            </SoftTypography>
+          </SoftBox>
+        </li>
+      )}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          placeholder="Tìm mã, tên hoặc barcode..."
+          sx={{
+            "& .MuiOutlinedInput-root": { minHeight: 52, borderRadius: 2 },
+            "& .MuiAutocomplete-input": {
+              py: "9px !important",
+              lineHeight: "22px",
+            },
+          }}
+        />
+      )}
+    />
+  );
+}
+
 function NhapKho() {
   const [imports, setImports] = useState([]);
   const [products, setProducts] = useState([]);
@@ -59,20 +146,14 @@ function NhapKho() {
   const load = async () => {
     setLoading(true);
     try {
-      const [impRes, prodRes, supRes] = await Promise.all([
+      const [impRes, supRes] = await Promise.all([
         ImportService.getAll(),
-        ProductService.getAll({ page: 1, limit: 100 }),
         SupplierService.getAll(),
       ]);
 
       const impData = listOf(impRes);
       setImports([...impData].reverse());
 
-      setProducts(
-        listOf(prodRes).sort((a, b) =>
-          String(a.code || "").localeCompare(String(b.code || ""), "vi", { numeric: true })
-        )
-      );
       setSuppliers(listOf(supRes));
     } catch (error) {
       console.error("Lỗi khi tải dữ liệu:", error);
@@ -554,40 +635,20 @@ function NhapKho() {
                   </SoftBox>
 
                   <SoftBox>
-                    <Autocomplete
-                      options={products}
-                      openOnFocus
-                      autoHighlight
+                    <RemoteProductSelect
                       value={selectedProduct}
-                      onChange={(_, product) => {
-                        handleItemChange(idx, "productId", product?.id || product?._id || "");
-                        if (product && document.activeElement instanceof HTMLElement) {
-                          document.activeElement.blur();
+                      onSelect={(product) => {
+                        if (product) {
+                          setProducts((current) => {
+                            const id = product.id || product._id;
+                            return current.some((item) => (item.id || item._id) === id)
+                              ? current
+                              : [...current, product];
+                          });
                         }
+                        handleItemChange(idx, "productId", product?.id || product?._id || "");
+                        if (product) handleItemChange(idx, "price", product.costPrice || 0);
                       }}
-                      getOptionLabel={(product) =>
-                        `${product.code || ""} · ${product.name || ""} (${product.unit || ""})`
-                      }
-                      isOptionEqualToValue={(option, value) =>
-                        String(option.id || option._id) === String(value.id || value._id)
-                      }
-                      noOptionsText="Không tìm thấy sản phẩm"
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          placeholder="Tìm mã hoặc tên sản phẩm..."
-                          sx={{
-                            "& .MuiOutlinedInput-root": {
-                              minHeight: 52,
-                              borderRadius: 2,
-                            },
-                            "& .MuiAutocomplete-input": {
-                              py: "9px !important",
-                              lineHeight: "22px",
-                            },
-                          }}
-                        />
-                      )}
                     />
                   </SoftBox>
 
