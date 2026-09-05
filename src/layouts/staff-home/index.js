@@ -19,7 +19,7 @@ import SoftTypography from "components/SoftTypography";
 import { DashboardAnalyticsService } from "services/analyticsService";
 import EmployeeKpiService from "services/employeeKpiService";
 import { InvoiceService } from "services/warehouseService";
-import { CustomerService } from "services/crmService";
+import { CustomerService, LeadService } from "services/crmService";
 import { CreateInvoiceModal } from "layouts/hoa-don";
 import { toast } from "react-toastify";
 import StaffAccountMenu from "components/StaffAccountMenu";
@@ -111,6 +111,18 @@ const mapCustomer = (customer = {}) => {
     imageUrl: image.secureUrl || image.secure_url || image.url || customer.storefrontImageUrl || "",
   };
 };
+const mapLead = (lead = {}) => {
+  const latitude = coordinate(lead.location?.latitude);
+  const longitude = coordinate(lead.location?.longitude);
+  if (latitude === null || longitude === null) return null;
+  return {
+    ...lead,
+    latitude,
+    longitude,
+    name: `Lead · ${lead.name || "Tiềm năng"}`,
+    pointType: "LEAD",
+  };
+};
 const distanceKm = (from, to) => {
   if (!from || !to) return null;
   const radians = (value) => (value * Math.PI) / 180;
@@ -130,7 +142,9 @@ const escapeHtml = (value = "") =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character])
   );
 const customerMapColor = (customer = {}) =>
-  String(customer.source || customer.customerSource || "").toUpperCase() === "LEGACY"
+  customer.pointType === "LEAD"
+    ? customer.color || "#7c3aed"
+    : String(customer.source || customer.customerSource || "").toUpperCase() === "LEGACY"
     ? "#22c55e"
     : "#ef4444";
 const customerMapIcon = (customer) =>
@@ -172,14 +186,50 @@ function PinnedQuickNote({ note }) {
   if (!note) return null;
   return (
     <Card sx={{ borderRadius: 0, boxShadow: "none", mb: 1, overflow: "hidden" }}>
-      <SoftBox p={1.75} sx={{ background: "linear-gradient(135deg, #fff8e1, #fff3cd)", borderLeft: "5px solid #ffb300" }}>
+      <SoftBox
+        p={1.75}
+        sx={{
+          background: "linear-gradient(135deg, #fff8e1, #fff3cd)",
+          borderLeft: "5px solid #ffb300",
+        }}
+      >
         <SoftBox display="flex" gap={1.25} alignItems="flex-start">
-          <SoftBox width={42} height={42} borderRadius={2} bgcolor="#ffb300" color="#fff" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>push_pin</Icon></SoftBox>
+          <SoftBox
+            width={42}
+            height={42}
+            borderRadius={2}
+            bgcolor="#ffb300"
+            color="#fff"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            flexShrink={0}
+          >
+            <Icon>push_pin</Icon>
+          </SoftBox>
           <SoftBox minWidth={0} flex={1}>
-            <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "#e65100", textTransform: "uppercase" }}>Lưu ý từ quản lý</SoftTypography>
-            <SoftTypography variant="button" fontWeight="bold" display="block">{note.title}</SoftTypography>
-            <SoftTypography variant="body2" mt={.5} sx={{ color: "#5d4037", whiteSpace: "pre-wrap" }}>{note.content}</SoftTypography>
-            {note.updatedAt || note.createdAt ? <SoftTypography variant="caption" color="text" display="block" mt={.75}>Cập nhật {formatDateTime(note.updatedAt || note.createdAt)}</SoftTypography> : null}
+            <SoftTypography
+              variant="caption"
+              fontWeight="bold"
+              sx={{ color: "#e65100", textTransform: "uppercase" }}
+            >
+              Lưu ý từ quản lý
+            </SoftTypography>
+            <SoftTypography variant="button" fontWeight="bold" display="block">
+              {note.title}
+            </SoftTypography>
+            <SoftTypography
+              variant="body2"
+              mt={0.5}
+              sx={{ color: "#5d4037", whiteSpace: "pre-wrap" }}
+            >
+              {note.content}
+            </SoftTypography>
+            {note.updatedAt || note.createdAt ? (
+              <SoftTypography variant="caption" color="text" display="block" mt={0.75}>
+                Cập nhật {formatDateTime(note.updatedAt || note.createdAt)}
+              </SoftTypography>
+            ) : null}
           </SoftBox>
         </SoftBox>
       </SoftBox>
@@ -225,7 +275,7 @@ function Stat({ label, value, color = "#1c1e21" }) {
   );
 }
 
-function CustomerNavigationPreview({ onOpenNavigator, onOpenStoreProfile }) {
+function CustomerNavigationPreview({ onOpenNavigator, onOpenStoreProfile, leads = [] }) {
   const [currentLocation, setCurrentLocation] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -277,13 +327,14 @@ function CustomerNavigationPreview({ onOpenNavigator, onOpenStoreProfile }) {
   }, []);
 
   const nearbyCustomers = useMemo(() => {
-    if (!currentLocation) return customers.slice(0, 3);
-    return customers
+    const points = [...customers, ...leads.map(mapLead).filter(Boolean)];
+    if (!currentLocation) return points.slice(0, 6);
+    return points
       .map((customer) => ({ ...customer, distance: distanceKm(currentLocation, customer) }))
       .filter((customer) => customer.distance !== null && customer.distance <= 2)
       .sort((left, right) => left.distance - right.distance)
       .slice(0, 3);
-  }, [currentLocation, customers]);
+  }, [currentLocation, customers, leads]);
 
   return (
     <Card
@@ -302,7 +353,7 @@ function CustomerNavigationPreview({ onOpenNavigator, onOpenStoreProfile }) {
               Điểm bán gần bạn
             </SoftTypography>
             <SoftTypography variant="caption" color="text">
-              Bản đồ khách hàng trong bán kính 2 km
+              Khách hàng và lead trong bán kính 2 km
             </SoftTypography>
           </SoftBox>
         </SoftBox>
@@ -520,6 +571,12 @@ export default function StaffHome() {
   const [overview, setOverview] = useState({});
   const [invoices, setInvoices] = useState([]);
   const [pinnedNote, setPinnedNote] = useState(null);
+  const [leads, setLeads] = useState([]);
+  const [interactionLead, setInteractionLead] = useState(null);
+  const [interactionNote, setInteractionNote] = useState("");
+  const [savingInteraction, setSavingInteraction] = useState(false);
+  const [detailLead, setDetailLead] = useState(null);
+  const [leadInvoice, setLeadInvoice] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const params = useMemo(
     () => ({
@@ -539,12 +596,15 @@ export default function StaffHome() {
         InvoiceService.getAll({ page: 1, limit: 3, sortBy: "date", sortOrder: "desc" }),
         EmployeeKpiService.getAll({ status: "ACTIVE", page: 1, limit: 20 }),
         QuickNoteService.getLatestPinned(),
+        LeadService.getAll({ status: "OPEN", page: 1, limit: 30 }),
       ];
-      const [overviewResult, invoiceResult, kpiResult, noteResult] = await Promise.allSettled(requests);
+      const [overviewResult, invoiceResult, kpiResult, noteResult, leadResult] =
+        await Promise.allSettled(requests);
       if (overviewResult.status === "fulfilled") setOverview(unwrap(overviewResult.value) || {});
       if (invoiceResult.status === "fulfilled") setInvoices(listOf(invoiceResult.value));
       const baseKpis = kpiResult.status === "fulfilled" ? listOf(kpiResult.value) : [];
       setPinnedNote(noteResult.status === "fulfilled" ? unwrap(noteResult.value) || null : null);
+      setLeads(leadResult.status === "fulfilled" ? listOf(leadResult.value) : []);
       const detailed = await Promise.all(
         baseKpis.map(async (kpi) => {
           try {
@@ -572,6 +632,24 @@ export default function StaffHome() {
   const invoiceCount = metricValue(sales.invoiceCount);
   const collected = metricValue(sales.collectedAmount);
   const credit = metricValue(sales.creditSales);
+  const saveLeadInteraction = async () => {
+    if (!interactionLead || !interactionNote.trim())
+      return toast.error("Vui lòng nhập nội dung đã tương tác với lead");
+    setSavingInteraction(true);
+    try {
+      await LeadService.interact(interactionLead.id || interactionLead._id, {
+        note: interactionNote.trim(),
+      });
+      toast.success("Đã lưu tương tác. Các sale khác sẽ thấy ngay.");
+      setInteractionLead(null);
+      setInteractionNote("");
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Không thể lưu tương tác");
+    } finally {
+      setSavingInteraction(false);
+    }
+  };
 
   return (
     <SoftBox minHeight="100vh" sx={{ bgcolor: "#f0f2f5", pb: { xs: 10, md: 4 } }}>
@@ -621,9 +699,103 @@ export default function StaffHome() {
         <CustomerNavigationPreview
           onOpenNavigator={() => setCustomerMapOpen(true)}
           onOpenStoreProfile={() => setCustomerLocationOpen(true)}
+          leads={leads}
         />
 
         <PinnedQuickNote note={pinnedNote} />
+
+        <Card sx={{ borderRadius: 0, boxShadow: "none", mb: 1, overflow: "hidden" }}>
+          <SoftBox
+            px={2}
+            pt={1.5}
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <SoftTypography variant="button" fontWeight="bold">
+              Lead cần ghé thăm
+            </SoftTypography>
+            <SoftTypography variant="caption" color="text">
+              {leads.length} lead
+            </SoftTypography>
+          </SoftBox>
+          {!loading && !leads.length && (
+            <SoftBox px={2} py={2}>
+              <SoftTypography variant="caption" color="text">
+                Chưa có lead mới cần tương tác.
+              </SoftTypography>
+            </SoftBox>
+          )}
+          <SoftBox
+            px={1.25}
+            pb={1.25}
+            pt={1}
+            display="flex"
+            gap={1}
+            sx={{
+              overflowX: "auto",
+              scrollbarWidth: "none",
+              "&::-webkit-scrollbar": { display: "none" },
+            }}
+          >
+            {leads.map((lead) => (
+              <SoftBox
+                key={lead.id || lead._id}
+                component="button"
+                type="button"
+                onClick={() => setDetailLead(lead)}
+                minWidth={220}
+                p={1.25}
+                borderRadius={2}
+                sx={{
+                  border: 0,
+                  textAlign: "left",
+                  font: "inherit",
+                  cursor: "pointer",
+                  borderLeft: `5px solid ${lead.color || "#5e72e4"}`,
+                  bgcolor: "#f8f9fa",
+                }}
+              >
+                <SoftBox display="flex" alignItems="center" gap={1}>
+                  <Avatar
+                    src={lead.imageUrl}
+                    sx={{ width: 34, height: 34, bgcolor: lead.color || "#5e72e4" }}
+                  >
+                    {initials(lead.name)}
+                  </Avatar>
+                  <SoftBox minWidth={0}>
+                    <SoftTypography variant="button" fontWeight="bold" noWrap>
+                      {lead.name}
+                    </SoftTypography>
+                    <SoftTypography display="block" variant="caption" color="text">
+                      {lead.phone}
+                    </SoftTypography>
+                  </SoftBox>
+                </SoftBox>
+                <SoftTypography display="block" variant="caption" color="text" mt={0.75} noWrap>
+                  {lead.location?.address ||
+                    `${Number(lead.location?.latitude || 0).toFixed(5)}, ${Number(
+                      lead.location?.longitude || 0
+                    ).toFixed(5)}`}
+                </SoftTypography>
+                <SoftButton
+                  size="small"
+                  color="dark"
+                  variant="outlined"
+                  fullWidth
+                  sx={{ mt: 1 }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setInteractionLead(lead);
+                    setInteractionNote("");
+                  }}
+                >
+                  <Icon sx={{ mr: 0.5 }}>check_circle</Icon>Đã tương tác
+                </SoftButton>
+              </SoftBox>
+            ))}
+          </SoftBox>
+        </Card>
 
         <Card
           sx={{
@@ -874,8 +1046,21 @@ export default function StaffHome() {
         onClose={() => setSaleOpen(false)}
         onCreated={() => {
           setSaleOpen(false);
+          setLeadInvoice(null);
           setRefreshKey((value) => value + 1);
         }}
+        initialNewCustomer={
+          leadInvoice
+            ? {
+                name: leadInvoice.name,
+                phone: leadInvoice.phone,
+                address: leadInvoice.location?.address,
+                latitude: leadInvoice.location?.latitude,
+                longitude: leadInvoice.location?.longitude,
+                note: `Từ lead: ${leadInvoice.name}`,
+              }
+            : undefined
+        }
       />
       <QuickCustomerLocation
         open={customerLocationOpen}
@@ -886,6 +1071,117 @@ export default function StaffHome() {
           <CustomerRouteMap open={customerMapOpen} onClose={() => setCustomerMapOpen(false)} />
         </Suspense>
       )}
+      <Dialog
+        open={Boolean(interactionLead)}
+        onClose={() => !savingInteraction && setInteractionLead(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Ghi nhận tương tác</DialogTitle>
+        <DialogContent>
+          <SoftTypography variant="button">{interactionLead?.name}</SoftTypography>
+          <textarea
+            autoFocus
+            value={interactionNote}
+            onChange={(event) => setInteractionNote(event.target.value)}
+            placeholder="Bắt buộc: đã trao đổi, nhu cầu và kết quả..."
+            rows={4}
+            style={{
+              width: "100%",
+              marginTop: 12,
+              padding: 12,
+              borderRadius: 8,
+              border: "1px solid #d2d6da",
+              resize: "vertical",
+              font: "inherit",
+            }}
+          />
+          <SoftButton
+            color="info"
+            fullWidth
+            disabled={savingInteraction}
+            onClick={saveLeadInteraction}
+          >
+            {savingInteraction ? "Đang lưu..." : "Lưu tương tác"}
+          </SoftButton>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(detailLead)}
+        onClose={() => setDetailLead(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Thông tin Lead</DialogTitle>
+        <DialogContent>
+          <SoftBox
+            p={1.25}
+            borderRadius={2}
+            sx={{ borderLeft: `5px solid ${detailLead?.color || "#5e72e4"}`, bgcolor: "#f8f9fa" }}
+          >
+            <SoftTypography variant="h6" fontWeight="bold">
+              {detailLead?.name}
+            </SoftTypography>
+            <SoftTypography variant="button">{detailLead?.phone}</SoftTypography>
+            <SoftTypography display="block" variant="caption" color="text">
+              {detailLead?.location?.address || "Chưa có địa chỉ"}
+            </SoftTypography>
+          </SoftBox>
+          <SoftBox mt={2}>
+            <SoftTypography variant="button" fontWeight="bold">
+              Lịch sử tương tác
+            </SoftTypography>
+            {detailLead?.interactions?.length ? (
+              detailLead.interactions
+                .slice()
+                .reverse()
+                .map((item, index) => (
+                  <SoftBox
+                    key={item._id || index}
+                    py={1}
+                    sx={{ borderBottom: "1px solid #edf0f5" }}
+                  >
+                    <SoftTypography variant="caption" fontWeight="bold">
+                      {item.salespersonName || "Nhân viên"} · {formatDateTime(item.interactedAt)}
+                    </SoftTypography>
+                    <SoftTypography variant="body2" display="block">
+                      {item.note}
+                    </SoftTypography>
+                  </SoftBox>
+                ))
+            ) : (
+              <SoftTypography display="block" variant="caption" color="text" mt={0.75}>
+                Chưa có lần tương tác nào.
+              </SoftTypography>
+            )}
+          </SoftBox>
+          <SoftBox display="flex" gap={1} mt={2}>
+            <SoftButton
+              fullWidth
+              color="dark"
+              variant="outlined"
+              onClick={() => {
+                setInteractionLead(detailLead);
+                setInteractionNote("");
+              }}
+            >
+              Ghi nhận tương tác
+            </SoftButton>
+            <SoftButton
+              fullWidth
+              color="info"
+              variant="gradient"
+              onClick={() => {
+                setLeadInvoice(detailLead);
+                setDetailLead(null);
+                setSaleOpen(true);
+              }}
+            >
+              Tạo hóa đơn
+            </SoftButton>
+          </SoftBox>
+        </DialogContent>
+      </Dialog>
       <KpiDetail
         item={selectedKpi}
         open={Boolean(selectedKpi)}

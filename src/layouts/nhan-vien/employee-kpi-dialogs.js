@@ -62,6 +62,13 @@ const displayValue = (metric, value) =>
   MONEY_METRICS.includes(metric)
     ? `${Number(value || 0).toLocaleString("vi-VN")} ₫`
     : Number(value || 0).toLocaleString("vi-VN");
+const formatCycleDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const currentKpiCycle = () => {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getDate() >= 10 ? now.getMonth() : now.getMonth() - 1, 10);
+  const to = new Date(from.getFullYear(), from.getMonth() + 1, 9);
+  return { from: formatCycleDate(from), to: formatCycleDate(to) };
+};
 
 function KpiEvidenceModal({ open, kpi, targetIndex, onClose }) {
   const [search, setSearch] = useState("");
@@ -206,13 +213,14 @@ function KpiEvidenceModal({ open, kpi, targetIndex, onClose }) {
 }
 
 export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
+  const defaultCycle = currentKpiCycle();
   const [form, setForm] = useState({
     name: "",
-    from: "",
-    to: "",
+    from: defaultCycle.from,
+    to: defaultCycle.to,
     note: "",
     status: "ACTIVE",
-    cycleType: "FIXED_RANGE",
+    cycleType: "CUSTOM_MONTHLY",
     startDay: 10,
     endDay: 9,
     targets: [newTarget()],
@@ -266,11 +274,11 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
           }
         : {
             name: `KPI ${employee.fullName || employee.username}`,
-            from: "",
-            to: "",
+            from: currentKpiCycle().from,
+            to: currentKpiCycle().to,
             note: "",
             status: "ACTIVE",
-            cycleType: "FIXED_RANGE",
+            cycleType: "CUSTOM_MONTHLY",
             startDay: 10,
             endDay: 9,
             targets: [newTarget()],
@@ -410,7 +418,13 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
             <SoftInput
               select
               value={form.cycleType}
-              onChange={(event) => setForm({ ...form, cycleType: event.target.value })}
+              onChange={(event) => {
+                const cycleType = event.target.value;
+                const cycle = currentKpiCycle();
+                setForm((current) => cycleType === "CUSTOM_MONTHLY"
+                  ? { ...current, cycleType, from: cycle.from, to: cycle.to, startDay: 10, endDay: 9 }
+                  : { ...current, cycleType });
+              }}
             >
               <MenuItem value="FIXED_RANGE">Theo khoảng ngày đã chọn</MenuItem>
               <MenuItem value="CUSTOM_MONTHLY">Chu kỳ tháng ngày 10 đến ngày 9</MenuItem>
@@ -420,7 +434,7 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
             <Grid item xs={12}>
               <SoftBox p={1.5} borderRadius={2} bgcolor="#fff8e1">
                 <SoftTypography variant="button" fontWeight="bold" sx={{ color: "#e65100" }}>
-                  Chu kỳ áp dụng: ngày {form.startDay} tháng này đến ngày {form.endDay} tháng sau
+                  Chu kỳ KPI cố định: {new Date(`${form.from}T12:00:00`).toLocaleDateString("vi-VN")} đến {new Date(`${form.to}T12:00:00`).toLocaleDateString("vi-VN")}
                 </SoftTypography>
               </SoftBox>
             </Grid>
@@ -437,6 +451,7 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
             <SoftInput
               type="date"
               value={form.from}
+              disabled={form.cycleType === "CUSTOM_MONTHLY"}
               onChange={(event) => setForm({ ...form, from: event.target.value })}
             />
           </Grid>
@@ -445,6 +460,7 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
             <SoftInput
               type="date"
               value={form.to}
+              disabled={form.cycleType === "CUSTOM_MONTHLY"}
               onChange={(event) => setForm({ ...form, to: event.target.value })}
             />
           </Grid>

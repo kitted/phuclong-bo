@@ -43,6 +43,8 @@ const menuGroups = [
   {
     title: "Quản trị & báo cáo",
     items: [
+      { path: "/website-products", icon: "language", label: "Sản phẩm website", color: "#1565c0" },
+      { path: "/website-admin", icon: "web", label: "Quản lý website", color: "#3949ab" },
       { path: "/bao-cao", icon: "analytics", label: "Báo cáo", color: "#0277bd" },
       { path: "/nhan-vien", icon: "badge", label: "Nhân viên", color: "#00796b" },
       { path: "/audit-logs", icon: "history", label: "Nhật ký", color: "#546e7a" },
@@ -66,6 +68,8 @@ const pageTitles = [
   ["/backup-data", "Sao lưu dữ liệu"],
   ["/danh-muc", "Danh mục"],
   ["/nha-cung-cap", "Nhà cung cấp"],
+  ["/website-products", "Sản phẩm website"],
+  ["/website-admin", "Quản lý website"],
 ];
 
 const initials = (value = "AD") =>

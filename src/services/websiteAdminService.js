@@ -17,6 +17,18 @@ export const WebsiteContentService = {
   remove: (id) => AxiosInstance.delete(`/admin/website-contents/${id}`),
 };
 
+export const WebsiteProductService = {
+  getAll: (params = {}) => AxiosInstance.get("/admin/website-products", { params }),
+  getById: (id) => AxiosInstance.get(`/admin/website-products/${id}`),
+  getCategories: () => AxiosInstance.get("/admin/website-products/categories"),
+  create: (payload) => AxiosInstance.post("/admin/website-products", payload),
+  update: (id, payload) => AxiosInstance.patch(`/admin/website-products/${id}`, payload),
+  remove: (id) => AxiosInstance.delete(`/admin/website-products/${id}`),
+  uploadImage: (file) => AxiosInstance.post("/admin/website-products/images/upload", fileForm(file)),
+  mapInventory: (id, inventoryProductId) =>
+    AxiosInstance.patch(`/admin/website-products/${id}/map-inventory`, { inventoryProductId }),
+};
+
 const fileForm = (file) => {
   const data = new FormData();
   data.append("file", file);

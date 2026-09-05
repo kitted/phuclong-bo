@@ -26,6 +26,9 @@ import BackupData from "layouts/backup-data";
 import DailyOperations from "layouts/nghiep-vu-ngay";
 import QuickNotes from "layouts/quick-notes";
 import WebsiteAdmin from "layouts/website-admin";
+import WebsiteProducts from "layouts/website-products";
+import WebsiteProductEditor from "layouts/website-product-editor";
+import Leads from "layouts/leads";
 
 const routes = [
   {
@@ -53,6 +56,32 @@ const routes = [
     route: "/website-admin",
     noCollapse: true,
     component: <WebsiteAdmin />,
+    permission: ["admin"],
+  },
+  {
+    type: "route",
+    name: "Tạo sản phẩm website",
+    key: "website-product-new",
+    route: "/website-products/new",
+    component: <WebsiteProductEditor />,
+    permission: ["admin"],
+  },
+  {
+    type: "route",
+    name: "Biên tập sản phẩm website",
+    key: "website-product-edit",
+    route: "/website-products/:id/edit",
+    component: <WebsiteProductEditor />,
+    permission: ["admin"],
+  },
+  {
+    type: "collapse",
+    name: "Sản phẩm website",
+    key: "website-products",
+    icon: <Cube size="12px" />,
+    route: "/website-products",
+    noCollapse: true,
+    component: <WebsiteProducts />,
     permission: ["admin"],
   },
   {
@@ -165,6 +194,16 @@ const routes = [
     noCollapse: true,
     component: <KhachHang />,
     permission: ["admin", "staff"],
+  },
+  {
+    type: "collapse",
+    name: "Lead tiềm năng",
+    key: "leads",
+    icon: <CustomerSupport size="12px" />,
+    route: "/leads",
+    noCollapse: true,
+    component: <Leads />,
+    permission: ["admin"],
   },
   {
     type: "collapse",

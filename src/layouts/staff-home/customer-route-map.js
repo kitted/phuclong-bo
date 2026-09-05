@@ -9,7 +9,7 @@ import "leaflet/dist/leaflet.css";
 import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftTypography from "components/SoftTypography";
-import { CustomerService } from "services/crmService";
+import { CustomerService, LeadService } from "services/crmService";
 import { toast } from "react-toastify";
 
 const DEFAULT_CENTER = [10.0452, 105.7469];
@@ -64,12 +64,28 @@ const mapCustomer = (customer = {}) => {
     imageUrl: imageOf(customer),
   };
 };
+const mapLead = (lead = {}) => {
+  const latitude = coordinate(lead.location?.latitude);
+  const longitude = coordinate(lead.location?.longitude);
+  if (latitude === null || longitude === null) return null;
+  return {
+    ...lead,
+    latitude,
+    longitude,
+    code: "Lead",
+    name: lead.name || "Tiềm năng",
+    imageUrl: lead.imageUrl || "",
+    pointType: "LEAD",
+  };
+};
 const routeUrlOf = (from, customer) =>
   from
     ? `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${from.latitude}%2C${from.longitude}%3B${customer.latitude}%2C${customer.longitude}`
     : "";
 const customerMarkerColor = (customer = {}) =>
-  String(customer.source || customer.customerSource || "").toUpperCase() === "LEGACY"
+  customer.pointType === "LEAD"
+    ? customer.color || "#7c3aed"
+    : String(customer.source || customer.customerSource || "").toUpperCase() === "LEGACY"
     ? "#22c55e"
     : "#ef4444";
 const customerMarkerIcon = (customer, selected) =>
@@ -241,7 +257,10 @@ export default function CustomerRouteMap({ open, onClose }) {
     const load = async () => {
       setLoading(true);
       try {
-        const firstResponse = await CustomerService.getAll({ page: 1, limit: 100 });
+        const [firstResponse, leadsResponse] = await Promise.all([
+          CustomerService.getAll({ page: 1, limit: 100 }),
+          LeadService.getAll({ status: "OPEN", page: 1, limit: 100 }),
+        ]);
         const firstItems = listOf(firstResponse);
         const totalPages = Math.max(1, Number(firstResponse.data?.meta?.totalPages || 1));
         const responses = await Promise.all(
@@ -249,13 +268,19 @@ export default function CustomerRouteMap({ open, onClose }) {
             CustomerService.getAll({ page: index + 2, limit: 100 })
           )
         );
-        const allCustomers = [...firstItems, ...responses.flatMap((response) => listOf(response))];
+        const allCustomers = [
+          ...firstItems,
+          ...responses.flatMap((response) => listOf(response)),
+          ...listOf(leadsResponse),
+        ];
         if (active) {
           setCustomers(
             Array.from(
               new Map(
                 allCustomers
-                  .map(mapCustomer)
+                  .map((item) =>
+                    item.location && !item.storeLocation ? mapLead(item) : mapCustomer(item)
+                  )
                   .filter(Boolean)
                   .map((customer) => [String(idOf(customer)), customer])
               ).values()

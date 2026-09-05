@@ -491,7 +491,7 @@ function SearchSelect({
   );
 }
 
-export function CreateInvoiceModal({ open, onClose, onCreated }) {
+export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustomer }) {
   const authUser = useSelector((state) => state.auth?.user);
   const role = authUser?.role;
   const isAdmin = String(role || "").toLowerCase() === "admin";
@@ -599,9 +599,20 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
       allowDebtLimitOverride: false,
       debtOverrideReason: "",
     });
-    setCustomerMode("EXISTING");
+    setCustomerMode(initialNewCustomer ? "NEW" : "EXISTING");
     setCustomer(null);
-    setNewCustomer({ name: "", phone: "", address: "", note: "" });
+    setNewCustomer(
+      initialNewCustomer
+        ? {
+            name: initialNewCustomer.name || "",
+            phone: initialNewCustomer.phone || "",
+            address: initialNewCustomer.address || "",
+            note: initialNewCustomer.note || "",
+            latitude: initialNewCustomer.latitude,
+            longitude: initialNewCustomer.longitude,
+          }
+        : { name: "", phone: "", address: "", note: "" }
+    );
     setSalesperson(isAdmin ? null : authUser || null);
     sourceAutoSelectedRef.current = false;
     setTruck(null);
@@ -618,7 +629,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
     setGiftSelections({});
     setAppliedGiftPromotion(null);
     setReviewOpen(false);
-  }, [open, isAdmin, authUser]);
+  }, [open, isAdmin, authUser, initialNewCustomer]);
   useEffect(() => {
     if (!open) return undefined;
     const timer = setTimeout(() => {
@@ -704,7 +715,11 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
               page: 1,
               limit: 20,
             })
-          : ProductService.getAll({ search: productSearch.trim() || undefined, page: 1, limit: 20 });
+          : ProductService.getAll({
+              search: productSearch.trim() || undefined,
+              page: 1,
+              limit: 20,
+            });
       request
         .then((response) => active && setProductOptions(listOf(response)))
         .catch(() => active && setProductOptions([]))
@@ -1128,6 +1143,8 @@ export function CreateInvoiceModal({ open, onClose, onCreated }) {
               phone: newCustomer.phone.trim() || undefined,
               address: newCustomer.address.trim() || undefined,
               note: newCustomer.note.trim() || undefined,
+              latitude: newCustomer.latitude,
+              longitude: newCustomer.longitude,
             }
           : undefined,
         sourceType: form.sourceType,
@@ -4652,183 +4669,182 @@ export default function HoaDon() {
                     : undefined
                 }
               >
-                {!loading &&
-                  invoices.map((invoice) => {
-                    const customerInfo = invoiceCustomer(invoice);
-                    const debtPaymentDocument = isDebtPaymentDocument(invoice);
-                    const customerReturnDocument = isCustomerReturnDocument(invoice);
-                    const isReversed =
-                      invoice.status === "REVERSED" ||
-                      invoice.invoiceStatus === "REVERSED" ||
-                      Boolean(invoice.reversedAt);
-                    return (
+                {invoices.map((invoice) => {
+                  const customerInfo = invoiceCustomer(invoice);
+                  const debtPaymentDocument = isDebtPaymentDocument(invoice);
+                  const customerReturnDocument = isCustomerReturnDocument(invoice);
+                  const isReversed =
+                    invoice.status === "REVERSED" ||
+                    invoice.invoiceStatus === "REVERSED" ||
+                    Boolean(invoice.reversedAt);
+                  return (
+                    <SoftBox
+                      key={`${
+                        customerReturnDocument
+                          ? "return-"
+                          : debtPaymentDocument
+                          ? "debt-"
+                          : "invoice-"
+                      }${getId(invoice)}`}
+                      py={1.5}
+                      display="flex"
+                      gap={1.25}
+                      alignItems="flex-start"
+                      onClick={() => openDocument(invoice)}
+                      sx={{
+                        borderBottom: "1px solid #edf0f5",
+                        cursor: "pointer",
+                        ...(isTouchAdmin && {
+                          p: 1.5,
+                          border: "1px solid #e1e8f0",
+                          borderRadius: 2.5,
+                          bgcolor: "#fff",
+                          minHeight: 150,
+                          "&:active": { bgcolor: "#f4f8fd" },
+                        }),
+                      }}
+                    >
                       <SoftBox
-                        key={`${
-                          customerReturnDocument
-                            ? "return-"
+                        width={44}
+                        height={44}
+                        borderRadius="50%"
+                        bgcolor={
+                          isReversed
+                            ? "#ffebee"
+                            : customerReturnDocument
+                            ? "#fff3e0"
                             : debtPaymentDocument
-                            ? "debt-"
-                            : "invoice-"
-                        }${getId(invoice)}`}
-                        py={1.5}
+                            ? "#e8f5e9"
+                            : "#e7f3ff"
+                        }
+                        color={
+                          isReversed
+                            ? "#c62828"
+                            : customerReturnDocument
+                            ? "#e65100"
+                            : debtPaymentDocument
+                            ? "#2e7d32"
+                            : "#1877f2"
+                        }
                         display="flex"
-                        gap={1.25}
-                        alignItems="flex-start"
-                        onClick={() => openDocument(invoice)}
-                        sx={{
-                          borderBottom: "1px solid #edf0f5",
-                          cursor: "pointer",
-                          ...(isTouchAdmin && {
-                            p: 1.5,
-                            border: "1px solid #e1e8f0",
-                            borderRadius: 2.5,
-                            bgcolor: "#fff",
-                            minHeight: 150,
-                            "&:active": { bgcolor: "#f4f8fd" },
-                          }),
-                        }}
+                        alignItems="center"
+                        justifyContent="center"
+                        flexShrink={0}
                       >
+                        <Icon>
+                          {isReversed
+                            ? "undo"
+                            : customerReturnDocument
+                            ? "assignment_return"
+                            : debtPaymentDocument
+                            ? "payments"
+                            : "receipt"}
+                        </Icon>
+                      </SoftBox>
+                      <SoftBox flex={1} minWidth={0}>
                         <SoftBox
-                          width={44}
-                          height={44}
-                          borderRadius="50%"
-                          bgcolor={
-                            isReversed
-                              ? "#ffebee"
-                              : customerReturnDocument
-                              ? "#fff3e0"
-                              : debtPaymentDocument
-                              ? "#e8f5e9"
-                              : "#e7f3ff"
-                          }
-                          color={
-                            isReversed
-                              ? "#c62828"
-                              : customerReturnDocument
-                              ? "#e65100"
-                              : debtPaymentDocument
-                              ? "#2e7d32"
-                              : "#1877f2"
-                          }
                           display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                          flexShrink={0}
+                          justifyContent="space-between"
+                          alignItems="flex-start"
+                          gap={1}
                         >
-                          <Icon>
-                            {isReversed
-                              ? "undo"
-                              : customerReturnDocument
-                              ? "assignment_return"
-                              : debtPaymentDocument
-                              ? "payments"
-                              : "receipt"}
-                          </Icon>
-                        </SoftBox>
-                        <SoftBox flex={1} minWidth={0}>
-                          <SoftBox
-                            display="flex"
-                            justifyContent="space-between"
-                            alignItems="flex-start"
-                            gap={1}
-                          >
-                            <SoftTypography variant="button" fontWeight="bold" display="block">
-                              {invoice.code || "Hóa đơn"}
-                            </SoftTypography>
-                            <SoftBox textAlign="right" flexShrink={0}>
-                              <SoftTypography variant="caption" color="text" display="block">
-                                {customerReturnDocument ? "Giá trị hoàn" : "Đã trả (3)"}
-                              </SoftTypography>
-                              <SoftTypography
-                                variant="button"
-                                fontWeight="bold"
-                                sx={{
-                                  color: invoiceReceivedAmount(invoice) > 0 ? "#2e7d32" : "#6b7280",
-                                }}
-                              >
-                                {money(invoiceReceivedAmount(invoice))}
-                              </SoftTypography>
-                            </SoftBox>
-                          </SoftBox>
-                          <SoftTypography
-                            variant="button"
-                            fontWeight="bold"
-                            display="block"
-                            mt={0.25}
-                            sx={{
-                              lineHeight: 1.35,
-                              whiteSpace: "normal",
-                              overflowWrap: "anywhere",
-                            }}
-                          >
-                            {customerInfo.code
-                              ? `${customerInfo.code} · ${customerInfo.name}`
-                              : customerInfo.label}
+                          <SoftTypography variant="button" fontWeight="bold" display="block">
+                            {invoice.code || "Hóa đơn"}
                           </SoftTypography>
-                          <SoftTypography variant="caption" color="text" display="block" mt={0.25}>
-                            {dateTime(documentOccurredAt(invoice))}
-                          </SoftTypography>
-                          {canViewAllCompanyInvoices && (
-                            <SoftTypography variant="caption" color="text" display="block" mt={0.2}>
-                              Nhân viên:{" "}
-                              {invoice.salespersonName ||
-                                invoice.collectorName ||
-                                invoice.salespersonId?.fullName ||
-                                "Chưa xác định"}
+                          <SoftBox textAlign="right" flexShrink={0}>
+                            <SoftTypography variant="caption" color="text" display="block">
+                              {customerReturnDocument ? "Giá trị hoàn" : "Đã trả (3)"}
                             </SoftTypography>
-                          )}
-                          <SoftBox display="flex" gap={0.75} mt={0.75} flexWrap="wrap">
                             <SoftTypography
-                              variant="caption"
+                              variant="button"
                               fontWeight="bold"
                               sx={{
-                                color: isReversed
-                                  ? "#c62828"
-                                  : customerReturnDocument
-                                  ? "#e65100"
-                                  : debtPaymentDocument
-                                  ? "#2e7d32"
-                                  : invoice.debtAmount > 0
-                                  ? "#c62828"
-                                  : "#2e7d32",
-                                bgcolor: isReversed
-                                  ? "#ffebee"
-                                  : customerReturnDocument
-                                  ? "#fff3e0"
-                                  : debtPaymentDocument
-                                  ? "#e8f5e9"
-                                  : invoice.debtAmount > 0
-                                  ? "#fff3e0"
-                                  : "#e8f5e9",
-                                px: 0.8,
-                                py: 0.25,
-                                borderRadius: 5,
+                                color: invoiceReceivedAmount(invoice) > 0 ? "#2e7d32" : "#6b7280",
                               }}
                             >
-                              {isReversed
-                                ? customerReturnDocument
-                                  ? "Phiếu hoàn đã đảo"
-                                  : "Đã hoàn hóa đơn"
-                                : customerReturnDocument
-                                ? "Hoàn hàng về xe"
-                                : debtPaymentDocument
-                                ? invoice.status === "CANCELLED"
-                                  ? "Phiếu thu đã hủy"
-                                  : "Thanh toán công nợ"
-                                : invoice.paymentStatus === "PAID"
-                                ? "Đã thanh toán"
-                                : `Công nợ ${money(invoice.debtAmount)}`}
+                              {money(invoiceReceivedAmount(invoice))}
                             </SoftTypography>
-                            {customerInfo.phone && (
-                              <SoftTypography variant="caption" color="text">
-                                {customerInfo.phone}
-                              </SoftTypography>
-                            )}
                           </SoftBox>
                         </SoftBox>
+                        <SoftTypography
+                          variant="button"
+                          fontWeight="bold"
+                          display="block"
+                          mt={0.25}
+                          sx={{
+                            lineHeight: 1.35,
+                            whiteSpace: "normal",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {customerInfo.code
+                            ? `${customerInfo.code} · ${customerInfo.name}`
+                            : customerInfo.label}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text" display="block" mt={0.25}>
+                          {dateTime(documentOccurredAt(invoice))}
+                        </SoftTypography>
+                        {canViewAllCompanyInvoices && (
+                          <SoftTypography variant="caption" color="text" display="block" mt={0.2}>
+                            Nhân viên:{" "}
+                            {invoice.salespersonName ||
+                              invoice.collectorName ||
+                              invoice.salespersonId?.fullName ||
+                              "Chưa xác định"}
+                          </SoftTypography>
+                        )}
+                        <SoftBox display="flex" gap={0.75} mt={0.75} flexWrap="wrap">
+                          <SoftTypography
+                            variant="caption"
+                            fontWeight="bold"
+                            sx={{
+                              color: isReversed
+                                ? "#c62828"
+                                : customerReturnDocument
+                                ? "#e65100"
+                                : debtPaymentDocument
+                                ? "#2e7d32"
+                                : invoice.debtAmount > 0
+                                ? "#c62828"
+                                : "#2e7d32",
+                              bgcolor: isReversed
+                                ? "#ffebee"
+                                : customerReturnDocument
+                                ? "#fff3e0"
+                                : debtPaymentDocument
+                                ? "#e8f5e9"
+                                : invoice.debtAmount > 0
+                                ? "#fff3e0"
+                                : "#e8f5e9",
+                              px: 0.8,
+                              py: 0.25,
+                              borderRadius: 5,
+                            }}
+                          >
+                            {isReversed
+                              ? customerReturnDocument
+                                ? "Phiếu hoàn đã đảo"
+                                : "Đã hoàn hóa đơn"
+                              : customerReturnDocument
+                              ? "Hoàn hàng về xe"
+                              : debtPaymentDocument
+                              ? invoice.status === "CANCELLED"
+                                ? "Phiếu thu đã hủy"
+                                : "Thanh toán công nợ"
+                              : invoice.paymentStatus === "PAID"
+                              ? "Đã thanh toán"
+                              : `Công nợ ${money(invoice.debtAmount)}`}
+                          </SoftTypography>
+                          {customerInfo.phone && (
+                            <SoftTypography variant="caption" color="text">
+                              {customerInfo.phone}
+                            </SoftTypography>
+                          )}
+                        </SoftBox>
                       </SoftBox>
-                    );
-                  })}
+                    </SoftBox>
+                  );
+                })}
               </SoftBox>
             )}
             <SoftBox

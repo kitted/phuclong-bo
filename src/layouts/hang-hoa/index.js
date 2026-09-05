@@ -8,7 +8,6 @@ import Tooltip from "@mui/material/Tooltip";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
-import TextField from "@mui/material/TextField";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
@@ -37,11 +36,6 @@ const EMPTY_FORM = {
   sellPrice: "",
   minStock: "",
   supplierId: "",
-  slug: "",
-  shortDescription: "",
-  descriptionHtml: "",
-  imageUrlsText: "",
-  websiteVisible: true,
 };
 
 // Hàm hỗ trợ bóc tách ID chuỗi (tránh lỗi khi backend trả về Object do populate)
@@ -69,12 +63,15 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
   useEffect(() => {
     if (product) {
       setForm({
-        ...product,
+        name: product.name || "",
+        code: product.code || "",
         // Dùng hàm extractId để luôn lấy được chuỗi ID, giúp MUI Select hoạt động đúng
         categoryId: extractId(product.categoryId || product.category),
+        unit: product.unit || "",
+        costPrice: product.costPrice ?? "",
+        sellPrice: product.sellPrice ?? "",
+        minStock: product.minStock ?? "",
         supplierId: extractId(product.supplierId || product.supplier),
-        imageUrlsText: Array.isArray(product.imageUrls) ? product.imageUrls.join("\n") : "",
-        websiteVisible: product.websiteVisible !== false,
       });
     } else {
       setForm(EMPTY_FORM);
@@ -106,19 +103,15 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
     try {
       setLoading(true);
       const payload = {
-        ...form,
+        name: form.name.trim(),
+        code: form.code.trim(),
+        unit: form.unit,
         categoryId: form.categoryId || null,
         supplierId: form.supplierId || null,
         costPrice: Number(form.costPrice) || 0,
         sellPrice: Number(form.sellPrice) || 0,
         minStock: Number(form.minStock) || 0,
-        slug: form.slug.trim() || undefined,
-        shortDescription: form.shortDescription.trim() || undefined,
-        descriptionHtml: form.descriptionHtml.trim() || undefined,
-        imageUrls: form.imageUrlsText.split(/\n|,/).map((value) => value.trim()).filter(Boolean),
-        websiteVisible: Boolean(form.websiteVisible),
       };
-      delete payload.imageUrlsText;
 
       const productId = product?.id || product?._id;
       if (productId) {
@@ -171,18 +164,6 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
               placeholder="Nhập tên sản phẩm"
               fullWidth
             />
-          </Grid>
-          <Grid item xs={12}>
-            <SoftBox mt={1} p={1.5} borderRadius={2} bgcolor="#f3f8ff">
-              <SoftTypography variant="button" fontWeight="bold" color="info">Thông tin hiển thị trên website</SoftTypography>
-              <Grid container spacing={1.5} mt={0.25}>
-                <Grid item xs={12} sm={8}><SoftTypography variant="caption">Slug đường dẫn</SoftTypography><SoftInput name="slug" value={form.slug || ""} onChange={handleChange} placeholder="Tự tạo từ tên nếu để trống" /></Grid>
-                <Grid item xs={12} sm={4}><SoftTypography variant="caption">Hiển thị website</SoftTypography><SoftButton fullWidth color={form.websiteVisible ? "success" : "secondary"} variant="outlined" onClick={() => setForm((current) => ({ ...current, websiteVisible: !current.websiteVisible }))}>{form.websiteVisible ? "Đang hiển thị" : "Đang ẩn"}</SoftButton></Grid>
-                <Grid item xs={12}><SoftTypography variant="caption">Mô tả ngắn</SoftTypography><SoftInput name="shortDescription" value={form.shortDescription || ""} onChange={handleChange} placeholder="Nội dung ngắn trên catalog" /></Grid>
-                <Grid item xs={12}><SoftTypography variant="caption">Nội dung HTML chi tiết</SoftTypography><TextField fullWidth multiline minRows={4} name="descriptionHtml" value={form.descriptionHtml || ""} onChange={handleChange} placeholder="<p>Mô tả chi tiết sản phẩm...</p>" /></Grid>
-                <Grid item xs={12}><SoftTypography variant="caption">URL hình ảnh, mỗi dòng một ảnh</SoftTypography><TextField fullWidth multiline minRows={3} name="imageUrlsText" value={form.imageUrlsText || ""} onChange={handleChange} placeholder="https://.../image-1.jpg" /></Grid>
-              </Grid>
-            </SoftBox>
           </Grid>
           <Grid item xs={6}>
             <SoftTypography variant="caption" fontWeight="medium">

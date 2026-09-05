@@ -837,16 +837,29 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
               size="small"
               variant="text"
               color="info"
-              startIcon={<Icon>content_copy</Icon>}
+              startIcon={<Icon>done_all</Icon>}
               onClick={() => {
-                const next = {};
-                rows.forEach((row) => {
-                  next[row.key] = row.system;
-                });
-                setCounts(next);
+                const remaining = rows.filter((row) => row.raw === "");
+                if (!remaining.length) {
+                  toast.info("Tất cả sản phẩm đã được kiểm");
+                  return;
+                }
+                if (
+                  !window.confirm(
+                    `Đánh dấu ${remaining.length} sản phẩm chưa kiểm là khớp với tồn trên app? Các số lượng đã nhập sẽ được giữ nguyên.`
+                  )
+                )
+                  return;
+                setCounts((current) => ({
+                  ...current,
+                  ...remaining.reduce(
+                    (next, row) => ({ ...next, [row.key]: row.system }),
+                    {}
+                  ),
+                }));
               }}
             >
-              Điền tất cả theo app
+              Đánh dấu phần còn lại là khớp
             </SoftButton>
           </SoftBox>
 

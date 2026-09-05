@@ -64,6 +64,16 @@ export const CustomerService = {
     AxiosInstance.get(`/admin/customers/${id}/debt-history/chart`, { params }),
 };
 
+export const LeadService = {
+  getAll: (params = {}) => AxiosInstance.get("/admin/leads", { params }),
+  getById: (id) => AxiosInstance.get(`/admin/leads/${id}`),
+  create: (payload) => AxiosInstance.post("/admin/leads", payload),
+  update: (id, payload) => AxiosInstance.patch(`/admin/leads/${id}`, payload),
+  remove: (id) => AxiosInstance.delete(`/admin/leads/${id}`),
+  interact: (id, payload) => AxiosInstance.post(`/admin/leads/${id}/interactions`, payload),
+  uploadImage: (id, file) => { const data = new FormData(); data.append("file", file); return AxiosInstance.post(`/admin/leads/${id}/image`, data); },
+};
+
 export const PromotionActivationService = {
   getAll: (params = {}) => AxiosInstance.get("/admin/promotion-activations", { params }),
   getById: (id) => AxiosInstance.get(`/admin/promotion-activations/${id}`),
