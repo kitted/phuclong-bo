@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import SoftTypography from "components/SoftTypography";
-import { Box, Grid } from "@mui/material";
+import { Grid } from "@mui/material";
 import { useEffect, useState } from "react";
 import { truncateText } from "utils";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -9,7 +9,6 @@ function FileAttachment(props) {
   const { id, containsEdit, containsConfirm, containsCreate, file, setFile, showAll } = props;
   //attachment
   const [isFiles, setIsFiles] = useState([]);
-  const [isFileRemove, setIsFileRemove] = useState([]);
 
   const handleChangeFiles = (event) => {
     const files = event.target.files;
@@ -28,10 +27,7 @@ function FileAttachment(props) {
   const handleDeleteFile = (index) => {
     if (isFiles) {
       const newFiles = [...isFiles];
-      const deletedFile = newFiles.splice(index, 1)[0];
-      setIsFileRemove((prev) => {
-        return [...prev, deletedFile];
-      });
+      newFiles.splice(index, 1);
       setIsFiles(newFiles);
       setFile(newFiles);
     }
@@ -65,8 +61,7 @@ function FileAttachment(props) {
     if (id && containsEdit) {
       setIsFiles(file);
     }
-  }, [file]);
-
+  }, [containsEdit, file, id]);
 
   return (
     <Grid>
@@ -78,16 +73,20 @@ function FileAttachment(props) {
         file?.map((file, index) => (
           <div style={{ display: "flex", gap: "5px" }} key={index}>
             {/* <span style={{ color: "black", whiteSpace: "nowrap" }}>{truncateText(file, 35)}</span> */}
-            <a
-              target="_blank"
-              rel="noreferrer"
-              href={file.name ? "#" : file}
-              style={{ color: "black", whiteSpace: "nowrap", fontSize: "12px" }}
-              onMouseOver={(e) => (e.currentTarget.style.color = "blue")}
-              onMouseOut={(e) => (e.currentTarget.style.color = "black")}
-            >
-              {truncateText(file, 95)}
-            </a>
+            {file.name ? (
+              <span style={{ color: "black", whiteSpace: "nowrap", fontSize: "12px" }}>
+                {truncateText(file.name, 95)}
+              </span>
+            ) : (
+              <a
+                target="_blank"
+                rel="noreferrer"
+                href={file}
+                style={{ color: "black", whiteSpace: "nowrap", fontSize: "12px" }}
+              >
+                {truncateText(file, 95)}
+              </a>
+            )}
           </div>
         ))}
       {id && !containsEdit && !containsConfirm ? (
@@ -133,14 +132,11 @@ function FileAttachment(props) {
                   <span style={{ color: "black", whiteSpace: "nowrap" }}>
                     {file.name ? file.name : truncateText(file, 35)}
                   </span>
+                ) : file.name ? (
+                  <span style={{ color: "black", whiteSpace: "nowrap" }}>{file.name}</span>
                 ) : (
-                  <a
-                    href={file.name ? "#" : file}
-                    style={{ color: "black", whiteSpace: "nowrap" }}
-                    onMouseOver={(e) => (e.currentTarget.style.color = "blue")}
-                    onMouseOut={(e) => (e.currentTarget.style.color = "black")}
-                  >
-                    {file.name ? file.name : truncateText(file, 35)}
+                  <a href={file} style={{ color: "black", whiteSpace: "nowrap" }}>
+                    {truncateText(file, 35)}
                   </a>
                 )}
                 <span

@@ -68,7 +68,7 @@ function ProgressLineChart({ color, icon, title, count, progress, height, chart 
             <Line data={data} options={options} style={{ height }} />
           </SoftBox>
         ),
-        [chart, height, color]
+        [data, height, options]
       )}
     </Card>
   );

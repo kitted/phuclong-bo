@@ -60,6 +60,53 @@ const productOf = (item) =>
   (typeof item?.productId === "object" ? item.productId : null) ||
   (item?.name || item?.code ? item : null) ||
   {};
+const productImageUrl = (item = {}) => {
+  const product = productOf(item);
+  return (
+    product?.imageUrl ||
+    product?.productImageUrl ||
+    product?.image?.url ||
+    product?.image?.secureUrl ||
+    item?.imageUrl ||
+    item?.productImageUrl ||
+    item?.image?.url ||
+    item?.image?.secureUrl ||
+    ""
+  );
+};
+const ProductThumbnail = ({ product, size = 42 }) => {
+  const imageUrl = productImageUrl(product);
+  return imageUrl ? (
+    <img
+      src={imageUrl}
+      alt=""
+      width={size}
+      height={size}
+      style={{
+        width: size,
+        height: size,
+        objectFit: "cover",
+        borderRadius: 8,
+        background: "#f1f5f9",
+        flexShrink: 0,
+      }}
+    />
+  ) : (
+    <SoftBox
+      width={size}
+      height={size}
+      borderRadius={2}
+      bgcolor="#eef5ff"
+      color="#1976d2"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      flexShrink={0}
+    >
+      <Icon sx={{ fontSize: Math.max(18, size * 0.52) }}>inventory_2</Icon>
+    </SoftBox>
+  );
+};
 const productIdOf = (item) => getId(productOf(item)) || item?.productId;
 const quantityOf = (item) => Number(item?.qty ?? item?.quantity ?? 0);
 const optionalQuantity = (...values) => {
@@ -621,7 +668,13 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
           </Field>
         </Grid>
         <SoftBox mt={2.5}>
-          <SoftBox display="flex" alignItems="center" justifyContent="space-between" mb={0.75} gap={1}>
+          <SoftBox
+            display="flex"
+            alignItems="center"
+            justifyContent="space-between"
+            mb={0.75}
+            gap={1}
+          >
             <SoftTypography variant="button" fontWeight="bold" display="block">
               {isLoad ? "Tìm và chọn hàng trong kho" : "Tìm và chọn hàng trên xe"}
             </SoftTypography>
@@ -702,13 +755,17 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
                     py: "10px !important",
                   }}
                 >
-                  <SoftBox minWidth={0}>
-                    <SoftTypography variant="button" fontWeight="bold" display="block">
-                      {product.name || product.productName || "Sản phẩm"}
-                    </SoftTypography>
-                    <SoftTypography variant="caption" color="text">
-                      {[product.code, product.barcode].filter(Boolean).join(" · ") || "Chưa có mã"}
-                    </SoftTypography>
+                  <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                    <ProductThumbnail product={product} size={42} />
+                    <SoftBox minWidth={0}>
+                      <SoftTypography variant="button" fontWeight="bold" display="block">
+                        {product.name || product.productName || "Sản phẩm"}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        {[product.code, product.barcode].filter(Boolean).join(" · ") ||
+                          "Chưa có mã"}
+                      </SoftTypography>
+                    </SoftBox>
                   </SoftBox>
                   <SoftBox
                     px={1.25}
@@ -747,18 +804,21 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
                       flexShrink: 0,
                     }}
                   >
-                    <SoftBox textAlign="left" minWidth={0}>
-                      <SoftTypography
-                        variant="caption"
-                        fontWeight="bold"
-                        display="block"
-                        sx={{ color: "inherit" }}
-                      >
-                        {product.name || product.productName}
-                      </SoftTypography>
-                      <SoftTypography variant="caption" sx={{ color: "inherit", opacity: 0.8 }}>
-                        Còn {stockOf(product)} {product.unit || ""}
-                      </SoftTypography>
+                    <SoftBox display="flex" alignItems="center" gap={0.75} minWidth={0}>
+                      <ProductThumbnail product={product} size={32} />
+                      <SoftBox textAlign="left" minWidth={0}>
+                        <SoftTypography
+                          variant="caption"
+                          fontWeight="bold"
+                          display="block"
+                          sx={{ color: "inherit" }}
+                        >
+                          {product.name || product.productName}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" sx={{ color: "inherit", opacity: 0.8 }}>
+                          Còn {stockOf(product)} {product.unit || ""}
+                        </SoftTypography>
+                      </SoftBox>
                     </SoftBox>
                   </SoftButton>
                 ))}
@@ -805,14 +865,17 @@ function TransferModal({ open, onClose, truck, type, onSaved }) {
                 sx={{ border: "1px solid #dce5ef" }}
               >
                 <SoftBox display="flex" justifyContent="space-between" gap={1}>
-                  <SoftBox minWidth={0}>
-                    <SoftTypography variant="button" fontWeight="bold" display="block">
-                      {index + 1}. {product.name || product.productName || "Sản phẩm"}
-                    </SoftTypography>
-                    <SoftTypography variant="caption" color="text">
-                      {product.code ? `${product.code} · ` : ""}
-                      Còn <b>{stock}</b> {product.unit || ""}
-                    </SoftTypography>
+                  <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                    <ProductThumbnail product={product} size={42} />
+                    <SoftBox minWidth={0}>
+                      <SoftTypography variant="button" fontWeight="bold" display="block">
+                        {index + 1}. {product.name || product.productName || "Sản phẩm"}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        {product.code ? `${product.code} · ` : ""}
+                        Còn <b>{stock}</b> {product.unit || ""}
+                      </SoftTypography>
+                    </SoftBox>
                   </SoftBox>
                   <IconButton
                     size="small"
@@ -1160,13 +1223,16 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
                   gap="12px !important"
                   py="10px !important"
                 >
-                  <SoftBox minWidth={0}>
-                    <SoftTypography variant="button" fontWeight="bold" display="block">
-                      {product.name || "Sản phẩm"}
-                    </SoftTypography>
-                    <SoftTypography variant="caption" color="text">
-                      {product.code || "Chưa có mã"}
-                    </SoftTypography>
+                  <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                    <ProductThumbnail product={product} size={42} />
+                    <SoftBox minWidth={0}>
+                      <SoftTypography variant="button" fontWeight="bold" display="block">
+                        {product.name || "Sản phẩm"}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        {product.code || "Chưa có mã"}
+                      </SoftTypography>
+                    </SoftBox>
                   </SoftBox>
                   <SoftBox px={1.1} py={0.5} borderRadius={1.5} bgcolor="#e8f5e9" flexShrink={0}>
                     <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "#2e7d32" }}>
@@ -1193,13 +1259,16 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
                     textTransform: "none",
                   }}
                 >
-                  <SoftBox textAlign="left" minWidth={0}>
-                    <SoftTypography variant="caption" fontWeight="bold" display="block" noWrap>
-                      {product.name}
-                    </SoftTypography>
-                    <SoftTypography variant="caption" sx={{ color: "inherit", opacity: 0.8 }}>
-                      Còn {product.stock || 0} {product.unit || ""}
-                    </SoftTypography>
+                  <SoftBox display="flex" alignItems="center" gap={0.75} minWidth={0}>
+                    <ProductThumbnail product={product} size={32} />
+                    <SoftBox textAlign="left" minWidth={0}>
+                      <SoftTypography variant="caption" fontWeight="bold" display="block" noWrap>
+                        {product.name}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" sx={{ color: "inherit", opacity: 0.8 }}>
+                        Còn {product.stock || 0} {product.unit || ""}
+                      </SoftTypography>
+                    </SoftBox>
                   </SoftBox>
                 </SoftButton>
               ))}
@@ -1245,16 +1314,24 @@ function TruckToTruckModal({ open, onClose, sourceTruck, onSaved }) {
                 sx={{ border: "2px solid #d9e8f7" }}
               >
                 <SoftBox display="flex" justifyContent="space-between" gap={1}>
-                  <SoftBox minWidth={0}>
-                    <SoftTypography variant="button" color="info" fontWeight="bold" display="block">
-                      SẢN PHẨM CHUYỂN #{index + 1}
-                    </SoftTypography>
-                    <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
-                      {product.name || "Chưa chọn sản phẩm"}
-                    </SoftTypography>
-                    <SoftTypography variant="caption" color="text">
-                      Còn trên xe nguồn: <b>{stock}</b> {product.unit || ""}
-                    </SoftTypography>
+                  <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                    <ProductThumbnail product={product} size={44} />
+                    <SoftBox minWidth={0}>
+                      <SoftTypography
+                        variant="button"
+                        color="info"
+                        fontWeight="bold"
+                        display="block"
+                      >
+                        SẢN PHẨM CHUYỂN #{index + 1}
+                      </SoftTypography>
+                      <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
+                        {product.name || "Chưa chọn sản phẩm"}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        Còn trên xe nguồn: <b>{stock}</b> {product.unit || ""}
+                      </SoftTypography>
+                    </SoftBox>
                   </SoftBox>
                   <IconButton
                     size="small"
@@ -2010,6 +2087,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
       code: product.code || item.productCode || item.code || "—",
       barcode: product.barcode || item.barcode || "",
       unit: product.unit || item.unit || "—",
+      imageUrl: productImageUrl(item),
     };
   };
   const totalSellingValue = inventory.reduce(
@@ -2573,6 +2651,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                                   {index + 1}
                                 </SoftTypography>
                               </SoftBox>
+                              <ProductThumbnail product={row} size={42} />
                               <SoftBox minWidth={0}>
                                 <SoftTypography variant="button" fontWeight="bold" display="block">
                                   {row.name}
@@ -2676,9 +2755,12 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                                 <SoftTypography variant="button">{index + 1}</SoftTypography>
                               </SoftBox>
                               <SoftBox component="td" px={1.25} py={1.3}>
-                                <SoftTypography variant="button" fontWeight="bold">
-                                  {row.name}
-                                </SoftTypography>
+                                <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                                  <ProductThumbnail product={row} size={38} />
+                                  <SoftTypography variant="button" fontWeight="bold">
+                                    {row.name}
+                                  </SoftTypography>
+                                </SoftBox>
                               </SoftBox>
                               <SoftBox component="td" px={1.25} py={1.3}>
                                 <SoftTypography variant="caption" display="block">
@@ -2777,7 +2859,13 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                   <>
                     <Grid container spacing={1.25} mt={0.25} mb={2}>
                       {[
-                        ["Chứng từ", salesTotals.documentCount, "receipt_long", "#1565c0", "#e3f2fd"],
+                        [
+                          "Chứng từ",
+                          salesTotals.documentCount,
+                          "receipt_long",
+                          "#1565c0",
+                          "#e3f2fd",
+                        ],
                         [
                           "Đã bán",
                           salesTotals.soldQuantity,
@@ -2786,7 +2874,13 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                           "#ffebee",
                         ],
                         ["Quà tặng", salesTotals.giftQuantity, "redeem", "#ef6c00", "#fff3e0"],
-                        ["Hoàn về xe", salesTotals.inboundQuantity, "restore", "#2e7d32", "#e8f5e9"],
+                        [
+                          "Hoàn về xe",
+                          salesTotals.inboundQuantity,
+                          "restore",
+                          "#2e7d32",
+                          "#e8f5e9",
+                        ],
                         [
                           "Biến động ròng",
                           salesTotals.netQuantity > 0
@@ -2907,7 +3001,12 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                                 ["Đảo hoàn", item.returnReversedQuantity, "#ad1457", "#fce4ec"],
                                 ["Tồn cuối", item.closingQuantity ?? "—", "#1b5e20", "#dcedc8"],
                               ].map(([label, value, color, background]) => (
-                                <SoftBox key={label} p={0.85} borderRadius={1.5} bgcolor={background}>
+                                <SoftBox
+                                  key={label}
+                                  p={0.85}
+                                  borderRadius={1.5}
+                                  bgcolor={background}
+                                >
                                   <SoftTypography variant="caption" sx={{ color }} display="block">
                                     {label}
                                   </SoftTypography>
@@ -2974,7 +3073,11 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                                   <SoftTypography variant="caption">{index + 1}</SoftTypography>
                                 </SoftBox>
                                 <SoftBox component="td" px={1.15} py={1.15} minWidth={220}>
-                                  <SoftTypography variant="button" fontWeight="bold" display="block">
+                                  <SoftTypography
+                                    variant="button"
+                                    fontWeight="bold"
+                                    display="block"
+                                  >
                                     {item.name}
                                   </SoftTypography>
                                   <SoftTypography variant="caption" color="text">
@@ -3252,6 +3355,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                                           : "remove_shopping_cart"}
                                       </Icon>
                                     </SoftBox>
+                                    <ProductThumbnail product={item} size={34} />
                                     <SoftBox minWidth={0}>
                                       <SoftTypography
                                         variant="button"
@@ -4309,13 +4413,20 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                             sx={{ border: `1px solid ${status.color}35` }}
                           >
                             <SoftBox display="flex" justifyContent="space-between" gap={1}>
-                              <SoftBox minWidth={0}>
-                                <SoftTypography variant="button" fontWeight="bold" display="block">
-                                  {item.productName || "Sản phẩm chưa xác định"}
-                                </SoftTypography>
-                                <SoftTypography variant="caption" color="text">
-                                  {[item.productCode, item.unit].filter(Boolean).join(" · ")}
-                                </SoftTypography>
+                              <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                                <ProductThumbnail product={item} size={40} />
+                                <SoftBox minWidth={0}>
+                                  <SoftTypography
+                                    variant="button"
+                                    fontWeight="bold"
+                                    display="block"
+                                  >
+                                    {item.productName || "Sản phẩm chưa xác định"}
+                                  </SoftTypography>
+                                  <SoftTypography variant="caption" color="text">
+                                    {[item.productCode, item.unit].filter(Boolean).join(" · ")}
+                                  </SoftTypography>
+                                </SoftBox>
                               </SoftBox>
                               <SoftBox
                                 px={0.9}
@@ -4419,16 +4530,21 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                                   <SoftTypography variant="caption">{index + 1}</SoftTypography>
                                 </SoftBox>
                                 <SoftBox component="td" px={1.2} py={1.15} minWidth={230}>
-                                  <SoftTypography
-                                    variant="button"
-                                    fontWeight="bold"
-                                    display="block"
-                                  >
-                                    {item.productName || "Sản phẩm chưa xác định"}
-                                  </SoftTypography>
-                                  <SoftTypography variant="caption" color="text">
-                                    {[item.productCode, item.unit].filter(Boolean).join(" · ")}
-                                  </SoftTypography>
+                                  <SoftBox display="flex" alignItems="center" gap={1}>
+                                    <ProductThumbnail product={item} size={36} />
+                                    <SoftBox minWidth={0}>
+                                      <SoftTypography
+                                        variant="button"
+                                        fontWeight="bold"
+                                        display="block"
+                                      >
+                                        {item.productName || "Sản phẩm chưa xác định"}
+                                      </SoftTypography>
+                                      <SoftTypography variant="caption" color="text">
+                                        {[item.productCode, item.unit].filter(Boolean).join(" · ")}
+                                      </SoftTypography>
+                                    </SoftBox>
+                                  </SoftBox>
                                 </SoftBox>
                                 {[
                                   item.systemQuantity,
@@ -4834,12 +4950,17 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                     borderRadius={2}
                     bgcolor="#f8fafc"
                   >
-                    <SoftTypography variant="button" fontWeight="bold" display="block">
-                      {index + 1}. {item.productName || "Sản phẩm"}
-                    </SoftTypography>
-                    <SoftTypography variant="caption" color="text" display="block">
-                      {[item.productCode, item.unit].filter(Boolean).join(" · ")}
-                    </SoftTypography>
+                    <SoftBox display="flex" alignItems="center" gap={1}>
+                      <ProductThumbnail product={item} size={38} />
+                      <SoftBox minWidth={0}>
+                        <SoftTypography variant="button" fontWeight="bold" display="block">
+                          {index + 1}. {item.productName || "Sản phẩm"}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text" display="block">
+                          {[item.productCode, item.unit].filter(Boolean).join(" · ")}
+                        </SoftTypography>
+                      </SoftBox>
+                    </SoftBox>
                     <SoftBox display="flex" justifyContent="space-between" mt={0.75}>
                       <SoftTypography variant="caption">
                         Số lượng: <b>{item.quantity || 0}</b>
@@ -4892,9 +5013,12 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                           {item.productCode || "—"}
                         </SoftBox>
                         <SoftBox component="td" px={1} py={0.9}>
-                          <SoftTypography variant="caption" fontWeight="bold">
-                            {item.productName || "—"}
-                          </SoftTypography>
+                          <SoftBox display="flex" alignItems="center" gap={0.75}>
+                            <ProductThumbnail product={item} size={32} />
+                            <SoftTypography variant="caption" fontWeight="bold">
+                              {item.productName || "—"}
+                            </SoftTypography>
+                          </SoftBox>
                         </SoftBox>
                         <SoftBox component="td" px={1} py={0.9} textAlign="center">
                           {item.unit || "—"}
@@ -5591,12 +5715,15 @@ function TruckGrid({
                       py={0.5}
                       borderBottom="1px solid #eee"
                     >
-                      <SoftTypography variant="caption">
-                        {product.name ||
-                          item.productName ||
-                          item.name ||
-                          "Sản phẩm không còn tồn tại"}
-                      </SoftTypography>
+                      <SoftBox display="flex" alignItems="center" gap={0.75}>
+                        <ProductThumbnail product={item} size={30} />
+                        <SoftTypography variant="caption">
+                          {product.name ||
+                            item.productName ||
+                            item.name ||
+                            "Sản phẩm không còn tồn tại"}
+                        </SoftTypography>
+                      </SoftBox>
                       <SoftTypography variant="caption" fontWeight="bold">
                         {quantityOf(item)} {product.unit || item.unit || ""}
                       </SoftTypography>
@@ -5723,9 +5850,12 @@ function TransferTable({ transfers, onReverse, readOnly, touchMode = false }) {
                     justifyContent="space-between"
                     py={0.4}
                   >
-                    <SoftTypography variant="caption">
-                      {item.productName || item.name || "Sản phẩm"}
-                    </SoftTypography>
+                    <SoftBox display="flex" alignItems="center" gap={0.75}>
+                      <ProductThumbnail product={item} size={30} />
+                      <SoftTypography variant="caption">
+                        {item.productName || item.name || "Sản phẩm"}
+                      </SoftTypography>
+                    </SoftBox>
                     <SoftTypography variant="caption" fontWeight="bold">
                       {quantityOf(item)} {item.unit || ""}
                     </SoftTypography>
@@ -5889,13 +6019,16 @@ function TransferTable({ transfers, onReverse, readOnly, touchMode = false }) {
                               index < transfer.items.length - 1 ? "1px dashed #E5E7EB" : "none",
                           }}
                         >
-                          <SoftBox>
-                            <SoftTypography variant="caption" fontWeight="bold" display="block">
-                              {item.productName || item.name || "Sản phẩm"}
-                            </SoftTypography>
-                            <SoftTypography variant="caption" color="text">
-                              {item.productCode || item.code || "Không có mã"}
-                            </SoftTypography>
+                          <SoftBox display="flex" alignItems="center" gap={0.75}>
+                            <ProductThumbnail product={item} size={32} />
+                            <SoftBox minWidth={0}>
+                              <SoftTypography variant="caption" fontWeight="bold" display="block">
+                                {item.productName || item.name || "Sản phẩm"}
+                              </SoftTypography>
+                              <SoftTypography variant="caption" color="text">
+                                {item.productCode || item.code || "Không có mã"}
+                              </SoftTypography>
+                            </SoftBox>
                           </SoftBox>
                           <span
                             style={{

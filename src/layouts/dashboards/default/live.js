@@ -8,6 +8,7 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
+import EntityThumbnail from "components/EntityThumbnail";
 import QuickSortBar from "components/QuickSortBar";
 import { DashboardAnalyticsService } from "services/analyticsService";
 import { toast } from "react-toastify";
@@ -479,12 +480,20 @@ export default function DashboardLive() {
                   title="Khách hàng công nợ cao"
                   rows={debt.topDebtors}
                   render={(row) => (
-                    <SoftBox display="flex" justifyContent="space-between">
-                      <SoftTypography variant="button">
-                        {row.customerCode} - {row.customerName}
-                        <br />
-                        <small>{row.phone}</small>
-                      </SoftTypography>
+                    <SoftBox
+                      display="flex"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      gap={1}
+                    >
+                      <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                        <EntityThumbnail entity={row.customer || row} type="customer" size={38} />
+                        <SoftTypography variant="button">
+                          {row.customerCode} - {row.customerName}
+                          <br />
+                          <small>{row.phone}</small>
+                        </SoftTypography>
+                      </SoftBox>
                       <SoftTypography variant="button" fontWeight="bold" color="error">
                         {money(row.debt)}
                       </SoftTypography>

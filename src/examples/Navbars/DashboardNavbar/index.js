@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 // react-router components
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 // prop-types is a library for typechecking of props.
 import PropTypes from "prop-types";
@@ -42,12 +42,7 @@ import {
 } from "examples/Navbars/DashboardNavbar/styles";
 // Soft UI Dashboard PRO React context
 import { styled } from "@mui/material/styles";
-import {
-  setMiniSidenav,
-  setOpenConfigurator,
-  setTransparentNavbar,
-  useSoftUIController,
-} from "context";
+import { setMiniSidenav, setTransparentNavbar, useSoftUIController } from "context";
 // Images
 import { Badge, Tooltip } from "@mui/material";
 import brand from "assets/images/logo-dhbk.png";
@@ -63,16 +58,13 @@ import NotificationCenter from "components/NotificationCenter";
 function DashboardNavbar({ absolute, light, isMini }) {
   const [navbarType, setNavbarType] = useState();
   const [controller, dispatch] = useSoftUIController();
-  const { miniSidenav, transparentNavbar, fixedNavbar, openConfigurator } = controller;
+  const { miniSidenav, transparentNavbar, fixedNavbar } = controller;
   const [openMenu, setOpenMenu] = useState(false);
-  const route = useLocation().pathname.split("/").slice(1);
   const { user } = useSelector(authSelector);
   const dispatchRedux = useDispatch();
-  const [notifications, setNotifications] = useState([]);
+  const notifications = [];
   const [open, setOpen] = useState(false);
   const [selectedNoti, setSelectedNoti] = useState({});
-  const navigation = useNavigate();
-
   const [anchorEl, setAnchorEl] = useState(null);
   const openUser = Boolean(anchorEl);
 
@@ -95,7 +87,6 @@ function DashboardNavbar({ absolute, light, isMini }) {
       // navigation(`/user-quan-ly-hoat-dong/hoat-dong/${selectedNoti.activity._id}`);
       setSelectedNoti({});
       setOpen(false);
-      getNotification();
     } catch (error) {
       console.log(error);
     }
@@ -103,34 +94,6 @@ function DashboardNavbar({ absolute, light, isMini }) {
 
   const handleClose = () => {
     setOpen(false);
-  };
-
-  useEffect(() => {
-    getNotification();
-  }, []);
-
-  useEffect(() => {
-    // console.log(user);
-
-    const id = setInterval(() => {
-      (async () => {
-        getNotification();
-      })();
-    }, 10000);
-    return () => clearInterval(id);
-  }, []);
-
-  const getNotification = async () => {
-    try {
-      if (user?.role === "user") {
-        // const {
-        //   data: { items },
-        // } = await NotificationService.getForUser({ type: "Chưa đọc" });
-        // setNotifications(items);
-      }
-    } catch (error) {
-      console.log({ error });
-    }
   };
 
   useEffect(() => {
@@ -155,7 +118,6 @@ function DashboardNavbar({ absolute, light, isMini }) {
   }, [dispatch, fixedNavbar]);
 
   const handleMiniSidenav = () => setMiniSidenav(dispatch, !miniSidenav);
-  const handleConfiguratorOpen = () => setOpenConfigurator(dispatch, !openConfigurator);
   const handleOpenMenu = (event) => setOpenMenu(event.currentTarget);
   const handleCloseMenu = () => setOpenMenu(false);
 

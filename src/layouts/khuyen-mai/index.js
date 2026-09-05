@@ -15,6 +15,7 @@ import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
+import EntityThumbnail from "components/EntityThumbnail";
 import MobileLoadMore from "components/MobileLoadMore";
 import { CategoryService, ProductService } from "services/warehouseService";
 import { CustomerService, PromotionService, PRODUCT_TYPES } from "services/crmService";
@@ -261,7 +262,7 @@ function FormGridField({ label, children, xs = 12, md = 6 }) {
   );
 }
 
-function MultiSelectField({ value, onChange, options, placeholder }) {
+function MultiSelectField({ value, onChange, options, placeholder, showImages = false }) {
   const safeValue = Array.isArray(value) ? value : [];
   const safeOptions = Array.isArray(options) ? options : [];
   return (
@@ -271,21 +272,32 @@ function MultiSelectField({ value, onChange, options, placeholder }) {
         value={safeValue}
         onChange={(event) => onChange(event.target.value)}
         displayEmpty
-        renderValue={(selected) =>
-          Array.isArray(selected) && selected.length
-            ? selected
-                .map(
-                  (id) =>
-                    safeOptions.find((item) => String(item.id || item._id) === String(id))?.name
-                )
-                .filter(Boolean)
-                .join(", ")
-            : placeholder
-        }
+        renderValue={(selected) => {
+          if (!Array.isArray(selected) || !selected.length) return placeholder;
+          const selectedItems = selected
+            .map((id) => safeOptions.find((item) => String(item.id || item._id) === String(id)))
+            .filter(Boolean);
+          return (
+            <SoftBox display="flex" alignItems="center" gap={0.65} minWidth={0}>
+              {showImages &&
+                selectedItems
+                  .slice(0, 3)
+                  .map((item) => (
+                    <EntityThumbnail key={item.id || item._id} entity={item} size={26} />
+                  ))}
+              <SoftTypography variant="caption" noWrap>
+                {selectedItems.map((item) => item.name).join(", ")}
+              </SoftTypography>
+            </SoftBox>
+          );
+        }}
       >
         {safeOptions.map((item) => (
           <MenuItem key={item.id || item._id} value={item.id || item._id}>
-            {item.name}
+            <SoftBox display="flex" alignItems="center" gap={1}>
+              {showImages && <EntityThumbnail entity={item} size={36} />}
+              <span>{item.name}</span>
+            </SoftBox>
           </MenuItem>
         ))}
       </Select>
@@ -486,6 +498,7 @@ function GiftRuleFields({ form, set, products, categories }) {
                     }
                     options={products}
                     placeholder="Chọn sản phẩm"
+                    showImages
                   />
                 </FormGridField>
               )}
@@ -637,6 +650,7 @@ function GiftRuleFields({ form, set, products, categories }) {
                         onChange={(value) => update({ productIds: value })}
                         options={products}
                         placeholder="Chọn sản phẩm"
+                        showImages
                       />
                     </FormGridField>
                   )}
@@ -742,6 +756,7 @@ function GiftRuleFields({ form, set, products, categories }) {
                 onChange={(value) => updateGift(giftIndex, { productIds: value })}
                 options={products}
                 placeholder="Chọn các quà khả dụng"
+                showImages
               />
             </FormGridField>
           </Grid>
@@ -1095,6 +1110,7 @@ function PromotionForm({ open, promotion, onClose, onSaved }) {
                 onChange={(value) => set("productIds", value)}
                 options={products}
                 placeholder="Chọn nhiều sản phẩm"
+                showImages
               />
             </FormGridField>
           )}
@@ -1543,7 +1559,13 @@ export default function KhuyenMai() {
             ["Voucher đã dùng", summary.usedVouchers || 0, "confirmation_number", "#E65100"],
           ].map(([label, value, icon, color]) => (
             <Card className="admin-summary-card" key={label} sx={{ flex: 1, minWidth: 180 }}>
-              <SoftBox className="admin-summary-content" p={2.5} display="flex" gap={2} alignItems="center">
+              <SoftBox
+                className="admin-summary-content"
+                p={2.5}
+                display="flex"
+                gap={2}
+                alignItems="center"
+              >
                 <Icon sx={{ color }}>{icon}</Icon>
                 <SoftBox>
                   <SoftTypography variant="caption">{label}</SoftTypography>

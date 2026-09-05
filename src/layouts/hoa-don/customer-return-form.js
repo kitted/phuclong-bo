@@ -15,6 +15,7 @@ import SoftTypography from "components/SoftTypography";
 import { CustomerService } from "services/crmService";
 import CustomerReturnService from "services/customerReturnService";
 import { ProductService, TruckService } from "services/warehouseService";
+import EntityThumbnail from "components/EntityThumbnail";
 
 const getId = (value) => value?.id || value?._id;
 const unwrap = (response) => response?.data?.data ?? response?.data;
@@ -147,15 +148,18 @@ function ProductSelector({ value, onChange }) {
       }}
       renderOption={(props, option) => (
         <li {...props} key={getId(option)}>
-          <SoftBox py={0.5} minWidth={0}>
-            <SoftTypography variant="button" fontWeight="bold" display="block">
-              {option.name}
-            </SoftTypography>
-            <SoftTypography variant="caption" color="text">
-              {[option.code, option.unit, money(option.sellPrice ?? option.price)]
-                .filter(Boolean)
-                .join(" · ")}
-            </SoftTypography>
+          <SoftBox py={0.5} minWidth={0} display="flex" alignItems="center" gap={1}>
+            <EntityThumbnail entity={option} size={42} />
+            <SoftBox minWidth={0}>
+              <SoftTypography variant="button" fontWeight="bold" display="block">
+                {option.name}
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text">
+                {[option.code, option.unit, money(option.sellPrice ?? option.price)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </SoftTypography>
+            </SoftBox>
           </SoftBox>
         </li>
       )}
@@ -585,13 +589,34 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                       if (reasonType !== "reset") setCustomerSearch(value);
                     }}
                     onChange={(_, value) => setCustomer(value)}
+                    renderOption={(props, option) => (
+                      <li {...props} key={getId(option)}>
+                        <SoftBox display="flex" alignItems="center" gap={1}>
+                          <EntityThumbnail entity={option} type="customer" size={42} />
+                          <SoftBox>
+                            <SoftTypography variant="button" fontWeight="bold">
+                              {[option.code, option.name].filter(Boolean).join(" · ")}
+                            </SoftTypography>
+                            <SoftTypography variant="caption" color="text" display="block">
+                              {option.phone || "Chưa có số điện thoại"}
+                            </SoftTypography>
+                          </SoftBox>
+                        </SoftBox>
+                      </li>
+                    )}
                     renderInput={(params) => (
                       <TextField {...params} placeholder="Tìm mã hoặc tên khách hàng..." />
                     )}
                   />
                   {customer && (
                     <SoftBox mt={1.25} p={1.5} borderRadius={1.5} bgcolor="#f1f7ff">
-                      <SoftBox display="flex" justifyContent="space-between" gap={2}>
+                      <SoftBox
+                        display="flex"
+                        justifyContent="space-between"
+                        gap={2}
+                        alignItems="center"
+                      >
+                        <EntityThumbnail entity={customer} type="customer" size={42} />
                         <SoftTypography variant="button" fontWeight="bold">
                           {[customer.code, customer.name].filter(Boolean).join(" · ")}
                         </SoftTypography>
@@ -652,9 +677,19 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                         alignItems="center"
                         mb={1.25}
                       >
-                        <SoftTypography variant="button" color="warning" fontWeight="bold">
-                          SẢN PHẨM HOÀN #{index + 1}
-                        </SoftTypography>
+                        <SoftBox display="flex" alignItems="center" gap={1}>
+                          <EntityThumbnail entity={item.product || {}} size={40} />
+                          <SoftBox>
+                            <SoftTypography variant="button" color="warning" fontWeight="bold">
+                              SẢN PHẨM HOÀN #{index + 1}
+                            </SoftTypography>
+                            {item.product?.name && (
+                              <SoftTypography variant="caption" color="text" display="block">
+                                {item.product.name}
+                              </SoftTypography>
+                            )}
+                          </SoftBox>
+                        </SoftBox>
                         {items.length > 1 && (
                           <IconButton
                             color="error"
@@ -1085,16 +1120,19 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                   sx={{ border: "1px solid #f0d6b5" }}
                 >
                   <SoftBox display="flex" justifyContent="space-between" gap={2}>
-                    <SoftBox>
-                      <SoftTypography variant="button" fontWeight="bold" display="block">
-                        {item.type === "CATALOG" ? item.product?.name : item.manualName}
-                      </SoftTypography>
-                      <SoftTypography variant="caption" color="text">
-                        {numberText(item.qty)}{" "}
-                        {item.type === "CATALOG" ? item.product?.unit : item.manualUnit} ×{" "}
-                        {money(item.returnUnitPrice)} ·{" "}
-                        {item.type === "MANUAL" ? "Chờ phân loại" : "Hàng công ty"}
-                      </SoftTypography>
+                    <SoftBox display="flex" alignItems="center" gap={1}>
+                      <EntityThumbnail entity={item.product || {}} size={40} />
+                      <SoftBox>
+                        <SoftTypography variant="button" fontWeight="bold" display="block">
+                          {item.type === "CATALOG" ? item.product?.name : item.manualName}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text">
+                          {numberText(item.qty)}{" "}
+                          {item.type === "CATALOG" ? item.product?.unit : item.manualUnit} ×{" "}
+                          {money(item.returnUnitPrice)} ·{" "}
+                          {item.type === "MANUAL" ? "Chờ phân loại" : "Hàng công ty"}
+                        </SoftTypography>
+                      </SoftBox>
                     </SoftBox>
                     <SoftTypography variant="button" color="warning" fontWeight="bold">
                       {money(Number(item.qty) * Number(item.returnUnitPrice))}

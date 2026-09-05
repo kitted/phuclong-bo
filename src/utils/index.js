@@ -46,7 +46,6 @@ export function truncateText(text, maxLength) {
   if (text?.length <= maxLength) {
     return text;
   } else {
-    const end = text?.slice(-maxLength / 2);
     return text?.slice(0, maxLength) + "...";
   }
 }

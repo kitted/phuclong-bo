@@ -60,7 +60,7 @@ function DefaultLineChart({ title, description, height, chart }) {
             <Line data={data} options={options} />
           </SoftBox>
         ),
-        [chart, height]
+        [data, height, options]
       )}
     </SoftBox>
   );

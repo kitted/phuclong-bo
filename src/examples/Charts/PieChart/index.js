@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 // porp-types is a library for typechecking of props
 import PropTypes from "prop-types";
@@ -16,7 +16,7 @@ import SoftTypography from "components/SoftTypography";
 // PieChart configurations
 import configs from "examples/Charts/PieChart/configs";
 
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
+import { Chart as ChartJS, ArcElement, Tooltip } from "chart.js";
 
 ChartJS.register(ArcElement, Tooltip);
 

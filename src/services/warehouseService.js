@@ -297,6 +297,11 @@ export const ProductService = {
   update: async (id, payload) => {
     return await AxiosInstance.put(`/admin/products/${id}`, payload);
   },
+  uploadImage: async (id, file) => {
+    const data = new FormData();
+    data.append("file", file);
+    return await AxiosInstance.post(`/admin/products/${id}/image`, data);
+  },
   delete: async (id) => {
     return await AxiosInstance.delete(`/admin/products/${id}`);
   },

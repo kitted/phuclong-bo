@@ -13,7 +13,7 @@ import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 
 // custom styles for the NotificationItem
-import { menuItem, menuImage } from "examples/Items/NotificationItem/styles";
+import { menuItem } from "examples/Items/NotificationItem/styles";
 import { formatDate } from "utils";
 import { timeAgo } from "utils";
 

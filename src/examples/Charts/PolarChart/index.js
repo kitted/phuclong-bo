@@ -41,7 +41,7 @@ function PolarChart({ title, description, chart }) {
             <PolarArea data={data} options={options} />
           </SoftBox>
         ),
-        [chart]
+        [data, options]
       )}
     </SoftBox>
   );

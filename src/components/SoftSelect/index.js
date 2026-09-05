@@ -4,20 +4,16 @@ import { forwardRef } from "react";
 import PropTypes from "prop-types";
 
 // react-select components
-import Select, { components } from "react-select";
+import Select from "react-select";
 
 // Soft UI Dashboard PRO React base styles
 import colors from "assets/theme/base/colors";
 
 // Custom styles for SoftSelect
 import styles from "components/SoftSelect/styles";
-import { Height } from "@mui/icons-material";
 
 const SoftSelect = forwardRef(({ size, error, success, placeholder, ...rest }, ref) => {
   const { light } = colors;
-  const { style } = rest;
-
-
   return (
     <Select
       {...rest}
@@ -45,14 +41,6 @@ const SoftSelect = forwardRef(({ size, error, success, placeholder, ...rest }, r
     />
   );
 });
-
-const NoOptionsMessage = (props) => {
-  return (
-    <components.NoOptionsMessage {...props}>
-      <span>Không có kết quả nào</span>
-    </components.NoOptionsMessage>
-  );
-};
 
 // Setting default values for the props of SoftSelect
 SoftSelect.defaultProps = {

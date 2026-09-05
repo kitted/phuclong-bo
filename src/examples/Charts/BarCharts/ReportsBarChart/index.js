@@ -51,7 +51,7 @@ function ReportsBarChart({ color, title, description, chart, items }) {
               <Bar data={data} options={options} />
             </SoftBox>
           ),
-          [chart, color]
+          [color, data, options]
         )}
         <SoftBox px={1}>
           <SoftBox mb={2}>

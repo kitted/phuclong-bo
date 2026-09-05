@@ -1,23 +1,13 @@
 // react-router-dom components
-import { Link, useNavigate } from "react-router-dom";
-
 // @mui material components
 import Grid from "@mui/material/Grid";
 
 // components
 import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
-import SoftButton from "components/SoftButton";
-
-// example components
-import DefaultNavbar from "examples/Navbars/DefaultNavbar";
-import PageLayout from "examples/LayoutContainers/PageLayout";
 
 // base styles
 import typography from "assets/theme/base/typography";
-
-// Authentication layout components
-import Footer from "layouts/authentication/components/Footer";
 
 // Images
 import error404 from "assets/images/illustrations/error-404.png";
@@ -26,8 +16,6 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 
 function AccessDenied() {
   const { d1, d3, d4, d5 } = typography;
-  const navigation = useNavigate();
-
   return (
     <DashboardLayout>
       <DashboardNavbar />

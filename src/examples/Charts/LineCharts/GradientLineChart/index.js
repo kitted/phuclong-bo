@@ -71,7 +71,7 @@ function GradientLineChart({ title, description, height, chart }) {
             <Line data={data} options={options} />
           </SoftBox>
         ),
-        [chartData, height]
+        [data, height, options]
       )}
     </SoftBox>
   );

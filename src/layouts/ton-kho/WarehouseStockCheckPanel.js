@@ -15,6 +15,7 @@ import { useSelector } from "react-redux";
 import MobileLoadMore from "components/MobileLoadMore";
 import QuickSortBar from "components/QuickSortBar";
 import { mergeUniqueItems } from "utils/infiniteList";
+import EntityThumbnail, { productImageUrl } from "components/EntityThumbnail";
 
 const STATUSES = {
   MATCHED: { label: "Khớp tồn", color: "#2e7d32", background: "#e8f5e9" },
@@ -423,6 +424,7 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
           key,
           code,
           name: product.productName || product.name || "Sản phẩm",
+          imageUrl: productImageUrl(product),
           unit: product.unit || "—",
           system,
           raw,
@@ -852,10 +854,7 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
                   return;
                 setCounts((current) => ({
                   ...current,
-                  ...remaining.reduce(
-                    (next, row) => ({ ...next, [row.key]: row.system }),
-                    {}
-                  ),
+                  ...remaining.reduce((next, row) => ({ ...next, [row.key]: row.system }), {}),
                 }));
               }}
             >
@@ -920,18 +919,21 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
                     alignItems="flex-start"
                     gap={1}
                   >
-                    <SoftBox minWidth={0} flex={1}>
-                      <SoftTypography
-                        variant="button"
-                        fontWeight="bold"
-                        display="block"
-                        sx={{ fontSize: { xs: 15, md: 16 }, lineHeight: 1.35 }}
-                      >
-                        {row.name}
-                      </SoftTypography>
-                      <SoftTypography variant="caption" color="text" display="block" mt={0.2}>
-                        {row.code} · {row.unit}
-                      </SoftTypography>
+                    <SoftBox display="flex" alignItems="center" gap={1} minWidth={0} flex={1}>
+                      <EntityThumbnail entity={row} size={42} />
+                      <SoftBox minWidth={0}>
+                        <SoftTypography
+                          variant="button"
+                          fontWeight="bold"
+                          display="block"
+                          sx={{ fontSize: { xs: 15, md: 16 }, lineHeight: 1.35 }}
+                        >
+                          {row.name}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text" display="block" mt={0.2}>
+                          {row.code} · {row.unit}
+                        </SoftTypography>
+                      </SoftBox>
                     </SoftBox>
                     <SoftBox
                       px={1}
@@ -1460,13 +1462,27 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
                   }}
                 >
                   <SoftBox display="flex" justifyContent="space-between" gap={1}>
-                    <SoftBox>
-                      <SoftTypography variant="button" fontWeight="bold" display="block">
-                        {item.productName || "Sản phẩm chưa xác định"}
-                      </SoftTypography>
-                      <SoftTypography variant="caption" color="text">
-                        {item.productCode} · {item.unit}
-                      </SoftTypography>
+                    <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
+                      <EntityThumbnail
+                        entity={
+                          products.find(
+                            (product) =>
+                              String(product.productId || product.id || product._id) ===
+                                String(item.productId || "") ||
+                              String(product.productCode || product.code || "").toUpperCase() ===
+                                String(item.productCode || "").toUpperCase()
+                          ) || item
+                        }
+                        size={40}
+                      />
+                      <SoftBox minWidth={0}>
+                        <SoftTypography variant="button" fontWeight="bold" display="block">
+                          {item.productName || "Sản phẩm chưa xác định"}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text">
+                          {item.productCode} · {item.unit}
+                        </SoftTypography>
+                      </SoftBox>
                     </SoftBox>
                     <SoftBox
                       px={0.75}
@@ -1783,13 +1799,25 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
                     py={0.8}
                     sx={{ borderBottom: "1px solid #edf0f3" }}
                   >
-                    <SoftBox>
-                      <SoftTypography variant="caption" fontWeight="bold" display="block">
-                        {index + 1}. {item.productName}
-                      </SoftTypography>
-                      <SoftTypography variant="caption" color="text">
-                        {item.productCode} · {item.unit}
-                      </SoftTypography>
+                    <SoftBox display="flex" alignItems="center" gap={0.75} minWidth={0}>
+                      <EntityThumbnail
+                        entity={
+                          products.find(
+                            (product) =>
+                              String(product.productId || product.id || product._id) ===
+                              String(item.productId || "")
+                          ) || item
+                        }
+                        size={34}
+                      />
+                      <SoftBox minWidth={0}>
+                        <SoftTypography variant="caption" fontWeight="bold" display="block">
+                          {index + 1}. {item.productName}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text">
+                          {item.productCode} · {item.unit}
+                        </SoftTypography>
+                      </SoftBox>
                     </SoftBox>
                     <SoftBox textAlign="right">
                       <SoftTypography variant="button" fontWeight="bold" display="block">

@@ -16,6 +16,7 @@ import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
+import EntityThumbnail from "components/EntityThumbnail";
 
 import { ImportService, ProductService, SupplierService } from "services/warehouseService";
 import { toast } from "react-toastify";
@@ -43,25 +44,26 @@ function RemoteProductSelect({ value, onSelect }) {
 
   useEffect(() => {
     let active = true;
-    const timer = setTimeout(() => {
-      setLoading(true);
-      ProductService.getAll({ search: search.trim() || undefined, page: 1, limit: 30 })
-        .then((response) => {
-          if (!active) return;
-          const rows = listOf(response);
-          setOptions(
-            [...rows].sort((a, b) =>
-              String(a.code || a.name || "").localeCompare(
-                String(b.code || b.name || ""),
-                "vi",
-                { numeric: true }
+    const timer = setTimeout(
+      () => {
+        setLoading(true);
+        ProductService.getAll({ search: search.trim() || undefined, page: 1, limit: 30 })
+          .then((response) => {
+            if (!active) return;
+            const rows = listOf(response);
+            setOptions(
+              [...rows].sort((a, b) =>
+                String(a.code || a.name || "").localeCompare(String(b.code || b.name || ""), "vi", {
+                  numeric: true,
+                })
               )
-            )
-          );
-        })
-        .catch(() => active && setOptions([]))
-        .finally(() => active && setLoading(false));
-    }, search ? 300 : 0);
+            );
+          })
+          .catch(() => active && setOptions([]))
+          .finally(() => active && setLoading(false));
+      },
+      search ? 300 : 0
+    );
     return () => {
       active = false;
       clearTimeout(timer);
@@ -96,13 +98,16 @@ function RemoteProductSelect({ value, onSelect }) {
       loadingText="Đang tìm sản phẩm..."
       renderOption={(props, product) => (
         <li {...props} key={product.id || product._id}>
-          <SoftBox py={0.35} minWidth={0}>
-            <SoftTypography variant="button" fontWeight="bold" display="block">
-              {product.name || "Sản phẩm"}
-            </SoftTypography>
-            <SoftTypography variant="caption" color="text">
-              {[product.code, product.barcode, product.unit].filter(Boolean).join(" · ")}
-            </SoftTypography>
+          <SoftBox py={0.35} display="flex" alignItems="center" gap={1} minWidth={0}>
+            <EntityThumbnail entity={product} size={40} />
+            <SoftBox minWidth={0}>
+              <SoftTypography variant="button" fontWeight="bold" display="block">
+                {product.name || "Sản phẩm"}
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text">
+                {[product.code, product.barcode, product.unit].filter(Boolean).join(" · ")}
+              </SoftTypography>
+            </SoftBox>
           </SoftBox>
         </li>
       )}
@@ -273,10 +278,7 @@ function NhapKho() {
     if (!window.confirm(`Xác nhận ${action}? Thao tác này sẽ cập nhật tồn kho.`)) return;
     try {
       setChangingStatus(true);
-      const response = await ImportService.changeStatus(
-        detailModal.id || detailModal._id,
-        status
-      );
+      const response = await ImportService.changeStatus(detailModal.id || detailModal._id, status);
       const updated = response?.data?.data ?? response?.data;
       setDetailModal(updated || { ...detailModal, status });
       toast.success(status === "RECEIVED" ? "Đã nhận hàng vào kho" : "Đã hoàn nhà cung cấp");
@@ -597,18 +599,7 @@ function NhapKho() {
                     mb={1.25}
                   >
                     <SoftBox display="flex" alignItems="center" gap={1} minWidth={0}>
-                      <SoftBox
-                        width={36}
-                        height={36}
-                        borderRadius={1.5}
-                        bgcolor="#e3f2fd"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        flexShrink={0}
-                      >
-                        <Icon sx={{ color: "#1565c0" }}>inventory_2</Icon>
-                      </SoftBox>
+                      <EntityThumbnail entity={selectedProduct || {}} size={40} />
                       <SoftBox minWidth={0}>
                         <SoftTypography
                           variant="button"

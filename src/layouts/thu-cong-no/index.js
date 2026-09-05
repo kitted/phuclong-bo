@@ -11,6 +11,7 @@ import { DebtPaymentModal } from "layouts/khach-hang/debt-payment";
 import { toast } from "react-toastify";
 import MobileLoadMore from "components/MobileLoadMore";
 import { mergeUniqueItems } from "utils/infiniteList";
+import EntityThumbnail from "components/EntityThumbnail";
 
 const money = (value) => `${Number(value || 0).toLocaleString("vi-VN")} ₫`;
 const listOf = (response) => {
@@ -109,19 +110,7 @@ export default function ThuCongNo() {
                   onClick={() => setSelected(customer)}
                   sx={{ borderBottom: "1px solid #edf0f5", cursor: "pointer" }}
                 >
-                  <SoftBox
-                    width={46}
-                    height={46}
-                    borderRadius="50%"
-                    bgcolor="#e8f5e9"
-                    color="#2e7d32"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    flexShrink={0}
-                  >
-                    <Icon>payments</Icon>
-                  </SoftBox>
+                  <EntityThumbnail entity={customer} type="customer" size={46} />
                   <SoftBox flex={1} minWidth={0}>
                     <SoftBox display="flex" alignItems="center" gap={0.75}>
                       <SoftTypography variant="button" fontWeight="bold" noWrap>

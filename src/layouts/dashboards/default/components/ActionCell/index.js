@@ -1,34 +1,14 @@
 /* eslint-disable react/prop-types */
 // @mui material components
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-} from "@mui/material";
 import Icon from "@mui/material/Icon";
 import Tooltip from "@mui/material/Tooltip";
 
 // Soft UI Dashboard PRO React components
 import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
-import React from "react";
 import { Link } from "react-router-dom";
-import { toast } from "react-toastify";
 
-function ActionCell({ item, setDataTable }) {
-  const [open, setOpen] = React.useState(false);
-
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
-
-  const handleClose = () => {
-    setOpen(false);
-  };
-
+function ActionCell({ item }) {
   return (
     <SoftBox display="flex" alignItems="center">
       <Link to={`/quan-ly-xe/xe/${item?._id}`}>

@@ -39,6 +39,7 @@ function MultiSelect(props) {
           </span>
           <img
             src={Arrow}
+            alt=""
             className={`absolute w-[24px] right-1 top-2 z-10 ${
               isOpen ? "rotate-180" : "rotate-0"
             } transition-all delay-100`}

@@ -60,7 +60,7 @@ function BubbleChart({ title, description, height, chart }) {
             <Bubble data={data} options={options} />
           </SoftBox>
         ),
-        [chart, height]
+        [data, height, options]
       )}
     </SoftBox>
   );

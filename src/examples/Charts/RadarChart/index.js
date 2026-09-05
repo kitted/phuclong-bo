@@ -56,7 +56,7 @@ function RadarChart({ title, description, chart }) {
             <Radar data={data} options={options} />
           </SoftBox>
         ),
-        [chart]
+        [data, options]
       )}
     </SoftBox>
   );

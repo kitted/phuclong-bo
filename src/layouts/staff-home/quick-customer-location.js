@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import Avatar from "@mui/material/Avatar";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
 import Icon from "@mui/material/Icon";
@@ -8,6 +7,7 @@ import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
+import EntityThumbnail from "components/EntityThumbnail";
 import { CustomerService } from "services/crmService";
 import { toast } from "react-toastify";
 
@@ -85,16 +85,7 @@ function CustomerRow({ customer, onSelect }) {
         "&:active": { bgcolor: "#eef6ff" },
       }}
     >
-      <Avatar
-        sx={{
-          width: 44,
-          height: 44,
-          bgcolor: hasLocation ? "#e8f5e9" : "#e7f3ff",
-          color: hasLocation ? "#2e7d32" : "#1877f2",
-        }}
-      >
-        <Icon>{hasImage ? "storefront" : hasLocation ? "location_on" : "person_pin_circle"}</Icon>
-      </Avatar>
+      <EntityThumbnail entity={customer} type="customer" size={44} />
       <SoftBox flex={1} minWidth={0}>
         <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
           {code ? `${code} · ` : ""}
@@ -335,9 +326,7 @@ export default function QuickCustomerLocation({ open, onClose, onSaved }) {
           <SoftBox pb="calc(24px + env(safe-area-inset-bottom))">
             <SoftBox bgcolor="#fff" p={1.5} mb={1}>
               <SoftBox display="flex" alignItems="center" gap={1.25}>
-                <Avatar sx={{ width: 48, height: 48, bgcolor: "#e7f3ff", color: "#1877f2" }}>
-                  <Icon>storefront</Icon>
-                </Avatar>
+                <EntityThumbnail entity={selected} type="customer" size={48} />
                 <SoftBox flex={1} minWidth={0}>
                   <SoftTypography variant="button" fontWeight="bold" display="block">
                     {customerCode(selected) ? `${customerCode(selected)} · ` : ""}

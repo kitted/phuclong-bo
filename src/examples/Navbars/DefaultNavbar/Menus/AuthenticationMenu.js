@@ -17,9 +17,6 @@ import SoftTypography from "components/SoftTypography";
 // Soft UI Dashboard PRO React example components
 import DefaultNavbarMenu from "examples/Navbars/DefaultNavbar/DefaultNavbarMenu";
 
-// Images
-import curved8 from "assets/images/curved-images/curved8.jpg";
-
 function AuthenticationMenu({ routes, open, close, mobileMenu }) {
   const [menuStates, setMenuStates] = useState({});
 
@@ -85,6 +82,14 @@ function AuthenticationMenu({ routes, open, close, mobileMenu }) {
 
       return template;
     });
+
+  const content = renderAuthenticationMenuRoute("authentication");
+  if (mobileMenu) return content;
+  return (
+    <DefaultNavbarMenu open={open} close={close}>
+      {content}
+    </DefaultNavbarMenu>
+  );
 }
 // Setting default values for the props of AuthenticationMenu
 AuthenticationMenu.defaultProps = {

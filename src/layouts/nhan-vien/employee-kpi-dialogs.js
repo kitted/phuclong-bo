@@ -20,6 +20,7 @@ import { PromotionService } from "services/crmService";
 import { CategoryService, ProductService } from "services/warehouseService";
 import { toast } from "react-toastify";
 import { mergeUniqueItems } from "utils/infiniteList";
+import EntityThumbnail from "components/EntityThumbnail";
 
 const METRICS = {
   PROMOTION_ACTIVATION_COUNT: "Số mã khuyến mãi kích hoạt",
@@ -62,10 +63,17 @@ const displayValue = (metric, value) =>
   MONEY_METRICS.includes(metric)
     ? `${Number(value || 0).toLocaleString("vi-VN")} ₫`
     : Number(value || 0).toLocaleString("vi-VN");
-const formatCycleDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const formatCycleDate = (date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
 const currentKpiCycle = () => {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getDate() >= 10 ? now.getMonth() : now.getMonth() - 1, 10);
+  const from = new Date(
+    now.getFullYear(),
+    now.getDate() >= 10 ? now.getMonth() : now.getMonth() - 1,
+    10
+  );
   const to = new Date(from.getFullYear(), from.getMonth() + 1, 9);
   return { from: formatCycleDate(from), to: formatCycleDate(to) };
 };
@@ -177,9 +185,18 @@ function KpiEvidenceModal({ open, kpi, targetIndex, onClose }) {
                     {invoice.date ? new Date(invoice.date).toLocaleDateString("vi-VN") : "—"}
                   </td>
                   <td style={{ padding: 10, fontSize: 13 }}>
-                    {invoice.customerName || "Khách lẻ"}
-                    <br />
-                    <span style={{ color: "#6B7280" }}>{invoice.customerCode || ""}</span>
+                    <SoftBox display="flex" alignItems="center" gap={1}>
+                      <EntityThumbnail
+                        entity={invoice.customer || invoice}
+                        type="customer"
+                        size={36}
+                      />
+                      <SoftBox>
+                        {invoice.customerName || "Khách lẻ"}
+                        <br />
+                        <span style={{ color: "#6B7280" }}>{invoice.customerCode || ""}</span>
+                      </SoftBox>
+                    </SoftBox>
                   </td>
                   <td style={{ padding: 10, fontSize: 13 }}>
                     {displayValue("TOTAL_REVENUE", invoice.grandTotal)}
@@ -367,9 +384,7 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
       ...(Number(target.referencePrice) > 0
         ? { referenceUnitPrice: Number(target.referencePrice) }
         : {}),
-      ...(Number(target.revenueTarget) > 0
-        ? { revenueTarget: Number(target.revenueTarget) }
-        : {}),
+      ...(Number(target.revenueTarget) > 0 ? { revenueTarget: Number(target.revenueTarget) } : {}),
       ...(target.note?.trim() ? { note: target.note.trim() } : {}),
     }));
     try {
@@ -421,9 +436,18 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
               onChange={(event) => {
                 const cycleType = event.target.value;
                 const cycle = currentKpiCycle();
-                setForm((current) => cycleType === "CUSTOM_MONTHLY"
-                  ? { ...current, cycleType, from: cycle.from, to: cycle.to, startDay: 10, endDay: 9 }
-                  : { ...current, cycleType });
+                setForm((current) =>
+                  cycleType === "CUSTOM_MONTHLY"
+                    ? {
+                        ...current,
+                        cycleType,
+                        from: cycle.from,
+                        to: cycle.to,
+                        startDay: 10,
+                        endDay: 9,
+                      }
+                    : { ...current, cycleType }
+                );
               }}
             >
               <MenuItem value="FIXED_RANGE">Theo khoảng ngày đã chọn</MenuItem>
@@ -434,7 +458,9 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
             <Grid item xs={12}>
               <SoftBox p={1.5} borderRadius={2} bgcolor="#fff8e1">
                 <SoftTypography variant="button" fontWeight="bold" sx={{ color: "#e65100" }}>
-                  Chu kỳ KPI cố định: {new Date(`${form.from}T12:00:00`).toLocaleDateString("vi-VN")} đến {new Date(`${form.to}T12:00:00`).toLocaleDateString("vi-VN")}
+                  Chu kỳ KPI cố định:{" "}
+                  {new Date(`${form.from}T12:00:00`).toLocaleDateString("vi-VN")} đến{" "}
+                  {new Date(`${form.to}T12:00:00`).toLocaleDateString("vi-VN")}
                 </SoftTypography>
               </SoftBox>
             </Grid>
@@ -664,6 +690,21 @@ export function AssignKpiModal({ open, employee, kpi, onClose, onSaved }) {
                         isOptionEqualToValue={(option, value) =>
                           (option.id || option._id) === (value.id || value._id)
                         }
+                        renderOption={(props, product) => (
+                          <li {...props} key={product.id || product._id}>
+                            <SoftBox display="flex" alignItems="center" gap={1}>
+                              <EntityThumbnail entity={product} size={40} />
+                              <SoftBox>
+                                <SoftTypography variant="button" fontWeight="bold">
+                                  {product.name}
+                                </SoftTypography>
+                                <SoftTypography variant="caption" color="text" display="block">
+                                  {product.code} · {product.unit}
+                                </SoftTypography>
+                              </SoftBox>
+                            </SoftBox>
+                          </li>
+                        )}
                         renderInput={(params) => (
                           <TextField
                             {...params}

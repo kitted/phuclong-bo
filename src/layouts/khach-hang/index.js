@@ -240,6 +240,50 @@ const hasCustomerStorefront = (customer = {}) => {
       customer.storeImageUrl
   );
 };
+const customerStorefrontUrl = (customer = {}) => {
+  const image = customer.storefrontImage || {};
+  return (
+    image.url ||
+    image.secureUrl ||
+    image.secure_url ||
+    customer.storefrontImageUrl ||
+    customer.storeImageUrl ||
+    ""
+  );
+};
+const CustomerThumbnail = ({ customer, size = 42 }) => {
+  const imageUrl = customerStorefrontUrl(customer);
+  return imageUrl ? (
+    <img
+      src={imageUrl}
+      alt=""
+      width={size}
+      height={size}
+      style={{
+        width: size,
+        height: size,
+        objectFit: "cover",
+        borderRadius: "50%",
+        background: "#e7f3ff",
+        flexShrink: 0,
+      }}
+    />
+  ) : (
+    <SoftBox
+      width={size}
+      height={size}
+      borderRadius="50%"
+      bgcolor="#e7f3ff"
+      color="#1877f2"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      flexShrink={0}
+    >
+      <Icon>storefront</Icon>
+    </SoftBox>
+  );
+};
 const CustomerStoreTags = ({ customer }) => {
   const hasLocation = hasCustomerLocation(customer);
   const hasStorefront = hasCustomerStorefront(customer);
@@ -658,7 +702,8 @@ function DeletedCustomersModal({ open, onClose, onRestored }) {
         setMeta(response.data?.meta || payload?.meta || { totalPages: 1, totalItems: rows.length });
       })
       .catch((error) => {
-        if (active) toast.error(error.response?.data?.message || "Không thể tải thùng rác khách hàng");
+        if (active)
+          toast.error(error.response?.data?.message || "Không thể tải thùng rác khách hàng");
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -691,7 +736,9 @@ function DeletedCustomersModal({ open, onClose, onRestored }) {
       const restoreMeta = response.data?.meta || {};
       if (restoreMeta.codeRestored === false) {
         toast.warning(
-          `Đã khôi phục khách hàng nhưng mã ${restoreMeta.previousCode || "cũ"} đang được sử dụng. Khách hàng hiện chưa có mã.`
+          `Đã khôi phục khách hàng nhưng mã ${
+            restoreMeta.previousCode || "cũ"
+          } đang được sử dụng. Khách hàng hiện chưa có mã.`
         );
       } else {
         toast.success(
@@ -742,13 +789,30 @@ function DeletedCustomersModal({ open, onClose, onRestored }) {
           sx={{ borderBottom: "1px solid #e5eaf0" }}
         >
           <SoftBox display="flex" alignItems="center" gap={1.25} minWidth={0}>
-            <SoftBox width={42} height={42} borderRadius={2} bgcolor="#ffebee" color="#c62828" display="flex" alignItems="center" justifyContent="center"><Icon>delete_outline</Icon></SoftBox>
+            <SoftBox
+              width={42}
+              height={42}
+              borderRadius={2}
+              bgcolor="#ffebee"
+              color="#c62828"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+            >
+              <Icon>delete_outline</Icon>
+            </SoftBox>
             <SoftBox minWidth={0}>
-              <SoftTypography variant="h5" fontWeight="bold">Thùng rác khách hàng</SoftTypography>
-              <SoftTypography variant="caption" color="text">{meta.totalItems || items.length} hồ sơ đã xóa · có thể truy xuất và khôi phục</SoftTypography>
+              <SoftTypography variant="h5" fontWeight="bold">
+                Thùng rác khách hàng
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text">
+                {meta.totalItems || items.length} hồ sơ đã xóa · có thể truy xuất và khôi phục
+              </SoftTypography>
             </SoftBox>
           </SoftBox>
-          <IconButton onClick={onClose}><Icon>close</Icon></IconButton>
+          <IconButton onClick={onClose}>
+            <Icon>close</Icon>
+          </IconButton>
         </SoftBox>
 
         <SoftBox p={{ xs: 1.25, sm: 2 }} overflow="auto" flex={1}>
@@ -760,50 +824,162 @@ function DeletedCustomersModal({ open, onClose, onRestored }) {
           />
 
           {detail && (
-            <SoftBox mt={1.5} p={{ xs: 1.5, sm: 2 }} bgcolor="#fff" borderRadius={2.5} sx={{ border: "1px solid #dbe4ee" }}>
-              <SoftBox display="flex" justifyContent="space-between" alignItems="flex-start" gap={1}>
+            <SoftBox
+              mt={1.5}
+              p={{ xs: 1.5, sm: 2 }}
+              bgcolor="#fff"
+              borderRadius={2.5}
+              sx={{ border: "1px solid #dbe4ee" }}
+            >
+              <SoftBox
+                display="flex"
+                justifyContent="space-between"
+                alignItems="flex-start"
+                gap={1}
+              >
                 <SoftBox minWidth={0}>
-                  <SoftTypography variant="button" fontWeight="bold" display="block">{detail.name}</SoftTypography>
-                  <SoftTypography variant="caption" color="text">Mã trước khi xóa: {detail.deletedCode || detail.code || "Chưa có mã"}</SoftTypography>
+                  <SoftTypography variant="button" fontWeight="bold" display="block">
+                    {detail.name}
+                  </SoftTypography>
+                  <SoftTypography variant="caption" color="text">
+                    Mã trước khi xóa: {detail.deletedCode || detail.code || "Chưa có mã"}
+                  </SoftTypography>
                 </SoftBox>
-                <IconButton size="small" onClick={() => setDetail(null)}><Icon>close</Icon></IconButton>
+                <IconButton size="small" onClick={() => setDetail(null)}>
+                  <Icon>close</Icon>
+                </IconButton>
               </SoftBox>
-              {detailLoading ? <SoftTypography variant="caption">Đang tải chi tiết...</SoftTypography> : (
+              {detailLoading ? (
+                <SoftTypography variant="caption">Đang tải chi tiết...</SoftTypography>
+              ) : (
                 <Grid container spacing={1} mt={0.25}>
-                  <Grid item xs={12} sm={6}><SoftTypography variant="caption" color="text">Liên hệ</SoftTypography><SoftTypography variant="button" display="block">{detail.phone || "Không có số điện thoại"}{detail.email ? ` · ${detail.email}` : ""}</SoftTypography></Grid>
-                  <Grid item xs={12} sm={6}><SoftTypography variant="caption" color="text">Thời điểm xóa</SoftTypography><SoftTypography variant="button" display="block">{dateTime(detail.deletedAt || detail.updatedAt)}</SoftTypography></Grid>
-                  <Grid item xs={12}><SoftTypography variant="caption" color="text">Lý do xóa</SoftTypography><SoftTypography variant="button" display="block">{detail.deleteReason || detail.deletionReason || detail.deletedReason || "Không có ghi chú"}</SoftTypography></Grid>
+                  <Grid item xs={12} sm={6}>
+                    <SoftTypography variant="caption" color="text">
+                      Liên hệ
+                    </SoftTypography>
+                    <SoftTypography variant="button" display="block">
+                      {detail.phone || "Không có số điện thoại"}
+                      {detail.email ? ` · ${detail.email}` : ""}
+                    </SoftTypography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <SoftTypography variant="caption" color="text">
+                      Thời điểm xóa
+                    </SoftTypography>
+                    <SoftTypography variant="button" display="block">
+                      {dateTime(detail.deletedAt || detail.updatedAt)}
+                    </SoftTypography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <SoftTypography variant="caption" color="text">
+                      Lý do xóa
+                    </SoftTypography>
+                    <SoftTypography variant="button" display="block">
+                      {detail.deleteReason ||
+                        detail.deletionReason ||
+                        detail.deletedReason ||
+                        "Không có ghi chú"}
+                    </SoftTypography>
+                  </Grid>
                 </Grid>
               )}
-              <SoftButton color="success" variant="gradient" fullWidth sx={{ mt: 1.5, minHeight: 46 }} disabled={restoringId === (detail.id || detail._id)} onClick={() => restore(detail)} startIcon={<Icon>restore</Icon>}>
-                {restoringId === (detail.id || detail._id) ? "Đang khôi phục..." : "Khôi phục khách hàng này"}
+              <SoftButton
+                color="success"
+                variant="gradient"
+                fullWidth
+                sx={{ mt: 1.5, minHeight: 46 }}
+                disabled={restoringId === (detail.id || detail._id)}
+                onClick={() => restore(detail)}
+                startIcon={<Icon>restore</Icon>}
+              >
+                {restoringId === (detail.id || detail._id)
+                  ? "Đang khôi phục..."
+                  : "Khôi phục khách hàng này"}
               </SoftButton>
             </SoftBox>
           )}
 
-          <SoftBox mt={1.5} display="grid" gap={1} sx={{ gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" } }}>
+          <SoftBox
+            mt={1.5}
+            display="grid"
+            gap={1}
+            sx={{ gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" } }}
+          >
             {items.map((item) => {
               const id = item.id || item._id;
               return (
-                <SoftBox key={id} p={1.5} bgcolor="#fff" borderRadius={2.5} sx={{ border: "1px solid #e1e8f0" }}>
+                <SoftBox
+                  key={id}
+                  p={1.5}
+                  bgcolor="#fff"
+                  borderRadius={2.5}
+                  sx={{ border: "1px solid #e1e8f0" }}
+                >
                   <SoftBox display="flex" gap={1.25} alignItems="flex-start">
-                    <SoftBox width={40} height={40} borderRadius="50%" bgcolor="#f1f3f5" color="#78909c" display="flex" alignItems="center" justifyContent="center" flexShrink={0}><Icon>person_off</Icon></SoftBox>
+                    <SoftBox
+                      width={40}
+                      height={40}
+                      borderRadius="50%"
+                      bgcolor="#f1f3f5"
+                      color="#78909c"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      flexShrink={0}
+                    >
+                      <Icon>person_off</Icon>
+                    </SoftBox>
                     <SoftBox flex={1} minWidth={0}>
-                      <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>{item.name}</SoftTypography>
-                      <SoftTypography variant="caption" color="text" display="block">{item.deletedCode || item.code || "Chưa có mã"} · {item.phone || "Không có SĐT"}</SoftTypography>
-                      <SoftTypography variant="caption" color="text" display="block">Đã xóa: {dateTime(item.deletedAt || item.updatedAt)}</SoftTypography>
+                      <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
+                        {item.name}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text" display="block">
+                        {item.deletedCode || item.code || "Chưa có mã"} ·{" "}
+                        {item.phone || "Không có SĐT"}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text" display="block">
+                        Đã xóa: {dateTime(item.deletedAt || item.updatedAt)}
+                      </SoftTypography>
                     </SoftBox>
                   </SoftBox>
                   <SoftBox display="flex" gap={1} mt={1.25}>
-                    <SoftButton color="secondary" variant="outlined" fullWidth size="small" onClick={() => openDetail(item)}>Chi tiết</SoftButton>
-                    <SoftButton color="success" variant="outlined" fullWidth size="small" disabled={restoringId === id} onClick={() => restore(item)}>{restoringId === id ? "Đang khôi phục" : "Khôi phục"}</SoftButton>
+                    <SoftButton
+                      color="secondary"
+                      variant="outlined"
+                      fullWidth
+                      size="small"
+                      onClick={() => openDetail(item)}
+                    >
+                      Chi tiết
+                    </SoftButton>
+                    <SoftButton
+                      color="success"
+                      variant="outlined"
+                      fullWidth
+                      size="small"
+                      disabled={restoringId === id}
+                      onClick={() => restore(item)}
+                    >
+                      {restoringId === id ? "Đang khôi phục" : "Khôi phục"}
+                    </SoftButton>
                   </SoftBox>
                 </SoftBox>
               );
             })}
           </SoftBox>
-          {!loading && items.length === 0 && <SoftBox py={6} textAlign="center"><Icon sx={{ fontSize: 52, color: "#b0bec5" }}>delete_sweep</Icon><SoftTypography variant="button" color="text" display="block">Không có khách hàng đã xóa</SoftTypography></SoftBox>}
-          <MobileLoadMore loading={loading} hasMore={page < Number(meta.totalPages || 1)} onLoadMore={() => setPage((value) => value + 1)} />
+          {!loading && items.length === 0 && (
+            <SoftBox py={6} textAlign="center">
+              <Icon sx={{ fontSize: 52, color: "#b0bec5" }}>delete_sweep</Icon>
+              <SoftTypography variant="button" color="text" display="block">
+                Không có khách hàng đã xóa
+              </SoftTypography>
+            </SoftBox>
+          )}
+          <MobileLoadMore
+            loading={loading}
+            hasMore={page < Number(meta.totalPages || 1)}
+            onLoadMore={() => setPage((value) => value + 1)}
+          />
         </SoftBox>
       </SoftBox>
     </Modal>
@@ -917,19 +1093,7 @@ function CustomerDetail({
                 sx={{ border: "1px solid #dfe6ee" }}
               >
                 <SoftBox display="flex" alignItems="flex-start" gap={1.25}>
-                  <SoftBox
-                    width={46}
-                    height={46}
-                    borderRadius="50%"
-                    bgcolor="#e7f1ff"
-                    color="#1565c0"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    flexShrink={0}
-                  >
-                    <Icon>person</Icon>
-                  </SoftBox>
+                  <CustomerThumbnail customer={customer} size={46} />
                   <SoftBox flex={1} minWidth={0}>
                     <SoftTypography
                       variant="h6"
@@ -2193,19 +2357,7 @@ export default function KhachHang() {
                       }}
                     >
                       <SoftBox display="flex" alignItems="flex-start" gap={1}>
-                        <SoftBox
-                          width={42}
-                          height={42}
-                          borderRadius="50%"
-                          bgcolor="#e7f3ff"
-                          color="#1877f2"
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                          flexShrink={0}
-                        >
-                          <Icon>person</Icon>
-                        </SoftBox>
+                        <CustomerThumbnail customer={item} />
                         <SoftBox flex={1} minWidth={0}>
                           <SoftTypography
                             variant="button"
@@ -2341,19 +2493,24 @@ export default function KhachHang() {
                     return (
                       <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}>
                         <td style={{ padding: 10 }}>
-                          <SoftTypography variant="button" fontWeight="bold">
-                            {item.name}
-                          </SoftTypography>
-                          {item.code ? (
-                            <SoftTypography variant="caption" display="block" color="text">
-                              {item.code}
-                            </SoftTypography>
-                          ) : (
-                            <SoftBox mt={0.5}>
-                              <UnassignedCodeTag />
+                          <SoftBox display="flex" alignItems="flex-start" gap={1} minWidth={190}>
+                            <CustomerThumbnail customer={item} />
+                            <SoftBox minWidth={0}>
+                              <SoftTypography variant="button" fontWeight="bold">
+                                {item.name}
+                              </SoftTypography>
+                              {item.code ? (
+                                <SoftTypography variant="caption" display="block" color="text">
+                                  {item.code}
+                                </SoftTypography>
+                              ) : (
+                                <SoftBox mt={0.5}>
+                                  <UnassignedCodeTag />
+                                </SoftBox>
+                              )}
+                              <CustomerStoreTags customer={item} />
                             </SoftBox>
-                          )}
-                          <CustomerStoreTags customer={item} />
+                          </SoftBox>
                         </td>
                         <td style={{ padding: 10, fontSize: 13 }}>
                           {item.phone}

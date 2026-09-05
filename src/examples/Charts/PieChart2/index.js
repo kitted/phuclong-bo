@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 // porp-types is a library for typechecking of props
 import PropTypes from "prop-types";
 

@@ -29,9 +29,6 @@ import sidenavLogoLabel from "examples/Sidenav/styles/sidenav";
 // Soft UI Dashboard PRO React context
 import { useSoftUIController, setMiniSidenav } from "context";
 
-import brand1 from "assets/images/logoAstraea.png";
-import brand2 from "assets/images/logoAstraea2.png";
-
 function Sidenav({ color, routes, subTitle, brandName, user, ...rest }) {
   const [openCollapse, setOpenCollapse] = useState(false);
   const [openNestedCollapse, setOpenNestedCollapse] = useState(false);
@@ -89,7 +86,7 @@ function Sidenav({ color, routes, subTitle, brandName, user, ...rest }) {
   const renderCollapse = (collapses) =>
     collapses.map(({ name, collapse, route, href, key, hidden }) => {
       let returnValue;
-      if (hidden) return;
+      if (hidden) return null;
 
       if (collapse) {
         returnValue = (
@@ -226,14 +223,29 @@ function Sidenav({ color, routes, subTitle, brandName, user, ...rest }) {
           </SoftTypography>
         </SoftBox>
         {/* <div className="flex gap-5"> */}
-        <SoftBox component={NavLink} to="/" display="flex" alignItems="center" justifyContent="center">
+        <SoftBox
+          component={NavLink}
+          to="/"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+        >
           <SoftBox sx={(theme) => sidenavLogoLabel(theme, { miniSidenav })}>
             <div className="flex flex-col items-center">
-              <SoftTypography component="h6" variant="button" fontWeight="bold" sx={{ fontSize: miniSidenav ? 10 : 14, textAlign: "center", lineHeight: 1.2 }}>
+              <SoftTypography
+                component="h6"
+                variant="button"
+                fontWeight="bold"
+                sx={{ fontSize: miniSidenav ? 10 : 14, textAlign: "center", lineHeight: 1.2 }}
+              >
                 {miniSidenav ? "PL" : brandName || "Phúc Long"}
               </SoftTypography>
               {!miniSidenav && (
-                <SoftTypography component="span" variant="caption" sx={{ fontSize: 10, opacity: 0.7, textAlign: "center" }}>
+                <SoftTypography
+                  component="span"
+                  variant="caption"
+                  sx={{ fontSize: 10, opacity: 0.7, textAlign: "center" }}
+                >
                   {subTitle || "Quản lý Kho"}
                 </SoftTypography>
               )}

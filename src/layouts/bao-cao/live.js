@@ -11,6 +11,7 @@ import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
+import EntityThumbnail from "components/EntityThumbnail";
 import MobileLoadMore from "components/MobileLoadMore";
 import QuickSortBar from "components/QuickSortBar";
 import { ReportsService } from "services/analyticsService";
@@ -227,11 +228,24 @@ function GenericTable({ rows }) {
               key={row.id || row.productId || row.employeeId || index}
               style={{ borderBottom: "1px solid #eee" }}
             >
-              {keys.map((key) => (
-                <td key={key} style={{ padding: 10, fontSize: 13, whiteSpace: "nowrap" }}>
-                  {typeof row[key] === "number" ? format(key, row[key]) : String(row[key] ?? "—")}
-                </td>
-              ))}
+              {keys.map((key) => {
+                const nameCell = /^(productName|customerName|name)$/i.test(key);
+                const entityType = row.customerId || /customer/i.test(key) ? "customer" : "product";
+                return (
+                  <td key={key} style={{ padding: 10, fontSize: 13, whiteSpace: "nowrap" }}>
+                    {nameCell ? (
+                      <SoftBox display="flex" alignItems="center" gap={0.75}>
+                        <EntityThumbnail entity={row} type={entityType} size={34} />
+                        <span>{String(row[key] ?? "—")}</span>
+                      </SoftBox>
+                    ) : typeof row[key] === "number" ? (
+                      format(key, row[key])
+                    ) : (
+                      String(row[key] ?? "—")
+                    )}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
@@ -284,14 +298,19 @@ function CustomerActivityTable({ rows = [] }) {
               >
                 <td style={{ padding: 12, fontSize: 13 }}>{row.rowNumber || index + 1}</td>
                 <td style={{ padding: 12, minWidth: 270 }}>
-                  <SoftTypography variant="button" fontWeight="bold" display="block">
-                    {[row.customerCode || "Chưa có mã", row.customerName || row.name]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </SoftTypography>
-                  <SoftTypography variant="caption" color="text">
-                    {row.phone || row.customerPhone || "Chưa có số điện thoại"}
-                  </SoftTypography>
+                  <SoftBox display="flex" alignItems="center" gap={1}>
+                    <EntityThumbnail entity={row} type="customer" size={40} />
+                    <SoftBox minWidth={0}>
+                      <SoftTypography variant="button" fontWeight="bold" display="block">
+                        {[row.customerCode || "Chưa có mã", row.customerName || row.name]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        {row.phone || row.customerPhone || "Chưa có số điện thoại"}
+                      </SoftTypography>
+                    </SoftBox>
+                  </SoftBox>
                 </td>
                 <td style={{ padding: 12 }}>
                   <SoftBox

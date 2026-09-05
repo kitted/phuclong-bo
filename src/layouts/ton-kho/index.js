@@ -15,6 +15,7 @@ import { toast } from "react-toastify";
 import WarehouseStockCheckPanel from "./WarehouseStockCheckPanel";
 import MobileLoadMore from "components/MobileLoadMore";
 import { mergeUniqueItems } from "utils/infiniteList";
+import EntityThumbnail, { productImageUrl } from "components/EntityThumbnail";
 
 const PAGE_SIZE = 20;
 
@@ -59,6 +60,7 @@ const normalizeItem = (item) => {
     productId,
     productCode: item.productCode || product.code || item.code || "—",
     productName: item.productName || product.name || item.name || "—",
+    imageUrl: productImageUrl(item),
     categoryName:
       (typeof rawCategory === "object" ? rawCategory?.name : undefined) || item.categoryName || "—",
     unit: item.unit || product.unit || "—",
@@ -148,10 +150,13 @@ function InventoryDetailModal({ productId, open, onClose }) {
           </SoftTypography>
         ) : (
           <>
-            <SoftTypography variant="h6" fontWeight="bold">
-              {product.code || product.productCode || "—"} ·{" "}
-              {product.name || product.productName || "—"}
-            </SoftTypography>
+            <SoftBox display="flex" alignItems="center" gap={1}>
+              <EntityThumbnail entity={product} size={44} />
+              <SoftTypography variant="h6" fontWeight="bold">
+                {product.code || product.productCode || "—"} ·{" "}
+                {product.name || product.productName || "—"}
+              </SoftTypography>
+            </SoftBox>
             <SoftBox display="flex" gap={3} flexWrap="wrap" my={2}>
               <SoftTypography variant="button">
                 Trong kho: <b>{detail?.warehouseQuantity ?? product.warehouseQuantity ?? 0}</b>
@@ -364,7 +369,13 @@ function TonKho() {
             ["Hết hàng", outOfStock, "remove_shopping_cart", "#FFEBEE", "#C62828"],
           ].map(([label, value, icon, bg, color]) => (
             <Card className="admin-summary-card" key={label} sx={{ flex: 1, minWidth: 180 }}>
-              <SoftBox className="admin-summary-content" p={2.5} display="flex" alignItems="center" gap={2}>
+              <SoftBox
+                className="admin-summary-content"
+                p={2.5}
+                display="flex"
+                alignItems="center"
+                gap={2}
+              >
                 <SoftBox
                   sx={{
                     width: 44,
@@ -590,7 +601,12 @@ function TonKho() {
                           >
                             {item.productCode}
                           </td>
-                          <td style={{ padding: "10px 12px", fontSize: 13 }}>{item.productName}</td>
+                          <td style={{ padding: "10px 12px", fontSize: 13 }}>
+                            <SoftBox display="flex" alignItems="center" gap={1} minWidth={180}>
+                              <EntityThumbnail entity={item} size={38} />
+                              <span>{item.productName}</span>
+                            </SoftBox>
+                          </td>
                           <td style={{ padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>
                             {item.categoryName}
                           </td>

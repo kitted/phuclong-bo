@@ -12,7 +12,6 @@ import { Doughnut } from "react-chartjs-2";
 // @mui material components
 import Card from "@mui/material/Card";
 import Tooltip from "@mui/material/Tooltip";
-import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
 
 // Soft UI Dashboard PRO React components
@@ -101,14 +100,14 @@ function ComplexReportsDoughnutChart({ title, chart, tooltip, action }) {
         }}
       >
         <SoftBox display="flex" width="100%">
-          {useMemo(() => renderItems, [chart])}
+          {useMemo(() => renderItems, [renderItems])}
         </SoftBox>
         <SoftBox display="flex" alignItems="center" justifyContent="center" width="50%" mt={3}>
           {useMemo(
             () => (
               <Doughnut data={data} options={options} />
             ),
-            [chart]
+            [data, options]
           )}
         </SoftBox>
         {renderButton()}

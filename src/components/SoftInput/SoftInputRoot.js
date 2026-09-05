@@ -3,7 +3,6 @@ import InputBase from "@mui/material/InputBase";
 import { styled } from "@mui/material/styles";
 
 export default styled(InputBase)(({ theme, ownerState, ...rest }) => {
-  const { textAlign } = rest;
   const { palette, boxShadows, functions, typography, borders } = theme;
   const { size, error, success, iconDirection, direction, disabled } = ownerState;
 

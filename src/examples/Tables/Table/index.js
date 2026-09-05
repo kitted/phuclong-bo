@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 // prop-types is a library for typechecking of props
 import PropTypes from "prop-types";
 
@@ -114,18 +112,15 @@ function Table({ columns, rows }) {
     return <TableRow key={rowKey}>{tableRow}</TableRow>;
   });
 
-  return useMemo(
-    () => (
-      <TableContainer>
-        <MuiTable>
-          <SoftBox component="thead">
-            <TableRow>{renderColumns}</TableRow>
-          </SoftBox>
-          <TableBody>{renderRows}</TableBody>
-        </MuiTable>
-      </TableContainer>
-    ),
-    [columns, rows]
+  return (
+    <TableContainer>
+      <MuiTable>
+        <SoftBox component="thead">
+          <TableRow>{renderColumns}</TableRow>
+        </SoftBox>
+        <TableBody>{renderRows}</TableBody>
+      </MuiTable>
+    </TableContainer>
   );
 }
 

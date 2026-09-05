@@ -34,7 +34,7 @@ function ThinBarChart({ color, title, height, chart }) {
             <Bar data={data} options={options} />
           </SoftBox>
         ),
-        [chart, height]
+        [data, height, options]
       )}
     </SoftBox>
   );

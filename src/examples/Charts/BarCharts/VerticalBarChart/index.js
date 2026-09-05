@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 // porp-types is a library for typechecking of props
 import PropTypes from "prop-types";
@@ -46,7 +46,7 @@ function VerticalBarChart({ title, description, height, chart, chartTwo }) {
       }))
     : [];
 
-  const { data, options } = configs(chart.labels || [], chartDatasets);
+  const { data } = configs(chart.labels || [], chartDatasets);
 
   function getWindowDimensions() {
     const { innerWidth: width, innerHeight: height } = window;

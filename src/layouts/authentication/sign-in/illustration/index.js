@@ -1,28 +1,20 @@
 import { useState } from "react";
 
 // react-router-dom components
-import { Link, useRoutes, useNavigate } from "react-router-dom";
-
-// @mui material components
-import Switch from "@mui/material/Switch";
+import { useNavigate } from "react-router-dom";
 
 // Soft UI Dashboard PRO React components
 import SoftBox from "components/SoftBox";
-import SoftTypography from "components/SoftTypography";
 import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
-import brand from "assets/images/astraeaLogo.png";
 
 // Authentication layout components
 import IllustrationLayout from "layouts/authentication/components/IllustrationLayout";
 
-// Image
-import chat from "assets/images/illustrations/chat.png";
 import { AuthService } from "services/authService";
 import { useDispatch } from "react-redux";
 import { updateUser } from "redux/slice/authSlice";
 function Illustration() {
-  const [rememberMe, setRememberMe] = useState(false);
   const [data, setData] = useState({
     username: "",
     password: "",
@@ -31,8 +23,6 @@ function Illustration() {
   const [loading, setLoading] = useState(false);
   const dispatch = useDispatch();
   const navigate = useNavigate();
-
-  const handleSetRememberMe = () => setRememberMe(!rememberMe);
 
   const handleChangValue = (e) => {
     const { name, value } = e.target;
@@ -80,35 +70,35 @@ function Illustration() {
 
   return (
     <IllustrationLayout
-          title="Đăng nhập"
-          description={
-            err ? <p style={{ color: "red" }}>{err}</p> : "Nhập tài khoản và mật khẩu để tiếp tục"
-          }
-          illustration={{
-            title: "Phúc Long",
-            description: "Hệ thống Quản lý Kho",
-          }}
-        >
-          <SoftBox component="form" role="form">
-            <SoftBox mb={2}>
-              <SoftInput
-                type="text"
-                name="username"
-                placeholder="Số điện thoại hoặc email"
-                size="large"
-                onChange={handleChangValue}
-              />
-            </SoftBox>
-            <SoftBox mb={2}>
-              <SoftInput
-                type="password"
-                name="password"
-                placeholder="Mật khẩu"
-                size="large"
-                onChange={handleChangValue}
-              />
-            </SoftBox>
-            {/* <SoftBox display="flex" alignItems="center">
+      title="Đăng nhập"
+      description={
+        err ? <p style={{ color: "red" }}>{err}</p> : "Nhập tài khoản và mật khẩu để tiếp tục"
+      }
+      illustration={{
+        title: "Phúc Long",
+        description: "Hệ thống Quản lý Kho",
+      }}
+    >
+      <SoftBox component="form" role="form">
+        <SoftBox mb={2}>
+          <SoftInput
+            type="text"
+            name="username"
+            placeholder="Số điện thoại hoặc email"
+            size="large"
+            onChange={handleChangValue}
+          />
+        </SoftBox>
+        <SoftBox mb={2}>
+          <SoftInput
+            type="password"
+            name="password"
+            placeholder="Mật khẩu"
+            size="large"
+            onChange={handleChangValue}
+          />
+        </SoftBox>
+        {/* <SoftBox display="flex" alignItems="center">
           <Switch checked={rememberMe} onChange={handleSetRememberMe} />
           <SoftTypography
             variant="button"
@@ -119,18 +109,12 @@ function Illustration() {
             &nbsp;&nbsp;Remember me
           </SoftTypography>
         </SoftBox> */}
-            <SoftBox mt={4} mb={1}>
-              <SoftButton
-                onClick={handleSubmit}
-                variant="gradient"
-                color="info"
-                size="large"
-                fullWidth
-              >
-                {loading ? "Loading..." : "Đăng Nhập"}
-              </SoftButton>
-            </SoftBox>
-            {/* <SoftBox mt={3} textAlign="center">
+        <SoftBox mt={4} mb={1}>
+          <SoftButton onClick={handleSubmit} variant="gradient" color="info" size="large" fullWidth>
+            {loading ? "Loading..." : "Đăng Nhập"}
+          </SoftButton>
+        </SoftBox>
+        {/* <SoftBox mt={3} textAlign="center">
           <SoftTypography variant="button" color="text" fontWeight="regular">
             Don&apos;t have an account?{" "}
             <SoftTypography
@@ -145,7 +129,7 @@ function Illustration() {
             </SoftTypography>
           </SoftTypography>
         </SoftBox> */}
-          </SoftBox>
+      </SoftBox>
     </IllustrationLayout>
   );
 }

@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 // porp-types is a library for typechecking of props
 import PropTypes from "prop-types";
 
@@ -7,17 +5,11 @@ import PropTypes from "prop-types";
 import { Bar } from "react-chartjs-2";
 
 // @mui material components
-import Card from "@mui/material/Card";
-
 // Soft UI Dashboard PRO React components
 import SoftBox from "components/SoftBox";
-import SoftTypography from "components/SoftTypography";
 
 // HorizontalBarChart configurations
 import configs from "examples/Charts/BarCharts/HorizontalBarChartCustom/configs";
-
-// Soft UI Dashboard PRO React base styles
-import colors from "assets/theme/base/colors";
 
 import "chartjs-plugin-datalabels";
 // import Issues from "../components/Issues";

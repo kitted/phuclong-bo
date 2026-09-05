@@ -19,7 +19,7 @@ function BasicSwitches(props) {
         </SoftTypography>
       </div>
       <div className="switches_box">
-        <Switch {...label} onChange={onChange} checked={value} />
+        <Switch {...label} {...rest} onChange={onChange} checked={value} />
       </div>
     </div>
   );

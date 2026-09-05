@@ -36,6 +36,7 @@ import { downloadBlob } from "utils/excel";
 import { mergeUniqueItems } from "utils/infiniteList";
 import CustomerReturnModal, { InvoiceBusinessTypeSwitch } from "./customer-return-form";
 import CustomerReturnService from "services/customerReturnService";
+import EntityThumbnail from "components/EntityThumbnail";
 
 const money = (value = 0) =>
   new Intl.NumberFormat("vi-VN", {
@@ -190,6 +191,7 @@ const customerReturnToInvoice = (document = {}) => {
         name: document.customerName,
         phone: document.customerPhone,
         address: document.customerAddress,
+        storefrontImage: document.storefrontImage,
       },
     salespersonName:
       document.createdByName || document.employeeName || document.salespersonName || "",
@@ -332,6 +334,7 @@ const invoiceCustomer = (invoice = {}) => {
     name,
     phone,
     label: code ? `${code} · ${name}` : isUnassigned ? `Chưa có mã · ${name}` : name,
+    entity: { ...legacyCustomer, ...snapshot, ...populatedCustomer },
   };
 };
 
@@ -415,6 +418,8 @@ function SearchSelect({
   large = false,
   disableClearable = false,
   dismissKeyboardOnSelect = false,
+  showProductImage = false,
+  thumbnailUrl,
 }) {
   return (
     <Autocomplete
@@ -486,6 +491,55 @@ function SearchSelect({
             }
           : undefined
       }
+      renderOption={(props, option) => (
+        <li {...props} key={getId(option) || option.code || option.name}>
+          <SoftBox display="flex" alignItems="center" gap={1.25} minWidth={0} width="100%">
+            {(showProductImage || thumbnailUrl) && (thumbnailUrl?.(option) || option?.imageUrl) ? (
+              <img
+                src={thumbnailUrl?.(option) || option.imageUrl}
+                alt=""
+                width="42"
+                height="42"
+                style={{
+                  borderRadius: 9,
+                  objectFit: "cover",
+                  background: "#eef2f6",
+                  flexShrink: 0,
+                }}
+              />
+            ) : showProductImage || thumbnailUrl ? (
+              <SoftBox
+                width={42}
+                height={42}
+                borderRadius={1.5}
+                bgcolor="#eef2f6"
+                color="#7b8794"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                flexShrink={0}
+              >
+                <Icon>inventory_2</Icon>
+              </SoftBox>
+            ) : null}
+            <SoftBox minWidth={0} flex={1}>
+              <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
+                {option?.name || label(option)}
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text" display="block" noWrap>
+                {showProductImage
+                  ? [
+                      option?.code,
+                      option?.unit && `Tồn ${numberText(stockOf(option))} ${option.unit}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : label(option)}
+              </SoftTypography>
+            </SoftBox>
+          </SoftBox>
+        </li>
+      )}
       renderInput={(params) => <TextField {...params} size="small" placeholder={placeholder} />}
     />
   );
@@ -1342,7 +1396,18 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                     display="block"
                     mt={0.75}
                   >
-                    {gift.product?.name || "Sản phẩm quà"} × {numberText(gift.qty)}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      {gift.product?.imageUrl && (
+                        <img
+                          src={gift.product.imageUrl}
+                          alt=""
+                          width="28"
+                          height="28"
+                          style={{ borderRadius: 6, objectFit: "cover" }}
+                        />
+                      )}
+                      {gift.product?.name || "Sản phẩm quà"} × {numberText(gift.qty)}
+                    </span>
                   </SoftTypography>
                 ))}
               </SoftBox>
@@ -1899,6 +1964,12 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                           disabled={Boolean(customer)}
                           disableClearable
                           large
+                          thumbnailUrl={(item) =>
+                            item.storefrontImage?.url ||
+                            item.storefrontImage?.secureUrl ||
+                            item.storefrontImageUrl ||
+                            item.storeImageUrl
+                          }
                         />
                       </SoftBox>
                       {customer && (
@@ -1945,6 +2016,37 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                         </Tooltip>
                       )}
                     </SoftBox>
+                    {customer && (
+                      <SoftBox
+                        display="flex"
+                        alignItems="center"
+                        gap={1}
+                        mt={1}
+                        p={0.75}
+                        borderRadius={1.5}
+                        bgcolor="#f7f9fc"
+                      >
+                        <img
+                          src={
+                            customer.storefrontImage?.url ||
+                            customer.storefrontImage?.secureUrl ||
+                            customer.storefrontImageUrl ||
+                            customer.storeImageUrl ||
+                            "/favicon.ico"
+                          }
+                          alt=""
+                          width="38"
+                          height="38"
+                          style={{ borderRadius: 8, objectFit: "cover", background: "#e7f3ff" }}
+                          onError={(event) => {
+                            event.currentTarget.style.visibility = "hidden";
+                          }}
+                        />
+                        <SoftTypography variant="caption" color="text">
+                          Ảnh cửa tiệm của {customer.name || "khách hàng"}
+                        </SoftTypography>
+                      </SoftBox>
+                    )}
                     {customer && (
                       <SoftTypography variant="caption" color="text" display="block" mt={0.5}>
                         Bấm nút xóa bên cạnh nếu muốn chọn khách hàng khác.
@@ -2367,18 +2469,28 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                   <SoftBox sx={{ flex: 3 }}>
                     {!isAdmin && (
                       <SoftBox display="flex" alignItems="center" gap={1} mb={1}>
-                        <SoftBox
-                          width={36}
-                          height={36}
-                          borderRadius={1.5}
-                          bgcolor={item.product ? "#1976d2" : "#e9eff5"}
-                          color={item.product ? "#fff" : "#607d8b"}
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <Icon>shopping_cart</Icon>
-                        </SoftBox>
+                        {item.product?.imageUrl ? (
+                          <img
+                            src={item.product.imageUrl}
+                            alt=""
+                            width="42"
+                            height="42"
+                            style={{ borderRadius: 10, objectFit: "cover", background: "#eef2f6" }}
+                          />
+                        ) : (
+                          <SoftBox
+                            width={36}
+                            height={36}
+                            borderRadius={1.5}
+                            bgcolor={item.product ? "#1976d2" : "#e9eff5"}
+                            color={item.product ? "#fff" : "#607d8b"}
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            <Icon>shopping_cart</Icon>
+                          </SoftBox>
+                        )}
                         <SoftBox flex={1}>
                           <SoftTypography
                             variant="button"
@@ -2419,6 +2531,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                         setProductOptionsRefresh((value) => value + 1);
                       }}
                       placeholder="Tìm mã, tên hoặc barcode..."
+                      showProductImage
                       label={(product) =>
                         `${product.name || "Sản phẩm"} · Tồn ${numberText(stockOf(product))} ${
                           product.unit || ""
@@ -2674,18 +2787,28 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                   >
                     <SoftBox flex={1} minWidth={0}>
                       <SoftBox display="flex" alignItems="center" gap={1} mb={1}>
-                        <SoftBox
-                          width={36}
-                          height={36}
-                          borderRadius={1.5}
-                          bgcolor={gift.product ? "#2196f3" : "#e3f2fd"}
-                          color={gift.product ? "#fff" : "#1976d2"}
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <Icon>card_giftcard</Icon>
-                        </SoftBox>
+                        {gift.product?.imageUrl ? (
+                          <img
+                            src={gift.product.imageUrl}
+                            alt=""
+                            width="42"
+                            height="42"
+                            style={{ borderRadius: 10, objectFit: "cover", background: "#eef2f6" }}
+                          />
+                        ) : (
+                          <SoftBox
+                            width={36}
+                            height={36}
+                            borderRadius={1.5}
+                            bgcolor={gift.product ? "#2196f3" : "#e3f2fd"}
+                            color={gift.product ? "#fff" : "#1976d2"}
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            <Icon>card_giftcard</Icon>
+                          </SoftBox>
+                        )}
                         <SoftBox flex={1}>
                           <SoftTypography
                             variant="button"
@@ -2727,6 +2850,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                           setGiftOptionsRefresh((value) => value + 1);
                         }}
                         placeholder="Tìm sản phẩm làm quà..."
+                        showProductImage
                         label={(product) =>
                           `${product.name || "Sản phẩm"} · Tồn ${numberText(stockOf(product))} ${
                             product.unit || ""
@@ -3823,9 +3947,12 @@ function InvoicePaperView({ invoice }) {
         }}
       >
         <SoftBox>
-          <SoftTypography component="p">
-            Khách hàng: <b>{customerName}</b>
-          </SoftTypography>
+          <SoftBox display="flex" alignItems="center" gap={1} mb={0.5}>
+            <EntityThumbnail entity={customer} type="customer" size={36} />
+            <SoftTypography component="p">
+              Khách hàng: <b>{customerName}</b>
+            </SoftTypography>
+          </SoftBox>
           <SoftTypography component="p">Địa chỉ: {customerAddress}</SoftTypography>
         </SoftBox>
         <SoftBox>
@@ -3896,9 +4023,16 @@ function InvoicePaperView({ invoice }) {
                     <tr key={`${getId(item.productId) || item.productId}-${index}`}>
                       <td className="center">{index + 1}</td>
                       <td className="left">
-                        {item.productName || item.productId?.name || "Sản phẩm"}
-                        {gift && <b style={{ color: "#1565c0", fontSize: 11 }}> (QUÀ TẶNG)</b>}
-                        {returned && <b style={{ color: "#c62828", fontSize: 11 }}> (HÀNG HOÀN)</b>}
+                        <SoftBox display="flex" alignItems="center" gap={0.75}>
+                          <EntityThumbnail entity={item} size={30} />
+                          <span>
+                            {item.productName || item.productId?.name || "Sản phẩm"}
+                            {gift && <b style={{ color: "#1565c0", fontSize: 11 }}> (QUÀ TẶNG)</b>}
+                            {returned && (
+                              <b style={{ color: "#c62828", fontSize: 11 }}> (HÀNG HOÀN)</b>
+                            )}
+                          </span>
+                        </SoftBox>
                       </td>
                       <td className="center">{item.unit || item.productId?.unit || ""}</td>
                       <td className="number">{numberText(item.qty)}</td>
@@ -4704,43 +4838,7 @@ export default function HoaDon() {
                         }),
                       }}
                     >
-                      <SoftBox
-                        width={44}
-                        height={44}
-                        borderRadius="50%"
-                        bgcolor={
-                          isReversed
-                            ? "#ffebee"
-                            : customerReturnDocument
-                            ? "#fff3e0"
-                            : debtPaymentDocument
-                            ? "#e8f5e9"
-                            : "#e7f3ff"
-                        }
-                        color={
-                          isReversed
-                            ? "#c62828"
-                            : customerReturnDocument
-                            ? "#e65100"
-                            : debtPaymentDocument
-                            ? "#2e7d32"
-                            : "#1877f2"
-                        }
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        flexShrink={0}
-                      >
-                        <Icon>
-                          {isReversed
-                            ? "undo"
-                            : customerReturnDocument
-                            ? "assignment_return"
-                            : debtPaymentDocument
-                            ? "payments"
-                            : "receipt"}
-                        </Icon>
-                      </SoftBox>
+                      <EntityThumbnail entity={customerInfo.entity} type="customer" size={44} />
                       <SoftBox flex={1} minWidth={0}>
                         <SoftBox
                           display="flex"
@@ -4947,9 +5045,20 @@ export default function HoaDon() {
                           {dateTime(documentOccurredAt(invoice))}
                         </td>
                         <td style={{ padding: 12, fontSize: 13 }}>
-                          {invoiceCustomer(invoice).label}
-                          <br />
-                          <span style={{ color: "#6B7280" }}>{invoiceCustomer(invoice).phone}</span>
+                          <SoftBox display="flex" alignItems="center" gap={1} minWidth={190}>
+                            <EntityThumbnail
+                              entity={invoiceCustomer(invoice).entity}
+                              type="customer"
+                              size={38}
+                            />
+                            <SoftBox>
+                              {invoiceCustomer(invoice).label}
+                              <br />
+                              <span style={{ color: "#6B7280" }}>
+                                {invoiceCustomer(invoice).phone}
+                              </span>
+                            </SoftBox>
+                          </SoftBox>
                         </td>
                         <td style={{ padding: 12, fontSize: 13 }}>
                           {invoice.salespersonName ||

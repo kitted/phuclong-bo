@@ -14,6 +14,7 @@ import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
 import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
+import EntityThumbnail from "components/EntityThumbnail";
 
 import {
   ProductService,
@@ -62,6 +63,8 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
+  const [imageFile, setImageFile] = useState(null);
+  const imageInputRef = useRef(null);
 
   // Đồng bộ dữ liệu vào form khi mở Modal
   useEffect(() => {
@@ -80,6 +83,7 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
     } else {
       setForm(EMPTY_FORM);
     }
+    setImageFile(null);
   }, [product, open]);
 
   // Load danh sách nhà cung cấp
@@ -118,20 +122,29 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
       };
 
       const productId = product?.id || product?._id;
+      let saved;
       if (productId) {
-        await ProductService.update(productId, payload);
+        saved = await ProductService.update(productId, payload);
         toast.success("Cập nhật thành công");
       } else {
-        await ProductService.create(payload);
+        saved = await ProductService.create(payload);
         toast.success("Thêm sản phẩm thành công");
       }
+      const savedProduct = saved?.data?.data || saved?.data || saved;
+      if (imageFile)
+        await ProductService.uploadImage(
+          productId || savedProduct?.id || savedProduct?._id,
+          imageFile
+        );
 
       onSaved();
       onClose();
     } catch (e) {
       console.error(e);
       const message = e?.response?.data?.message;
-      toast.error(Array.isArray(message) ? message.join(" · ") : message || "Không thể lưu sản phẩm");
+      toast.error(
+        Array.isArray(message) ? message.join(" · ") : message || "Không thể lưu sản phẩm"
+      );
     } finally {
       setLoading(false);
     }
@@ -158,6 +171,43 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
           {product?.id || product?._id ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới"}
         </SoftTypography>
         <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <SoftTypography variant="caption" fontWeight="medium">
+              Ảnh minh họa
+            </SoftTypography>
+            <SoftBox display="flex" alignItems="center" gap={1} mt={0.5}>
+              {(imageFile || product?.imageUrl) && (
+                <img
+                  src={imageFile ? URL.createObjectURL(imageFile) : product.imageUrl}
+                  alt=""
+                  width="54"
+                  height="54"
+                  style={{ borderRadius: 10, objectFit: "cover", background: "#f1f3f5" }}
+                />
+              )}
+              <input
+                hidden
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => setImageFile(event.target.files?.[0] || null)}
+              />
+              <SoftButton
+                size="small"
+                variant="outlined"
+                color="info"
+                onClick={() => imageInputRef.current?.click()}
+              >
+                <Icon>photo_camera</Icon>&nbsp;Tải ảnh
+              </SoftButton>
+            </SoftBox>
+            {product?.websiteProductId && (
+              <SoftTypography variant="caption" color="text" display="block" mt={0.5}>
+                Ảnh tải từ quản trị luôn được ưu tiên; nếu chưa tải, hệ thống dùng ảnh của sản phẩm
+                website đã liên kết.
+              </SoftTypography>
+            )}
+          </Grid>
           <Grid item xs={12}>
             <SoftTypography variant="caption" fontWeight="medium">
               Tên sản phẩm *
@@ -589,7 +639,12 @@ function HangHoa() {
                           >
                             {p.code}
                           </td>
-                          <td style={{ padding: "10px 12px", fontSize: 13 }}>{p.name}</td>
+                          <td style={{ padding: "10px 12px", fontSize: 13 }}>
+                            <SoftBox display="flex" alignItems="center" gap={1}>
+                              <EntityThumbnail entity={p} size={36} />
+                              <SoftBox>{p.name}</SoftBox>
+                            </SoftBox>
+                          </td>
                           <td style={{ padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>
                             {catName}
                           </td>

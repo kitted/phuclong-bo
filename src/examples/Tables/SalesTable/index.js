@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 // prop-types is a library for typechecking of props
 import PropTypes from "prop-types";
 
@@ -56,7 +54,7 @@ function SalesTable({ title, rows }) {
             </SoftTypography>
           </SoftBox>
         </TableHead>
-        <TableBody>{useMemo(() => renderTableCells, [rows])}</TableBody>
+        <TableBody>{renderTableCells}</TableBody>
       </Table>
     </TableContainer>
   );

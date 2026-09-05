@@ -11,7 +11,7 @@ import boxShadow from "assets/theme/functions/boxShadow";
 // @emotion/react components
 import { keyframes } from "@emotion/react";
 
-export default (selectSize, selectError, selectSuccess) => {
+const softSelectStyles = (selectSize, selectError, selectSuccess) => {
   const { dark, white, text, light, inputColors, gradients, transparent } = colors;
   const { size, fontWeightRegular } = typography;
   const { borderWidth, borderRadius } = borders;
@@ -219,3 +219,5 @@ export default (selectSize, selectError, selectSuccess) => {
     }),
   };
 };
+
+export default softSelectStyles;

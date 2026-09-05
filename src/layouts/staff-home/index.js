@@ -26,6 +26,7 @@ import StaffAccountMenu from "components/StaffAccountMenu";
 import NotificationCenter from "components/NotificationCenter";
 import QuickCustomerLocation from "./quick-customer-location";
 import QuickNoteService from "services/quickNoteService";
+import EntityThumbnail from "components/EntityThumbnail";
 
 const CustomerRouteMap = lazy(() => import("./customer-route-map"));
 
@@ -87,7 +88,12 @@ const invoiceCustomer = (invoice = {}) => {
     invoice.customerName ||
     (typeof invoice.customer === "string" ? invoice.customer : "") ||
     "Khách lẻ";
-  return { code, name, label: code ? `${code} · ${name}` : name };
+  return {
+    code,
+    name,
+    label: code ? `${code} · ${name}` : name,
+    entity: { ...legacyCustomer, ...snapshot, ...populatedCustomer },
+  };
 };
 const invoiceReceivedAmount = (invoice = {}) =>
   Number(invoice.receivedAmount ?? invoice.totalReceivedAmount ?? invoice.paidAmount ?? 0);
@@ -974,19 +980,7 @@ export default function StaffHome() {
                     navigate(`/hoa-don?search=${encodeURIComponent(invoice.code || "")}`)
                   }
                 >
-                  <SoftBox
-                    width={42}
-                    height={42}
-                    borderRadius="50%"
-                    bgcolor="#e7f3ff"
-                    color="#1877f2"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    flexShrink={0}
-                  >
-                    <Icon>receipt</Icon>
-                  </SoftBox>
+                  <EntityThumbnail entity={customer.entity} type="customer" size={42} />
                   <SoftBox flex={1} minWidth={0}>
                     <SoftTypography variant="button" fontWeight="bold" display="block" noWrap>
                       {invoice.code || "Hóa đơn"} · {customer.label}

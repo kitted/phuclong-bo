@@ -2,8 +2,6 @@
 import PropTypes from "prop-types";
 
 // @mui material components
-import Checkbox from "@mui/material/Checkbox";
-
 // Soft UI Dashboard PRO React components
 import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";

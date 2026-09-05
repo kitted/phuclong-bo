@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 // porp-types is a library for typechecking of props
 import PropTypes from "prop-types";
@@ -12,12 +12,6 @@ import Card from "@mui/material/Card";
 // Soft UI Dashboard PRO React components
 import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
-
-// VerticalBarChart configurations
-import configs from "examples/Charts/BarCharts/VerticalBarChart/configs";
-
-// Soft UI Dashboard PRO React base styles
-import colors from "assets/theme/base/colors";
 
 import {
   Chart as ChartJS,
@@ -64,7 +58,7 @@ function StackedVerticalBarChart({ title, description, height, chart }) {
     }
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [getWindowDimensions()]);
+  }, []);
 
   const renderChart = (
     <SoftBox p={2}>

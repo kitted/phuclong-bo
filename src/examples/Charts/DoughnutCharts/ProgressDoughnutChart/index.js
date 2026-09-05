@@ -86,7 +86,7 @@ function ProgressDoughnutChart({ color, icon, title, count, height, chart }) {
               <Doughnut data={data} options={options} sx={{ height }} />
             </SoftBox>
           ),
-          [chart, height]
+          [data, height, options]
         )}
       </SoftBox>
     </Card>

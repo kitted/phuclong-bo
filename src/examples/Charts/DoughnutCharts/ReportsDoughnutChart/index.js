@@ -82,7 +82,7 @@ function ReportsDoughnutChart({ title, count, chart, tooltip }) {
               </Grid>
             </Grid>
           ),
-          [chart]
+          [count.number, count.text, data, options, renderItems]
         )}
       </SoftBox>
     </Card>
