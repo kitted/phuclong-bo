@@ -26,6 +26,10 @@ import { downloadBlob, exportExcel, readExcelFile } from "utils/excel";
 
 const fmtCurrency = (n) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n || 0);
+const priceValue = (value) => {
+  const normalized = String(value ?? "").replace(/[^0-9]/g, "");
+  return normalized === "" ? 0 : Number(normalized);
+};
 
 const EMPTY_FORM = {
   name: "",
@@ -108,8 +112,8 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
         unit: form.unit,
         categoryId: form.categoryId || null,
         supplierId: form.supplierId || null,
-        costPrice: Number(form.costPrice) || 0,
-        sellPrice: Number(form.sellPrice) || 0,
+        costPrice: priceValue(form.costPrice),
+        sellPrice: priceValue(form.sellPrice),
         minStock: Number(form.minStock) || 0,
       };
 
@@ -126,7 +130,8 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
       onClose();
     } catch (e) {
       console.error(e);
-      toast.error("Có lỗi xảy ra khi lưu!");
+      const message = e?.response?.data?.message;
+      toast.error(Array.isArray(message) ? message.join(" · ") : message || "Không thể lưu sản phẩm");
     } finally {
       setLoading(false);
     }
@@ -252,7 +257,7 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
             </SoftTypography>
             <SoftInput
               name="costPrice"
-              type="number"
+              inputMode="numeric"
               value={form.costPrice}
               onChange={handleChange}
               placeholder="0"
@@ -265,7 +270,7 @@ function ProductModal({ open, onClose, product, onSaved, categories }) {
             </SoftTypography>
             <SoftInput
               name="sellPrice"
-              type="number"
+              inputMode="numeric"
               value={form.sellPrice}
               onChange={handleChange}
               placeholder="0"
