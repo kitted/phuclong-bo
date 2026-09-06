@@ -722,7 +722,6 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
       setTrucksLoading(true);
       TruckService.getAll({
         status: "active",
-        hasInventory: "true",
         search: truckSearch || undefined,
         page: 1,
         limit: 20,
@@ -768,6 +767,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
               search: productSearch.trim() || undefined,
               page: 1,
               limit: 20,
+              allowNegative: "true",
             })
           : ProductService.getAll({
               search: productSearch.trim() || undefined,
@@ -1115,8 +1115,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
       return lineId === productId ? sum + Number(line.qty || 0) : sum;
     }, 0);
   };
-  const remainingStockFor = (product) =>
-    Math.max(0, stockOf(product) - selectedQuantityFor(product));
+  const remainingStockFor = (product) => stockOf(product) - selectedQuantityFor(product);
   const unitPriceFor = (product) =>
     Number(product?.sellPrice ?? product?.price ?? product?.salePrice ?? 0);
   const previewConfirmsItemPrice = (item) => {
@@ -2652,6 +2651,23 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                         </SoftTypography>
                       </SoftBox>
                     )}
+                    {item.product &&
+                      form.sourceType === "truck" &&
+                      remainingStockFor(item.product) < 0 && (
+                        <SoftBox
+                          mt={0.75}
+                          px={1.25}
+                          py={0.9}
+                          borderRadius={1.5}
+                          bgcolor="#fff3e0"
+                          sx={{ border: "1px solid #ffb74d" }}
+                        >
+                          <SoftTypography variant="caption" color="warning" fontWeight="bold">
+                            Bán vượt tồn {numberText(Math.abs(remainingStockFor(item.product)))}{" "}
+                            {item.product.unit || ""}. Tồn xe sẽ ghi âm và lần ứng hàng sau tự bù.
+                          </SoftTypography>
+                        </SoftBox>
+                      )}
                     {item.product && (
                       <SoftBox mt={0.75} display="flex" justifyContent="flex-start">
                         <FormControlLabel
@@ -2767,7 +2783,10 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                         />
                       </SoftBox>
                       <IconButton
-                        disabled={!item.product || remainingStockFor(item.product) <= 0}
+                        disabled={
+                          !item.product ||
+                          (form.sourceType === "warehouse" && remainingStockFor(item.product) <= 0)
+                        }
                         onClick={() => updateItem(index, { qty: Number(item.qty || 0) + 1 })}
                         sx={{
                           color: "#fff",
