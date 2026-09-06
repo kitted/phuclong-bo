@@ -31,6 +31,7 @@ import WebsiteProductEditor from "layouts/website-product-editor";
 import WebsiteContents from "layouts/website-contents";
 import WebsiteContentEditor from "layouts/website-content-editor";
 import Leads from "layouts/leads";
+import CustomerCoins from "layouts/customer-coins";
 
 const routes = [
   {
@@ -225,6 +226,16 @@ const routes = [
     route: "/khach-hang",
     noCollapse: true,
     component: <KhachHang />,
+    permission: ["admin", "staff"],
+  },
+  {
+    type: "collapse",
+    name: "Điểm khách hàng",
+    key: "customer-coins",
+    icon: <CustomerSupport size="12px" />,
+    route: "/customer-coins",
+    noCollapse: true,
+    component: <CustomerCoins />,
     permission: ["admin", "staff"],
   },
   {

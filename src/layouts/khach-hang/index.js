@@ -1302,6 +1302,26 @@ function CustomerDetail({
               <Grid item xs={6} md={3}>
                 <Card className="admin-summary-card">
                   <SoftBox className="admin-summary-content" p={2}>
+                    <SoftTypography variant="caption">Coin hóa đơn</SoftTypography>
+                    <SoftTypography variant="h6" fontWeight="bold" color="info">
+                      {new Intl.NumberFormat("vi-VN").format(customer.invoiceCoinBalance || 0)}
+                    </SoftTypography>
+                  </SoftBox>
+                </Card>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Card className="admin-summary-card">
+                  <SoftBox className="admin-summary-content" p={2}>
+                    <SoftTypography variant="caption">Coin PlusEx</SoftTypography>
+                    <SoftTypography variant="h6" fontWeight="bold" color="success">
+                      {new Intl.NumberFormat("vi-VN").format(customer.plusExCoinBalance || 0)}
+                    </SoftTypography>
+                  </SoftBox>
+                </Card>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Card className="admin-summary-card">
+                  <SoftBox className="admin-summary-content" p={2}>
                     <SoftTypography variant="caption">Số hóa đơn</SoftTypography>
                     <SoftTypography variant="h5" fontWeight="bold">
                       {customer.orderCount}

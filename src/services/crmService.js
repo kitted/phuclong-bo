@@ -75,6 +75,20 @@ export const LeadService = {
   },
 };
 
+export const CustomerCoinService = {
+  getCustomers: (params = {}) => AxiosInstance.get("/admin/customer-coins", { params }),
+  getSummary: (params = {}) => AxiosInstance.get("/admin/customer-coins/summary", { params }),
+  getCustomer: (id, params = {}) =>
+    AxiosInstance.get(`/admin/customer-coins/customers/${id}`, { params }),
+  redeem: (id, payload) =>
+    AxiosInstance.post(`/admin/customer-coins/customers/${id}/redeem`, payload),
+  getProducts: (params = {}) => AxiosInstance.get("/admin/customer-coins/products", { params }),
+  updateProduct: (id, plusExCoinEnabled) =>
+    AxiosInstance.patch(`/admin/customer-coins/products/${id}`, { plusExCoinEnabled }),
+  backfill: (limit = 500) =>
+    AxiosInstance.post("/admin/customer-coins/backfill", null, { params: { limit } }),
+};
+
 export const PromotionActivationService = {
   getAll: (params = {}) => AxiosInstance.get("/admin/promotion-activations", { params }),
   createManual: (payload) => AxiosInstance.post("/admin/promotion-activations/manual", payload),

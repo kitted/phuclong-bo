@@ -8,6 +8,7 @@ const items = [
   ["/hoa-don", "receipt_long", "Hóa đơn"],
   ["/thu-cong-no", "payments", "Công nợ"],
   ["/khach-hang", "people", "Khách hàng"],
+  ["/customer-coins", "stars", "Điểm"],
   ["/quan-ly-xe", "local_shipping", "Xe hàng"],
 ];
 
@@ -33,7 +34,7 @@ export default function StaffMobileNav() {
           <SoftBox
             key={path}
             onClick={() => navigate(path)}
-            width="20%"
+            width={`${100 / items.length}%`}
             textAlign="center"
             sx={{ color: active ? "#1877f2" : "#65676b", cursor: "pointer" }}
           >
