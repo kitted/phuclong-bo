@@ -23,7 +23,7 @@ import AuditLogs from "layouts/audit-logs";
 import StaffHome from "layouts/staff-home";
 import ThuCongNo from "layouts/thu-cong-no";
 import BackupData from "layouts/backup-data";
-import DailyOperations from "layouts/nghiep-vu-ngay";
+import DailyOperations from "layouts/nghiep-vu-ngay/v2";
 import QuickNotes from "layouts/quick-notes";
 import WebsiteAdmin from "layouts/website-admin";
 import WebsiteProducts from "layouts/website-products";
