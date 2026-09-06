@@ -24,7 +24,12 @@ const menuGroups = [
   {
     title: "Bán hàng & khách hàng",
     items: [
-      { path: "/hoa-don?create=1", icon: "add_shopping_cart", label: "Tạo hóa đơn", color: "#1976d2" },
+      {
+        path: "/hoa-don?create=1",
+        icon: "add_shopping_cart",
+        label: "Tạo hóa đơn",
+        color: "#1976d2",
+      },
       { path: "/khach-hang", icon: "groups", label: "Khách hàng", color: "#00897b" },
       { path: "/khuyen-mai", icon: "redeem", label: "Khuyến mãi", color: "#8e24aa" },
     ],
@@ -41,10 +46,16 @@ const menuGroups = [
     ],
   },
   {
-    title: "Quản trị & báo cáo",
+    title: "Quản trị website",
     items: [
       { path: "/website-products", icon: "language", label: "Sản phẩm website", color: "#1565c0" },
-      { path: "/website-admin", icon: "web", label: "Quản lý website", color: "#3949ab" },
+      { path: "/website-contents", icon: "article", label: "Bài viết website", color: "#7b1fa2" },
+      { path: "/website-admin", icon: "web", label: "Đơn hàng & dữ liệu", color: "#3949ab" },
+    ],
+  },
+  {
+    title: "Quản trị & báo cáo",
+    items: [
       { path: "/bao-cao", icon: "analytics", label: "Báo cáo", color: "#0277bd" },
       { path: "/nhan-vien", icon: "badge", label: "Nhân viên", color: "#00796b" },
       { path: "/audit-logs", icon: "history", label: "Nhật ký", color: "#546e7a" },
@@ -69,7 +80,8 @@ const pageTitles = [
   ["/danh-muc", "Danh mục"],
   ["/nha-cung-cap", "Nhà cung cấp"],
   ["/website-products", "Sản phẩm website"],
-  ["/website-admin", "Quản lý website"],
+  ["/website-contents", "Bài viết website"],
+  ["/website-admin", "Đơn hàng & dữ liệu website"],
 ];
 
 const initials = (value = "AD") =>
@@ -200,7 +212,11 @@ export default function AdminTouchNavigation() {
               <SoftTypography
                 variant="caption"
                 display="block"
-                sx={{ color: "inherit", fontSize: { xs: 10.5, sm: 12 }, fontWeight: active ? 800 : 600 }}
+                sx={{
+                  color: "inherit",
+                  fontSize: { xs: 10.5, sm: 12 },
+                  fontWeight: active ? 800 : 600,
+                }}
               >
                 {item.label}
               </SoftTypography>
@@ -351,7 +367,13 @@ export default function AdminTouchNavigation() {
             </SoftTypography>
             <SoftBox
               display="grid"
-              sx={{ gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1 }}
+              sx={{
+                gridTemplateColumns: {
+                  xs: "repeat(2, minmax(0, 1fr))",
+                  sm: "repeat(3, minmax(0, 1fr))",
+                },
+                gap: 1,
+              }}
             >
               {group.items.map((item) => {
                 const active = pathname.startsWith(item.path.split("?")[0]);

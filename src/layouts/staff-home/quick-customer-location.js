@@ -134,7 +134,7 @@ function CustomerRow({ customer, onSelect }) {
   );
 }
 
-export default function QuickCustomerLocation({ open, onClose, onSaved }) {
+export default function QuickCustomerLocation({ open, onClose, onSaved, onCreateLead }) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [customers, setCustomers] = useState([]);
@@ -293,6 +293,22 @@ export default function QuickCustomerLocation({ open, onClose, onSaved }) {
                   "& input": { py: "13px !important" },
                 }}
               />
+              <SoftBox
+                mt={1.25}
+                p={1.25}
+                borderRadius={2}
+                sx={{ bgcolor: "#f0f7ff", border: "1px solid #b9dcff" }}
+              >
+                <SoftTypography variant="button" fontWeight="bold" display="block">
+                  Khách chưa có trong hệ thống?
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text" display="block" mb={1}>
+                  Lưu thành lead cùng ảnh và vị trí cửa tiệm để mọi nhân viên cùng theo dõi.
+                </SoftTypography>
+                <SoftButton color="info" variant="gradient" fullWidth onClick={onCreateLead}>
+                  <Icon>person_add</Icon>&nbsp;Tạo lead mới
+                </SoftButton>
+              </SoftBox>
             </SoftBox>
             {loading && (
               <SoftBox display="flex" justifyContent="center" alignItems="center" gap={1} py={4}>
@@ -309,7 +325,7 @@ export default function QuickCustomerLocation({ open, onClose, onSaved }) {
                   Không tìm thấy khách hàng
                 </SoftTypography>
                 <SoftTypography variant="caption" color="text">
-                  Thử tìm bằng mã hoặc một phần tên khách hàng.
+                  Thử tìm bằng mã hoặc một phần tên khách hàng, hoặc tạo lead mới.
                 </SoftTypography>
               </SoftBox>
             )}

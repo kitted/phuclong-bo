@@ -28,6 +28,8 @@ import QuickNotes from "layouts/quick-notes";
 import WebsiteAdmin from "layouts/website-admin";
 import WebsiteProducts from "layouts/website-products";
 import WebsiteProductEditor from "layouts/website-product-editor";
+import WebsiteContents from "layouts/website-contents";
+import WebsiteContentEditor from "layouts/website-content-editor";
 import Leads from "layouts/leads";
 
 const routes = [
@@ -47,10 +49,11 @@ const routes = [
     component: <ThuCongNo />,
     permission: ["staff"],
   },
-  // ─── Dashboard ────────────────────────────────────────────────────────────
+  // ─── Section: Quản trị website ───────────────────────────────────────────
+  { type: "title", title: "Quản trị website", key: "title-website", permission: ["admin"] },
   {
     type: "collapse",
-    name: "Quản lý website",
+    name: "Đơn hàng & dữ liệu",
     key: "website-admin",
     icon: <Document size="12px" />,
     route: "/website-admin",
@@ -84,6 +87,35 @@ const routes = [
     component: <WebsiteProducts />,
     permission: ["admin"],
   },
+  {
+    type: "route",
+    name: "Tạo bài viết website",
+    key: "website-content-new",
+    route: "/website-contents/new",
+    component: <WebsiteContentEditor />,
+    permission: ["admin"],
+  },
+  {
+    type: "route",
+    name: "Biên tập bài viết website",
+    key: "website-content-edit",
+    route: "/website-contents/:id/edit",
+    component: <WebsiteContentEditor />,
+    permission: ["admin"],
+  },
+  {
+    type: "collapse",
+    name: "Bài viết website",
+    key: "website-contents",
+    icon: <Document size="12px" />,
+    route: "/website-contents",
+    noCollapse: true,
+    component: <WebsiteContents />,
+    permission: ["admin"],
+  },
+
+  // ─── Dashboard & vận hành nội bộ ─────────────────────────────────────────
+  { type: "title", title: "Vận hành nội bộ", key: "title-internal", permission: ["admin"] },
   {
     type: "collapse",
     name: "Note nhanh cho sale",

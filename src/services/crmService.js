@@ -29,8 +29,7 @@ export const CustomerService = {
   update: (id, payload) => AxiosInstance.patch(`/admin/customers/${id}`, payload),
   updateCode: (id, code, reason) =>
     AxiosInstance.patch(`/admin/customers/${id}/code`, { code, reason }),
-  remove: (id, reason) =>
-    AxiosInstance.delete(`/admin/customers/${id}`, { data: { reason } }),
+  remove: (id, reason) => AxiosInstance.delete(`/admin/customers/${id}`, { data: { reason } }),
   getDeleted: (params = {}) => AxiosInstance.get("/admin/customers/deleted/list", { params }),
   getDeletedById: (id) => AxiosInstance.get(`/admin/customers/deleted/${id}`),
   restore: (id) => AxiosInstance.post(`/admin/customers/${id}/restore`),
@@ -52,10 +51,8 @@ export const CustomerService = {
     formData.append("file", file);
     return AxiosInstance.post(`/admin/customers/${id}/storefront-image`, formData);
   },
-  deleteStorefrontImage: (id) =>
-    AxiosInstance.delete(`/admin/customers/${id}/storefront-image`),
-  deleteStoreProfile: (id) =>
-    AxiosInstance.delete(`/admin/customers/${id}/store-profile`),
+  deleteStorefrontImage: (id) => AxiosInstance.delete(`/admin/customers/${id}/storefront-image`),
+  deleteStoreProfile: (id) => AxiosInstance.delete(`/admin/customers/${id}/store-profile`),
   getPromotionActivations: (id, params = {}) =>
     AxiosInstance.get(`/admin/customers/${id}/promotion-activations`, { params }),
   getDebtHistory: (id, params = {}) =>
@@ -71,11 +68,20 @@ export const LeadService = {
   update: (id, payload) => AxiosInstance.patch(`/admin/leads/${id}`, payload),
   remove: (id) => AxiosInstance.delete(`/admin/leads/${id}`),
   interact: (id, payload) => AxiosInstance.post(`/admin/leads/${id}/interactions`, payload),
-  uploadImage: (id, file) => { const data = new FormData(); data.append("file", file); return AxiosInstance.post(`/admin/leads/${id}/image`, data); },
+  uploadImage: (id, file) => {
+    const data = new FormData();
+    data.append("file", file);
+    return AxiosInstance.post(`/admin/leads/${id}/image`, data);
+  },
 };
 
 export const PromotionActivationService = {
   getAll: (params = {}) => AxiosInstance.get("/admin/promotion-activations", { params }),
+  createManual: (payload) => AxiosInstance.post("/admin/promotion-activations/manual", payload),
+  updateManual: (id, payload) =>
+    AxiosInstance.patch(`/admin/promotion-activations/${id}/manual`, payload),
+  exportExcel: (params = {}) =>
+    AxiosInstance.get("/admin/promotion-activations/export", { params, responseType: "blob" }),
   getById: (id) => AxiosInstance.get(`/admin/promotion-activations/${id}`),
   getByCode: (code) =>
     AxiosInstance.get(`/admin/promotion-activations/code/${encodeURIComponent(code)}`),

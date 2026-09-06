@@ -1,4 +1,11 @@
-import { forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import Divider from "@mui/material/Divider";
 import Icon from "@mui/material/Icon";
 import MenuItem from "@mui/material/MenuItem";
@@ -22,7 +29,10 @@ const tools = [
   ["format_align_right", "Căn phải", "justifyRight"],
 ];
 
-const RichTextEditor = forwardRef(function RichTextEditor({ value, onChange, minHeight = 480 }, ref) {
+const RichTextEditor = forwardRef(function RichTextEditor(
+  { value, onChange, minHeight = 480 },
+  ref
+) {
   const editorRef = useRef(null);
   const sourceRef = useRef(null);
   const selectionRef = useRef(null);
@@ -34,10 +44,7 @@ const RichTextEditor = forwardRef(function RichTextEditor({ value, onChange, min
 
   const rememberSelection = useCallback(() => {
     const selection = window.getSelection();
-    if (
-      selection?.rangeCount &&
-      editorRef.current?.contains(selection.anchorNode)
-    ) {
+    if (selection?.rangeCount && editorRef.current?.contains(selection.anchorNode)) {
       selectionRef.current = selection.getRangeAt(0).cloneRange();
     }
   }, []);
@@ -57,26 +64,32 @@ const RichTextEditor = forwardRef(function RichTextEditor({ value, onChange, min
     selection.addRange(range);
   }, []);
 
-  const execute = useCallback((command, commandValue = null) => {
-    if (sourceMode) return;
-    restoreSelection();
-    document.execCommand(command, false, commandValue);
-    emit();
-    rememberSelection();
-  }, [emit, rememberSelection, restoreSelection, sourceMode]);
+  const execute = useCallback(
+    (command, commandValue = null) => {
+      if (sourceMode) return;
+      restoreSelection();
+      document.execCommand(command, false, commandValue);
+      emit();
+      rememberSelection();
+    },
+    [emit, rememberSelection, restoreSelection, sourceMode]
+  );
 
-  const insertImage = useCallback((url, alt = "") => {
-    if (!url || sourceMode) return;
-    restoreSelection();
-    const safeAlt = String(alt).replace(/["<>]/g, "");
-    document.execCommand(
-      "insertHTML",
-      false,
-      `<figure><img src="${url}" alt="${safeAlt}" /><figcaption></figcaption></figure><p><br></p>`
-    );
-    emit();
-    rememberSelection();
-  }, [emit, rememberSelection, restoreSelection, sourceMode]);
+  const insertImage = useCallback(
+    (url, alt = "") => {
+      if (!url || sourceMode) return;
+      restoreSelection();
+      const safeAlt = String(alt).replace(/["<>]/g, "");
+      document.execCommand(
+        "insertHTML",
+        false,
+        `<figure><img src="${url}" alt="${safeAlt}" /><figcaption></figcaption></figure><p><br></p>`
+      );
+      emit();
+      rememberSelection();
+    },
+    [emit, rememberSelection, restoreSelection, sourceMode]
+  );
 
   useImperativeHandle(ref, () => ({ insertImage }), [insertImage]);
 
@@ -113,7 +126,9 @@ const RichTextEditor = forwardRef(function RichTextEditor({ value, onChange, min
   };
 
   return (
-    <SoftBox sx={{ border: "1px solid #d8dee8", borderRadius: 2, overflow: "hidden", bgcolor: "#fff" }}>
+    <SoftBox
+      sx={{ border: "1px solid #d8dee8", borderRadius: 2, overflow: "hidden", bgcolor: "#fff" }}
+    >
       <SoftBox
         display="flex"
         alignItems="center"
@@ -154,22 +169,45 @@ const RichTextEditor = forwardRef(function RichTextEditor({ value, onChange, min
         ))}
         <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
         <Tooltip title="Thêm liên kết">
-          <SoftButton variant="text" color="dark" disabled={sourceMode} onClick={addLink} sx={{ minWidth: 34, width: 34, height: 34, p: 0 }}>
+          <SoftButton
+            variant="text"
+            color="dark"
+            disabled={sourceMode}
+            onClick={addLink}
+            sx={{ minWidth: 34, width: 34, height: 34, p: 0 }}
+          >
             <Icon fontSize="small">link</Icon>
           </SoftButton>
         </Tooltip>
         <Tooltip title="Bỏ liên kết">
-          <SoftButton variant="text" color="dark" disabled={sourceMode} onClick={() => execute("unlink")} sx={{ minWidth: 34, width: 34, height: 34, p: 0 }}>
+          <SoftButton
+            variant="text"
+            color="dark"
+            disabled={sourceMode}
+            onClick={() => execute("unlink")}
+            sx={{ minWidth: 34, width: 34, height: 34, p: 0 }}
+          >
             <Icon fontSize="small">link_off</Icon>
           </SoftButton>
         </Tooltip>
         <Tooltip title="Xóa định dạng">
-          <SoftButton variant="text" color="dark" disabled={sourceMode} onClick={() => execute("removeFormat")} sx={{ minWidth: 34, width: 34, height: 34, p: 0 }}>
+          <SoftButton
+            variant="text"
+            color="dark"
+            disabled={sourceMode}
+            onClick={() => execute("removeFormat")}
+            sx={{ minWidth: 34, width: 34, height: 34, p: 0 }}
+          >
             <Icon fontSize="small">format_clear</Icon>
           </SoftButton>
         </Tooltip>
         <SoftBox flex={1} />
-        <SoftButton size="small" variant={sourceMode ? "gradient" : "outlined"} color="secondary" onClick={toggleSource}>
+        <SoftButton
+          size="small"
+          variant={sourceMode ? "gradient" : "outlined"}
+          color="secondary"
+          onClick={toggleSource}
+        >
           <Icon>code</Icon>&nbsp;{sourceMode ? "Soạn thảo" : "HTML"}
         </SoftButton>
       </SoftBox>
@@ -183,10 +221,25 @@ const RichTextEditor = forwardRef(function RichTextEditor({ value, onChange, min
           onChange={(event) => {
             onChange(event.target.value);
             event.currentTarget.style.height = "auto";
-            event.currentTarget.style.height = `${Math.max(event.currentTarget.scrollHeight, minHeight)}px`;
+            event.currentTarget.style.height = `${Math.max(
+              event.currentTarget.scrollHeight,
+              minHeight
+            )}px`;
           }}
           spellCheck={false}
-          sx={{ width: "100%", minHeight, p: 2, border: 0, outline: 0, resize: "none", overflow: "hidden", fontFamily: "monospace", fontSize: 14, lineHeight: 1.6, boxSizing: "border-box" }}
+          sx={{
+            width: "100%",
+            minHeight,
+            p: 2,
+            border: 0,
+            outline: 0,
+            resize: "none",
+            overflow: "hidden",
+            fontFamily: "monospace",
+            fontSize: 14,
+            lineHeight: 1.6,
+            boxSizing: "border-box",
+          }}
         />
       ) : (
         <SoftBox
@@ -195,7 +248,7 @@ const RichTextEditor = forwardRef(function RichTextEditor({ value, onChange, min
           suppressContentEditableWarning
           role="textbox"
           aria-multiline="true"
-          aria-label="Nội dung chi tiết sản phẩm"
+          aria-label="Nội dung chi tiết"
           onInput={emit}
           onKeyUp={rememberSelection}
           onMouseUp={rememberSelection}
@@ -206,11 +259,17 @@ const RichTextEditor = forwardRef(function RichTextEditor({ value, onChange, min
             outline: 0,
             fontSize: 16,
             lineHeight: 1.75,
-            "&:empty:before": { content: '"Bắt đầu nhập nội dung chi tiết sản phẩm..."', color: "#9aa4b2" },
+            "&:empty:before": { content: '"Bắt đầu nhập nội dung chi tiết..."', color: "#9aa4b2" },
             "& h2": { fontSize: 28, mt: 2, mb: 1 },
             "& h3": { fontSize: 22, mt: 1.5, mb: 1 },
             "& blockquote": { borderLeft: "4px solid #1976d2", pl: 2, ml: 0, color: "#536273" },
-            "& img": { display: "block", maxWidth: "100%", height: "auto", mx: "auto", borderRadius: 2 },
+            "& img": {
+              display: "block",
+              maxWidth: "100%",
+              height: "auto",
+              mx: "auto",
+              borderRadius: 2,
+            },
             "& figure": { m: "24px 0", textAlign: "center" },
             "& figcaption": { color: "#7a8594", fontSize: 13, mt: 0.5 },
             "& a": { color: "#1976d2", textDecoration: "underline" },

@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Autocomplete from "@mui/material/Autocomplete";
-import Checkbox from "@mui/material/Checkbox";
-import FormControlLabel from "@mui/material/FormControlLabel";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
@@ -22,7 +20,6 @@ import EmployeeService from "services/employeeService";
 import { TruckService } from "services/warehouseService";
 import {
   prepareWebsiteImportFile,
-  WebsiteContentService,
   WebsiteDataImportService,
   WebsiteOrderService,
 } from "services/websiteAdminService";
@@ -385,266 +382,6 @@ function OrdersTab() {
   );
 }
 
-const emptyContent = {
-  title: "",
-  slug: "",
-  type: "ARTICLE",
-  excerpt: "",
-  contentHtml: "",
-  coverImageUrl: "",
-  hashtagsText: "",
-  status: "DRAFT",
-  requiresCustomerVerification: false,
-};
-function ContentModal({ content, onClose, onSaved }) {
-  const [form, setForm] = useState(emptyContent);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    if (content !== undefined)
-      setForm(
-        content
-          ? { ...emptyContent, ...content, hashtagsText: (content.hashtags || []).join(", ") }
-          : emptyContent
-      );
-  }, [content]);
-  if (content === undefined) return null;
-  const save = async () => {
-    if (!form.title.trim() || !form.slug.trim() || !form.contentHtml.trim())
-      return toast.error("Tiêu đề, slug và nội dung là bắt buộc");
-    const payload = {
-      title: form.title.trim(),
-      slug: form.slug.trim(),
-      type: form.type,
-      excerpt: form.excerpt.trim() || undefined,
-      contentHtml: form.contentHtml,
-      coverImageUrl: form.coverImageUrl.trim() || undefined,
-      hashtags: form.hashtagsText
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean),
-      status: form.status,
-      requiresCustomerVerification: form.requiresCustomerVerification,
-    };
-    try {
-      setSaving(true);
-      if (idOf(content)) await WebsiteContentService.update(idOf(content), payload);
-      else await WebsiteContentService.create(payload);
-      toast.success("Đã lưu nội dung website");
-      onSaved();
-    } catch (e) {
-      toast.error(e.response?.data?.message || "Không thể lưu nội dung");
-    } finally {
-      setSaving(false);
-    }
-  };
-  return (
-    <Modal open onClose={onClose}>
-      <SoftBox sx={{ ...modalSx, width: { xs: "96%", lg: 1000 } }}>
-        <SoftBox display="flex" justifyContent="space-between">
-          <SoftTypography variant="h5" fontWeight="bold">
-            {idOf(content) ? "Sửa nội dung" : "Tạo nội dung website"}
-          </SoftTypography>
-          <IconButton onClick={onClose}>
-            <Icon>close</Icon>
-          </IconButton>
-        </SoftBox>
-        <Grid container spacing={1.5} mt={0.5}>
-          <Grid item xs={12} md={8}>
-            <SoftInput
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="Tiêu đề"
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <SoftInput
-              value={form.slug}
-              onChange={(e) =>
-                setForm({ ...form, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })
-              }
-              placeholder="slug-duong-dan"
-            />
-          </Grid>
-          <Grid item xs={6} md={3}>
-            <SoftInput
-              select
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-            >
-              {["ARTICLE", "TECHNICAL", "NEWS", "PAGE"].map((x) => (
-                <MenuItem key={x} value={x}>
-                  {x}
-                </MenuItem>
-              ))}
-            </SoftInput>
-          </Grid>
-          <Grid item xs={6} md={3}>
-            <SoftInput
-              select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-            >
-              {["DRAFT", "PUBLISHED", "ARCHIVED"].map((x) => (
-                <MenuItem key={x} value={x}>
-                  {x}
-                </MenuItem>
-              ))}
-            </SoftInput>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <SoftInput
-              value={form.coverImageUrl}
-              onChange={(e) => setForm({ ...form, coverImageUrl: e.target.value })}
-              placeholder="URL ảnh bìa"
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <SoftInput
-              value={form.excerpt}
-              onChange={(e) => setForm({ ...form, excerpt: e.target.value })}
-              placeholder="Tóm tắt nội dung"
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              multiline
-              minRows={10}
-              value={form.contentHtml}
-              onChange={(e) => setForm({ ...form, contentHtml: e.target.value })}
-              placeholder="Nhập HTML nội dung bài viết..."
-            />
-          </Grid>
-          <Grid item xs={12} md={8}>
-            <SoftInput
-              value={form.hashtagsText}
-              onChange={(e) => setForm({ ...form, hashtagsText: e.target.value })}
-              placeholder="Hashtag, phân cách bằng dấu phẩy"
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={form.requiresCustomerVerification}
-                  onChange={(e) =>
-                    setForm({ ...form, requiresCustomerVerification: e.target.checked })
-                  }
-                />
-              }
-              label="Yêu cầu xác minh khách hàng"
-            />
-          </Grid>
-        </Grid>
-        <SoftBox mt={2} p={1.5} bgcolor="#f7f9fc" borderRadius={2}>
-          <SoftTypography variant="caption" fontWeight="bold">
-            Xem trước nội dung đã nhập
-          </SoftTypography>
-          <SoftBox
-            mt={1}
-            sx={{ "& img": { maxWidth: "100%" } }}
-            dangerouslySetInnerHTML={{ __html: form.contentHtml }}
-          />
-        </SoftBox>
-        <SoftButton
-          fullWidth
-          color="info"
-          variant="gradient"
-          sx={{ mt: 2 }}
-          disabled={saving}
-          onClick={save}
-        >
-          {saving ? "Đang lưu..." : "Lưu nội dung"}
-        </SoftButton>
-      </SoftBox>
-    </Modal>
-  );
-}
-
-function ContentsTab() {
-  const [contents, setContents] = useState([]);
-  const [page, setPage] = useState(1);
-  const [meta, setMeta] = useState({ totalPages: 1 });
-  const [loading, setLoading] = useState(false);
-  const [editing, setEditing] = useState(undefined);
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await WebsiteContentService.getAll({ page, limit: 20 });
-      setContents((current) => (page === 1 ? listOf(r) : mergeUniqueItems(current, listOf(r))));
-      setMeta(r.data?.meta || { totalPages: 1 });
-    } finally {
-      setLoading(false);
-    }
-  }, [page]);
-  useEffect(() => {
-    load();
-  }, [load]);
-  const remove = async (content) => {
-    if (!window.confirm(`Xóa “${content.title}”?`)) return;
-    await WebsiteContentService.remove(idOf(content));
-    setPage(1);
-    load();
-  };
-  return (
-    <SoftBox>
-      <SoftButton color="info" variant="gradient" onClick={() => setEditing(null)}>
-        <Icon>post_add</Icon>&nbsp;Tạo nội dung
-      </SoftButton>
-      <Grid container spacing={1.5} mt={0.25}>
-        {contents.map((content) => (
-          <Grid item xs={12} md={6} key={idOf(content)}>
-            <SoftBox p={1.5} borderRadius={2} sx={{ border: "1px solid #e1e6ee" }}>
-              <SoftBox display="flex" gap={1.5}>
-                {content.coverImageUrl && (
-                  <SoftBox
-                    component="img"
-                    src={content.coverImageUrl}
-                    width={100}
-                    height={72}
-                    sx={{ objectFit: "cover", borderRadius: 1.5 }}
-                  />
-                )}
-                <SoftBox flex={1} minWidth={0}>
-                  <SoftTypography variant="button" fontWeight="bold">
-                    {content.title}
-                  </SoftTypography>
-                  <SoftTypography variant="caption" display="block" color="text">
-                    /{content.slug} · {content.type} · {content.status}
-                  </SoftTypography>
-                  <SoftTypography variant="caption">
-                    {content.requiresCustomerVerification ? "🔒 Yêu cầu xác minh" : "Công khai"}
-                  </SoftTypography>
-                </SoftBox>
-                <IconButton onClick={() => setEditing(content)}>
-                  <Icon>edit</Icon>
-                </IconButton>
-                <IconButton onClick={() => remove(content)}>
-                  <Icon color="error">delete</Icon>
-                </IconButton>
-              </SoftBox>
-            </SoftBox>
-          </Grid>
-        ))}
-      </Grid>
-      <MobileLoadMore
-        loading={loading}
-        hasMore={page < Number(meta.totalPages || 1)}
-        onLoadMore={() => setPage((value) => value + 1)}
-      />
-      <ContentModal
-        content={editing}
-        onClose={() => setEditing(undefined)}
-        onSaved={() => {
-          setEditing(undefined);
-          setPage(1);
-          load();
-        }}
-      />
-    </SoftBox>
-  );
-}
-
 function WebsiteImportTab() {
   const inputRef = useRef(null);
   const [file, setFile] = useState(null);
@@ -869,7 +606,10 @@ export default function WebsiteAdmin() {
       <SoftBox py={3}>
         <SoftBox bgcolor="#fff" borderRadius={3} p={{ xs: 1.5, md: 3 }}>
           <SoftTypography variant="h4" fontWeight="bold">
-            Quản lý website
+            Đơn hàng & dữ liệu website
+          </SoftTypography>
+          <SoftTypography variant="button" color="text">
+            Theo dõi đơn đặt hàng và import dữ liệu. Sản phẩm, bài viết được quản lý ở menu riêng.
           </SoftTypography>
           <Tabs
             value={tab}
@@ -890,10 +630,9 @@ export default function WebsiteAdmin() {
             }}
           >
             <Tab label="Đơn đặt hàng" />
-            <Tab label="Bài viết & nội dung" />
             <Tab label="Import Excel" />
           </Tabs>
-          {tab === 0 ? <OrdersTab /> : tab === 1 ? <ContentsTab /> : <WebsiteImportTab />}
+          {tab === 0 ? <OrdersTab /> : <WebsiteImportTab />}
         </SoftBox>
       </SoftBox>
     </DashboardLayout>

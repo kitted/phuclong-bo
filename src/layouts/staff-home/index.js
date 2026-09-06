@@ -25,6 +25,7 @@ import { toast } from "react-toastify";
 import StaffAccountMenu from "components/StaffAccountMenu";
 import NotificationCenter from "components/NotificationCenter";
 import QuickCustomerLocation from "./quick-customer-location";
+import { LeadModal } from "layouts/leads";
 import QuickNoteService from "services/quickNoteService";
 import EntityThumbnail from "components/EntityThumbnail";
 
@@ -571,6 +572,7 @@ export default function StaffHome() {
   const [loading, setLoading] = useState(true);
   const [saleOpen, setSaleOpen] = useState(false);
   const [customerLocationOpen, setCustomerLocationOpen] = useState(false);
+  const [leadCreateOpen, setLeadCreateOpen] = useState(false);
   const [customerMapOpen, setCustomerMapOpen] = useState(false);
   const [selectedKpi, setSelectedKpi] = useState(null);
   const [kpis, setKpis] = useState([]);
@@ -783,6 +785,10 @@ export default function StaffHome() {
                     `${Number(lead.location?.latitude || 0).toFixed(5)}, ${Number(
                       lead.location?.longitude || 0
                     ).toFixed(5)}`}
+                </SoftTypography>
+                <SoftTypography display="block" variant="caption" color="text" noWrap>
+                  Tạo bởi: {lead.createdByName || "Nhân viên"}
+                  {lead.createdByCode ? ` · ${lead.createdByCode}` : ""}
                 </SoftTypography>
                 <SoftButton
                   size="small"
@@ -1059,6 +1065,19 @@ export default function StaffHome() {
       <QuickCustomerLocation
         open={customerLocationOpen}
         onClose={() => setCustomerLocationOpen(false)}
+        onCreateLead={() => {
+          setCustomerLocationOpen(false);
+          setLeadCreateOpen(true);
+        }}
+      />
+      <LeadModal
+        open={leadCreateOpen}
+        lead={null}
+        onClose={() => setLeadCreateOpen(false)}
+        onSaved={() => {
+          setLeadCreateOpen(false);
+          setRefreshKey((value) => value + 1);
+        }}
       />
       {customerMapOpen && (
         <Suspense fallback={null}>
@@ -1120,6 +1139,25 @@ export default function StaffHome() {
             <SoftTypography display="block" variant="caption" color="text">
               {detailLead?.location?.address || "Chưa có địa chỉ"}
             </SoftTypography>
+            <SoftTypography display="block" variant="caption" color="text" mt={0.75}>
+              Tạo bởi: {detailLead?.createdByName || "Nhân viên"}
+              {detailLead?.createdByCode ? ` · ${detailLead.createdByCode}` : ""}
+            </SoftTypography>
+            {detailLead?.contactName && (
+              <SoftTypography display="block" variant="caption" color="text">
+                Người liên hệ: {detailLead.contactName}
+              </SoftTypography>
+            )}
+            {detailLead?.businessType && (
+              <SoftTypography display="block" variant="caption" color="text">
+                Loại hình / nhu cầu: {detailLead.businessType}
+              </SoftTypography>
+            )}
+            {detailLead?.note && (
+              <SoftTypography display="block" variant="body2" mt={1}>
+                {detailLead.note}
+              </SoftTypography>
+            )}
           </SoftBox>
           <SoftBox mt={2}>
             <SoftTypography variant="button" fontWeight="bold">
@@ -1136,7 +1174,11 @@ export default function StaffHome() {
                     sx={{ borderBottom: "1px solid #edf0f5" }}
                   >
                     <SoftTypography variant="caption" fontWeight="bold">
-                      {item.salespersonName || "Nhân viên"} · {formatDateTime(item.interactedAt)}
+                      Người tương tác: {item.salespersonName || "Nhân viên"}
+                      {item.salespersonCode ? ` · ${item.salespersonCode}` : ""}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="text" display="block">
+                      {formatDateTime(item.interactedAt)}
                     </SoftTypography>
                     <SoftTypography variant="body2" display="block">
                       {item.note}

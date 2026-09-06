@@ -18,6 +18,9 @@ import { toast } from "react-toastify";
 const empty = {
   name: "",
   phone: "",
+  contactName: "",
+  businessType: "",
+  note: "",
   imageUrl: "",
   color: "#5e72e4",
   latitude: "",
@@ -59,7 +62,7 @@ function MapPicker({ lat, lon, onPick }) {
   );
 }
 
-function LeadModal({ open, lead, onClose, onSaved }) {
+export function LeadModal({ open, lead, onClose, onSaved }) {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [imageFile, setImageFile] = useState(null);
@@ -71,6 +74,9 @@ function LeadModal({ open, lead, onClose, onSaved }) {
           ? {
               name: lead.name || "",
               phone: lead.phone || "",
+              contactName: lead.contactName || "",
+              businessType: lead.businessType || "",
+              note: lead.note || "",
               imageUrl: lead.imageUrl || "",
               color: lead.color || "#5e72e4",
               latitude: lead.location?.latitude ?? "",
@@ -91,6 +97,9 @@ function LeadModal({ open, lead, onClose, onSaved }) {
     const payload = {
       name: form.name.trim(),
       phone: form.phone.trim(),
+      contactName: form.contactName.trim() || undefined,
+      businessType: form.businessType.trim() || undefined,
+      note: form.note.trim() || undefined,
       imageUrl: form.imageUrl.trim() || undefined,
       color: form.color,
       location: {
@@ -109,7 +118,7 @@ function LeadModal({ open, lead, onClose, onSaved }) {
       const saved = unwrap(response);
       if (imageFile) await LeadService.uploadImage(idOf(saved), imageFile);
       toast.success(lead ? "Đã cập nhật lead" : "Đã thêm lead");
-      onSaved();
+      onSaved(saved);
     } catch (error) {
       toast.error(error?.response?.data?.message || "Không thể lưu lead");
     } finally {
@@ -124,11 +133,12 @@ function LeadModal({ open, lead, onClose, onSaved }) {
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
-          width: { xs: "94%", md: 620 },
-          maxHeight: "92dvh",
+          width: { xs: "100%", md: 620 },
+          height: { xs: "100dvh", md: "auto" },
+          maxHeight: { xs: "100dvh", md: "92dvh" },
           overflowY: "auto",
           bgcolor: "#fff",
-          borderRadius: 3,
+          borderRadius: { xs: 0, md: 3 },
           boxShadow: 24,
           p: { xs: 2, md: 3 },
         }}
@@ -157,6 +167,26 @@ function LeadModal({ open, lead, onClose, onSaved }) {
               Số điện thoại *
             </SoftTypography>
             <SoftInput value={form.phone} onChange={set("phone")} placeholder="090..." />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <SoftTypography variant="caption" fontWeight="bold">
+              Người liên hệ
+            </SoftTypography>
+            <SoftInput
+              value={form.contactName}
+              onChange={set("contactName")}
+              placeholder="Tên người có thể liên hệ"
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <SoftTypography variant="caption" fontWeight="bold">
+              Loại hình / nhu cầu
+            </SoftTypography>
+            <SoftInput
+              value={form.businessType}
+              onChange={set("businessType")}
+              placeholder="VD: Cửa hàng phụ tùng"
+            />
           </Grid>
           <Grid item xs={12}>
             <SoftTypography variant="caption" fontWeight="bold">
@@ -240,6 +270,18 @@ function LeadModal({ open, lead, onClose, onSaved }) {
               value={form.address}
               onChange={set("address")}
               placeholder="Số nhà, đường, phường..."
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <SoftTypography variant="caption" fontWeight="bold">
+              Ghi chú lead
+            </SoftTypography>
+            <SoftInput
+              multiline
+              rows={3}
+              value={form.note}
+              onChange={set("note")}
+              placeholder="Nhu cầu, thời gian phù hợp để ghé, thông tin cần lưu ý..."
             />
           </Grid>
           <Grid item xs={6}>
@@ -375,7 +417,7 @@ export default function Leads() {
                 Quản lý Lead
               </SoftTypography>
               <SoftTypography variant="caption" color="text">
-                Lead tách biệt với khách hàng; sale chỉ xem và ghi nhận tương tác.
+                Lead do admin hoặc nhân viên tạo; admin quản trị và sale cùng theo dõi, tương tác.
               </SoftTypography>
             </SoftBox>
             <SoftButton
@@ -442,6 +484,10 @@ export default function Leads() {
                     {lead.location?.address ||
                       `${lead.location?.latitude}, ${lead.location?.longitude}`}
                   </SoftTypography>
+                  <SoftTypography display="block" variant="caption" color="text" mt={0.5}>
+                    Tạo bởi: {lead.createdByName || "Admin"}
+                    {lead.createdByCode ? ` · ${lead.createdByCode}` : ""}
+                  </SoftTypography>
                   <SoftTypography
                     display="block"
                     variant="caption"
@@ -504,6 +550,25 @@ export default function Leads() {
           <SoftTypography display="block" variant="caption" color="text">
             {detailLead?.location?.address || "Chưa có địa chỉ"}
           </SoftTypography>
+          <SoftTypography display="block" variant="caption" color="text" mt={0.75}>
+            Tạo bởi: {detailLead?.createdByName || "Admin"}
+            {detailLead?.createdByCode ? ` · ${detailLead.createdByCode}` : ""}
+          </SoftTypography>
+          {detailLead?.contactName && (
+            <SoftTypography display="block" variant="caption" color="text">
+              Người liên hệ: {detailLead.contactName}
+            </SoftTypography>
+          )}
+          {detailLead?.businessType && (
+            <SoftTypography display="block" variant="caption" color="text">
+              Loại hình / nhu cầu: {detailLead.businessType}
+            </SoftTypography>
+          )}
+          {detailLead?.note && (
+            <SoftTypography display="block" variant="body2" mt={1}>
+              {detailLead.note}
+            </SoftTypography>
+          )}
           <SoftTypography display="block" variant="button" fontWeight="bold" mt={2}>
             Lịch sử tương tác
           </SoftTypography>
@@ -514,7 +579,10 @@ export default function Leads() {
               .map((item, index) => (
                 <SoftBox key={item._id || index} py={1} sx={{ borderBottom: "1px solid #edf0f5" }}>
                   <SoftTypography variant="caption" fontWeight="bold">
-                    {item.salespersonName || "Nhân viên"} ·{" "}
+                    Người tương tác: {item.salespersonName || "Nhân viên"}
+                    {item.salespersonCode ? ` · ${item.salespersonCode}` : ""}
+                  </SoftTypography>
+                  <SoftTypography variant="caption" color="text" display="block">
                     {new Date(item.interactedAt).toLocaleString("vi-VN")}
                   </SoftTypography>
                   <SoftTypography variant="body2" display="block">

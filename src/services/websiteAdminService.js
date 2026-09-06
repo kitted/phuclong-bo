@@ -4,17 +4,23 @@ import * as XLSX from "xlsx";
 export const WebsiteOrderService = {
   getAll: (params = {}) => AxiosInstance.get("/admin/website-orders", { params }),
   getById: (id) => AxiosInstance.get(`/admin/website-orders/${id}`),
-  assign: (id, saleId, note) => AxiosInstance.patch(`/admin/website-orders/${id}/assign`, { saleId, note }),
-  changeStatus: (id, status, note) => AxiosInstance.patch(`/admin/website-orders/${id}/status`, { status, note }),
-  convert: (id, payload) => AxiosInstance.patch(`/admin/website-orders/${id}/convert-to-invoice`, payload),
+  assign: (id, saleId, note) =>
+    AxiosInstance.patch(`/admin/website-orders/${id}/assign`, { saleId, note }),
+  changeStatus: (id, status, note) =>
+    AxiosInstance.patch(`/admin/website-orders/${id}/status`, { status, note }),
+  convert: (id, payload) =>
+    AxiosInstance.patch(`/admin/website-orders/${id}/convert-to-invoice`, payload),
 };
 
 export const WebsiteContentService = {
   getAll: (params = {}) => AxiosInstance.get("/admin/website-contents", { params }),
   getById: (id) => AxiosInstance.get(`/admin/website-contents/${id}`),
+  getCategories: () => AxiosInstance.get("/admin/website-content-categories"),
   create: (payload) => AxiosInstance.post("/admin/website-contents", payload),
   update: (id, payload) => AxiosInstance.patch(`/admin/website-contents/${id}`, payload),
   remove: (id) => AxiosInstance.delete(`/admin/website-contents/${id}`),
+  uploadImage: (file) =>
+    AxiosInstance.post("/admin/website-products/images/upload", fileForm(file)),
 };
 
 export const WebsiteProductService = {
@@ -24,7 +30,8 @@ export const WebsiteProductService = {
   create: (payload) => AxiosInstance.post("/admin/website-products", payload),
   update: (id, payload) => AxiosInstance.patch(`/admin/website-products/${id}`, payload),
   remove: (id) => AxiosInstance.delete(`/admin/website-products/${id}`),
-  uploadImage: (file) => AxiosInstance.post("/admin/website-products/images/upload", fileForm(file)),
+  uploadImage: (file) =>
+    AxiosInstance.post("/admin/website-products/images/upload", fileForm(file)),
   mapInventory: (id, inventoryProductId) =>
     AxiosInstance.patch(`/admin/website-products/${id}/map-inventory`, { inventoryProductId }),
 };

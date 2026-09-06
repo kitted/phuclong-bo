@@ -823,7 +823,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
   );
   const loadPreview = useCallback(
     async (voucher = appliedVoucher, silent = true) => {
-      if (!previewItems.length) {
+      if (!previewItems.length && !voucher) {
         setPreview(null);
         return null;
       }
@@ -848,7 +848,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
     [appliedVoucher, customer, previewItems]
   );
   useEffect(() => {
-    if (!open || !previewItems.length) {
+    if (!open || (!previewItems.length && !appliedVoucher)) {
       setPreview(null);
       return undefined;
     }
@@ -889,14 +889,89 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
     const code = form.voucherCode.trim().toUpperCase();
     if (!code) {
       setAppliedVoucher("");
+      setGifts((current) => current.filter((gift) => !gift.manualPromotionCode));
       return;
     }
     const result = await loadPreview(code, false);
     if (result) {
-      setAppliedVoucher(code);
-      toast.success(`Đã áp dụng ${result.promotion?.name || code}`);
+      const manualCode = result.manualPromotionCode;
+      if (manualCode?.gift) {
+        if (!customer || String(getId(customer)) !== String(manualCode.customerId)) {
+          try {
+            const customerResponse = await CustomerService.getById(manualCode.customerId);
+            setCustomer(unwrap(customerResponse));
+            setCustomerMode("EXISTING");
+          } catch (error) {
+            toast.error(errorMessage(error, "Không thể tải khách hàng của mã khuyến mãi"));
+            return;
+          }
+        }
+        setAppliedVoucher(code);
+        const giftQuantity = Math.max(1, Number(manualCode.gift.qty) || 1);
+        const product = {
+          id: manualCode.gift.productId,
+          _id: manualCode.gift.productId,
+          code: manualCode.gift.productCode,
+          name: manualCode.gift.productName,
+          unit: manualCode.gift.unit,
+          imageUrl: manualCode.gift.imageUrl,
+          stock: manualCode.gift.stock,
+        };
+        setGifts((current) => {
+          const withoutPreviousCode = current.filter((gift) => !gift.manualPromotionCode);
+          const matchingIndex = withoutPreviousCode.findIndex(
+            (gift) => String(getId(gift.product) || "") === String(manualCode.gift.productId)
+          );
+          if (matchingIndex >= 0)
+            return withoutPreviousCode.map((gift, index) =>
+              index === matchingIndex
+                ? {
+                    ...gift,
+                    product,
+                    qty: giftQuantity,
+                    manualPromotionCode: code,
+                    manualPromotionCustomerId: manualCode.customerId,
+                  }
+                : gift
+            );
+          return [
+            ...withoutPreviousCode,
+            {
+              product,
+              qty: giftQuantity,
+              search: "",
+              manualPromotionCode: code,
+              manualPromotionCustomerId: manualCode.customerId,
+            },
+          ];
+        });
+        if (!previewItems.length) setItems([]);
+        toast.success(`Đã thêm ${manualCode.gift.productName} vào quà tặng`);
+      } else {
+        setAppliedVoucher(code);
+        setGifts((current) => current.filter((gift) => !gift.manualPromotionCode));
+        toast.success(`Đã áp dụng ${result.promotion?.name || code}`);
+      }
     }
   };
+  useEffect(() => {
+    const manualGift = gifts.find((gift) => gift.manualPromotionCode);
+    if (!manualGift) return;
+    const selectedCustomerId = customerMode === "EXISTING" ? String(getId(customer) || "") : "";
+    if (
+      selectedCustomerId &&
+      selectedCustomerId === String(manualGift.manualPromotionCustomerId || "")
+    )
+      return;
+    setGifts((current) => current.filter((gift) => !gift.manualPromotionCode));
+    setAppliedVoucher("");
+    setForm((current) =>
+      current.voucherCode === manualGift.manualPromotionCode
+        ? { ...current, voucherCode: "" }
+        : current
+    );
+    toast.info("Đã bỏ quà khuyến mãi vì khách hàng trên hóa đơn đã thay đổi");
+  }, [customer, customerMode, gifts]);
   const chooseGiftPromotion = (promotion) => {
     setSelectedGiftPromotion(promotion);
     setGiftSelections({});
@@ -948,7 +1023,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
   const hasCustomerProfile = Boolean(customer) || createsUnassignedCustomer;
   const currentDebt = Number(customer?.debt || 0);
   const debtLimit = Number(customer?.debtLimit || 0);
-  const isDebtPaymentOnly = previewItems.length === 0 && paidAmount > 0;
+  const isDebtPaymentOnly = previewItems.length === 0 && gifts.length === 0 && paidAmount > 0;
   const paysExistingDebt = form.paymentMode === "PAY_WITH_DEBT";
   const invoicePaidAmount = Math.min(grandTotal, paidAmount);
   const previousDebtPaidAmount = isDebtPaymentOnly
@@ -1103,7 +1178,10 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
       return "";
     }
     if (!salesperson) return "Vui lòng chọn nhân viên xuất hóa đơn";
-    if (!previewItems.length || previewItems.length !== items.length)
+    const hasManualPromotionGift = gifts.some(
+      (gift) => gift.manualPromotionCode && gift.manualPromotionCode === appliedVoucher
+    );
+    if ((!previewItems.length && !hasManualPromotionGift) || previewItems.length !== items.length)
       return "Vui lòng chọn đầy đủ sản phẩm và số lượng";
     if (items.some((item) => item.customPriceEnabled && Number(item.customPrice || 0) <= 0))
       return "Giá bán điều chỉnh phải lớn hơn 0";
@@ -2826,6 +2904,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                       </SoftBox>
                       <SearchSelect
                         value={gift.product}
+                        disabled={Boolean(gift.manualPromotionCode)}
                         onChange={(product) =>
                           setGifts((current) =>
                             current.map((item, itemIndex) =>
@@ -2893,6 +2972,17 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                           </SoftTypography>
                         </SoftBox>
                       )}
+                      {gift.manualPromotionCode && (
+                        <SoftTypography
+                          variant="caption"
+                          color="success"
+                          fontWeight="bold"
+                          display="block"
+                          mt={0.75}
+                        >
+                          Quà tự động từ mã {gift.manualPromotionCode} · số lượng cố định {gift.qty}
+                        </SoftTypography>
+                      )}
                     </SoftBox>
                     <SoftBox
                       display="flex"
@@ -2916,6 +3006,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                         Số lượng
                       </SoftTypography>
                       <IconButton
+                        disabled={Boolean(gift.manualPromotionCode)}
                         onClick={() =>
                           setGifts((current) =>
                             current.map((item, itemIndex) =>
@@ -2933,6 +3024,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                         <SoftInput
                           type="number"
                           value={gift.qty}
+                          disabled={Boolean(gift.manualPromotionCode)}
                           inputProps={{
                             min: 1,
                             step: 1,
@@ -2948,7 +3040,11 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                         />
                       </SoftBox>
                       <IconButton
-                        disabled={!gift.product || remainingStockFor(gift.product) <= 0}
+                        disabled={
+                          Boolean(gift.manualPromotionCode) ||
+                          !gift.product ||
+                          remainingStockFor(gift.product) <= 0
+                        }
                         onClick={() =>
                           setGifts((current) =>
                             current.map((item, itemIndex) =>
@@ -2963,6 +3059,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                         <Icon>add</Icon>
                       </IconButton>
                       <IconButton
+                        disabled={Boolean(gift.manualPromotionCode)}
                         onClick={() =>
                           setGifts((current) =>
                             current.filter((_, itemIndex) => itemIndex !== index)
@@ -3308,7 +3405,10 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                       <SoftInput
                         value={form.voucherCode}
                         onChange={(e) => set("voucherCode", e.target.value.toUpperCase())}
-                        placeholder="Nhập mã voucher"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") applyVoucher();
+                        }}
+                        placeholder="Nhập voucher hoặc mã tặng quà"
                       />
                     </SoftBox>
                     <SoftButton variant="outlined" color="info" onClick={applyVoucher}>
@@ -3321,6 +3421,9 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                         onClick={() => {
                           setAppliedVoucher("");
                           set("voucherCode", "");
+                          setGifts((current) =>
+                            current.filter((gift) => !gift.manualPromotionCode)
+                          );
                         }}
                       >
                         Bỏ mã

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Card from "@mui/material/Card";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
@@ -9,6 +9,7 @@ import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
 import Tooltip from "@mui/material/Tooltip";
 import TextField from "@mui/material/TextField";
+import Autocomplete from "@mui/material/Autocomplete";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
@@ -17,8 +18,15 @@ import SoftInput from "components/SoftInput";
 import SoftButton from "components/SoftButton";
 import EntityThumbnail from "components/EntityThumbnail";
 import MobileLoadMore from "components/MobileLoadMore";
-import { CategoryService, ProductService } from "services/warehouseService";
-import { CustomerService, PromotionService, PRODUCT_TYPES } from "services/crmService";
+import { CategoryService, ProductService, TruckService } from "services/warehouseService";
+import {
+  CustomerService,
+  PromotionActivationService,
+  PromotionService,
+  PRODUCT_TYPES,
+} from "services/crmService";
+import EmployeeService from "services/employeeService";
+import { downloadBlob } from "utils/excel";
 import { toast } from "react-toastify";
 import { mergeUniqueItems } from "utils/infiniteList";
 
@@ -99,6 +107,19 @@ const plain = (value) =>
     .replace(/[đĐ]/g, "d")
     .toLowerCase();
 const idOf = (value) => value?.id || value?._id;
+const listData = (response) => {
+  const value = response?.data?.data ?? response?.data;
+  return Array.isArray(value) ? value : value?.items || value?.docs || [];
+};
+const loadAllOptions = async (request) => {
+  const first = await request({ page: 1, limit: 100 });
+  const totalPages = Number(first?.data?.meta?.totalPages || 1);
+  if (totalPages <= 1) return listData(first);
+  const remaining = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) => request({ page: index + 2, limit: 100 }))
+  );
+  return [...listData(first), ...remaining.flatMap(listData)];
+};
 const parseMoneyText = (text) => {
   const value = plain(text).replace(/\s/g, "");
   const million = value.match(/(\d+(?:[.,]\d+)?)tr(?:ieu)?/);
@@ -1447,6 +1468,649 @@ function PromotionPerformance({ promotion, onClose }) {
   );
 }
 
+function QuickCustomerPromotionCodes() {
+  const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [trucks, setTrucks] = useState([]);
+  const [codes, setCodes] = useState([]);
+  const [search, setSearch] = useState("");
+  const [submittedSearch, setSubmittedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ totalPages: 1 });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState("");
+  const [codeEdited, setCodeEdited] = useState(false);
+  const [form, setForm] = useState({
+    prefix: "KM",
+    product: null,
+    customer: null,
+    salesperson: null,
+    giftQuantity: 1,
+    stockSource: "WAREHOUSE",
+    sourceTruck: null,
+    code: "",
+  });
+
+  const cleanPart = (value, fallback = "") =>
+    String(value || "")
+      .trim()
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/Đ/g, "D")
+      .replace(/[^A-Z0-9_-]+/g, "") || fallback;
+
+  const datePart = () => {
+    const now = new Date();
+    return [
+      String(now.getDate()).padStart(2, "0"),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getFullYear()).slice(-2),
+    ].join("");
+  };
+
+  const generatedCode = () => {
+    const customerCode = cleanPart(
+      form.customer?.code,
+      String(idOf(form.customer) || "").slice(-6)
+    );
+    return [
+      cleanPart(form.prefix, "KM"),
+      cleanPart(form.product?.code, "SANPHAM"),
+      datePart(),
+      cleanPart(
+        form.salesperson?.fullName || form.salesperson?.username || form.salesperson?.employeeCode,
+        "SALE"
+      ),
+      customerCode.replace(/^KH/, "") || "KHACH",
+    ].join("/");
+  };
+
+  useEffect(() => {
+    Promise.all([
+      loadAllOptions((params) => ProductService.getAll(params)),
+      loadAllOptions((params) => CustomerService.getAll(params)),
+      loadAllOptions((params) => EmployeeService.getAll(params)),
+      loadAllOptions((params) => TruckService.getAll(params)),
+    ])
+      .then(([productRows, customerRows, employeeRows, truckRows]) => {
+        setProducts(productRows);
+        setCustomers(customerRows);
+        setEmployees(employeeRows);
+        setTrucks(truckRows);
+      })
+      .catch(() => toast.error("Không thể tải dữ liệu tạo mã khuyến mãi nhanh"));
+  }, []);
+
+  useEffect(() => {
+    if (!codeEdited)
+      setForm((current) => ({
+        ...current,
+        code: [
+          cleanPart(current.prefix, "KM"),
+          cleanPart(current.product?.code, "SANPHAM"),
+          datePart(),
+          cleanPart(
+            current.salesperson?.fullName ||
+              current.salesperson?.username ||
+              current.salesperson?.employeeCode,
+            "SALE"
+          ),
+          cleanPart(current.customer?.code, String(idOf(current.customer) || "").slice(-6)).replace(
+            /^KH/,
+            ""
+          ) || "KHACH",
+        ].join("/"),
+      }));
+  }, [codeEdited, form.customer, form.prefix, form.product, form.salesperson]);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    PromotionActivationService.getAll({
+      source: "MANUAL",
+      search: submittedSearch || undefined,
+      page,
+      limit: 20,
+    })
+      .then((response) => {
+        setCodes(listData(response));
+        setMeta(response.data?.meta || { totalPages: 1 });
+      })
+      .catch((error) =>
+        toast.error(error.response?.data?.message || "Không thể tải danh sách mã khuyến mãi")
+      )
+      .finally(() => setLoading(false));
+  }, [page, submittedSearch]);
+
+  useEffect(load, [load]);
+
+  const reset = () => {
+    setEditingId("");
+    setCodeEdited(false);
+    setForm({
+      prefix: "KM",
+      product: null,
+      customer: null,
+      salesperson: null,
+      giftQuantity: 1,
+      stockSource: "WAREHOUSE",
+      sourceTruck: null,
+      code: "",
+    });
+  };
+
+  const save = async () => {
+    if (!form.product || !form.customer || !form.salesperson)
+      return toast.error("Vui lòng chọn sản phẩm, khách hàng và nhân viên sale");
+    if (form.stockSource === "TRUCK" && !form.sourceTruck)
+      return toast.error("Vui lòng chọn xe xuất hàng khuyến mãi");
+    if (!Number.isInteger(Number(form.giftQuantity)) || Number(form.giftQuantity) < 1)
+      return toast.error("Số lượng sản phẩm muốn tặng phải là số nguyên từ 1 trở lên");
+    if (!form.code.trim()) return toast.error("Vui lòng nhập mã khuyến mãi");
+    try {
+      setSaving(true);
+      const payload = {
+        prefix: cleanPart(form.prefix, "KM"),
+        productId: idOf(form.product),
+        customerId: idOf(form.customer),
+        salespersonId: idOf(form.salesperson),
+        giftQuantity: Number(form.giftQuantity),
+        stockSource: form.stockSource,
+        sourceTruckId: form.stockSource === "TRUCK" ? idOf(form.sourceTruck) : undefined,
+        code: form.code.trim().toUpperCase(),
+      };
+      const response = editingId
+        ? await PromotionActivationService.updateManual(editingId, payload)
+        : await PromotionActivationService.createManual(payload);
+      if (response.data?.data?.stockWarning)
+        toast.warning("Đã lưu mã nhưng nguồn đã chọn hiện không đủ số lượng sản phẩm để tặng");
+      else toast.success(editingId ? "Đã cập nhật mã khuyến mãi" : "Đã tạo mã khuyến mãi");
+      reset();
+      setPage(1);
+      if (page === 1) load();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể lưu mã khuyến mãi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const edit = async (item) => {
+    let sourceTruck =
+      trucks.find((truck) => idOf(truck) === String(item.sourceTruckId)) ||
+      (item.sourceTruckId
+        ? { id: item.sourceTruckId, code: item.sourceTruckCode, name: item.sourceTruckName }
+        : null);
+    if (item.stockSource === "TRUCK" && item.sourceTruckId) {
+      try {
+        const response = await TruckService.getById(item.sourceTruckId);
+        sourceTruck = response.data?.data || response.data;
+      } catch {
+        toast.warning("Không thể tải tồn hiện tại của xe đã chọn");
+      }
+    }
+    setEditingId(idOf(item));
+    setCodeEdited(true);
+    setForm({
+      prefix: item.customPrefix || String(item.code || "").split("/")[0] || "KM",
+      product: products.find((product) => idOf(product) === String(item.productId)) || {
+        id: item.productId,
+        code: item.productCode,
+        name: item.productName,
+      },
+      customer: customers.find((customer) => idOf(customer) === String(item.customerId)) || {
+        id: item.customerId,
+        code: item.customerCode,
+        name: item.customerName,
+        phone: item.customerPhone,
+      },
+      salesperson: employees.find((employee) => idOf(employee) === String(item.salespersonId)) || {
+        id: item.salespersonId,
+        employeeCode: item.salespersonCode,
+        fullName: item.salespersonName,
+      },
+      giftQuantity: Number(item.giftQuantity) || 1,
+      stockSource: item.stockSource || "WAREHOUSE",
+      sourceTruck,
+      code: item.code || "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const copy = async (code) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast.success("Đã sao chép mã khuyến mãi");
+    } catch {
+      toast.error("Không thể sao chép tự động");
+    }
+  };
+
+  const exportExcel = async () => {
+    try {
+      const response = await PromotionActivationService.exportExcel({
+        source: "MANUAL",
+        search: submittedSearch || undefined,
+      });
+      downloadBlob(response.data, "ma-khuyen-mai-khach-hang.xlsx");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể xuất Excel");
+    }
+  };
+
+  const selectedTruckInventoryItem = (form.sourceTruck?.inventory || []).find(
+    (item) => String(idOf(item.productId) || item.productId) === String(idOf(form.product))
+  );
+  const availableQuantity =
+    form.stockSource === "WAREHOUSE"
+      ? Number(form.product?.stock || 0)
+      : Number(selectedTruckInventoryItem?.qty ?? selectedTruckInventoryItem?.quantity ?? 0);
+  const canCheckStock =
+    Boolean(form.product) &&
+    (form.stockSource === "WAREHOUSE" ||
+      (form.stockSource === "TRUCK" && Boolean(form.sourceTruck)));
+  const requestedGiftQuantity = Math.max(1, Number(form.giftQuantity) || 1);
+  const hasEnoughStock = canCheckStock && availableQuantity >= requestedGiftQuantity;
+  const stockSourceOptions = [
+    {
+      id: "warehouse",
+      sourceType: "WAREHOUSE",
+      name: "Kho chính",
+      subtitle: "Xuất quà trực tiếp từ kho",
+    },
+    ...trucks.map((truck) => ({
+      ...truck,
+      id: idOf(truck),
+      sourceType: "TRUCK",
+      subtitle: [truck.code, truck.licensePlate, truck.driverName || truck.driver?.fullName]
+        .filter(Boolean)
+        .join(" · "),
+    })),
+  ];
+  const selectedStockSource =
+    form.stockSource === "WAREHOUSE" ? stockSourceOptions[0] : form.sourceTruck;
+
+  const selectStockSource = async (value) => {
+    if (!value || value.sourceType === "WAREHOUSE") {
+      setForm((current) => ({
+        ...current,
+        stockSource: "WAREHOUSE",
+        sourceTruck: null,
+      }));
+      return;
+    }
+    setForm((current) => ({ ...current, stockSource: "TRUCK", sourceTruck: value }));
+    try {
+      const response = await TruckService.getById(idOf(value));
+      const detail = { ...(response.data?.data || response.data), sourceType: "TRUCK" };
+      setForm((current) => ({
+        ...current,
+        sourceTruck: idOf(current.sourceTruck) === idOf(value) ? detail : current.sourceTruck,
+      }));
+    } catch {
+      toast.error("Không thể kiểm tra tồn hàng trên xe");
+    }
+  };
+
+  return (
+    <SoftBox mb={3}>
+      <Card>
+        <SoftBox p={{ xs: 1.5, md: 3 }}>
+          <SoftBox
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+            gap={1.5}
+            flexWrap="wrap"
+          >
+            <SoftBox>
+              <SoftTypography variant="h5" fontWeight="bold">
+                Tạo mã khuyến mãi nhanh cho khách
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text">
+                Chọn từng thành phần, hệ thống tự ghép mã và vẫn cho phép chỉnh sửa trước khi lưu.
+              </SoftTypography>
+            </SoftBox>
+            <SoftButton color="success" variant="outlined" onClick={exportExcel}>
+              <Icon>download</Icon>&nbsp;Xuất Excel
+            </SoftButton>
+          </SoftBox>
+
+          <Grid container spacing={1.25} mt={0.5}>
+            <Grid item xs={12} sm={4} md={2}>
+              <SoftTypography variant="caption">Tiền tố</SoftTypography>
+              <SoftInput
+                value={form.prefix}
+                onChange={(event) => {
+                  setCodeEdited(false);
+                  setForm((current) => ({ ...current, prefix: event.target.value }));
+                }}
+                placeholder="KM"
+              />
+            </Grid>
+            <Grid item xs={12} sm={8} md={4}>
+              <SoftTypography variant="caption">Sản phẩm khuyến mãi *</SoftTypography>
+              <Autocomplete
+                options={products}
+                value={form.product}
+                onChange={(_, value) => {
+                  setCodeEdited(false);
+                  setForm((current) => ({ ...current, product: value }));
+                }}
+                getOptionLabel={(item) => [item.code, item.name].filter(Boolean).join(" · ")}
+                isOptionEqualToValue={(option, value) => idOf(option) === idOf(value)}
+                renderOption={(props, item) => (
+                  <li {...props} key={idOf(item)}>
+                    <SoftBox display="flex" alignItems="center" gap={1}>
+                      <EntityThumbnail entity={item} size={36} />
+                      <SoftBox>
+                        <SoftTypography variant="button" fontWeight="bold">
+                          {item.name}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text" display="block">
+                          {item.code}
+                        </SoftTypography>
+                      </SoftBox>
+                    </SoftBox>
+                  </li>
+                )}
+                renderInput={(params) => <TextField {...params} placeholder="Chọn sản phẩm" />}
+              />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <SoftTypography variant="caption">Nhân viên sale *</SoftTypography>
+              <Autocomplete
+                options={employees}
+                value={form.salesperson}
+                onChange={(_, value) => {
+                  setCodeEdited(false);
+                  setForm((current) => ({ ...current, salesperson: value }));
+                }}
+                getOptionLabel={(item) =>
+                  [item.employeeCode, item.fullName || item.username].filter(Boolean).join(" · ")
+                }
+                isOptionEqualToValue={(option, value) => idOf(option) === idOf(value)}
+                renderInput={(params) => <TextField {...params} placeholder="Chọn sale" />}
+              />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <SoftTypography variant="caption">Khách hàng *</SoftTypography>
+              <Autocomplete
+                options={customers}
+                value={form.customer}
+                onChange={(_, value) => {
+                  setCodeEdited(false);
+                  setForm((current) => ({ ...current, customer: value }));
+                }}
+                getOptionLabel={(item) =>
+                  [item.code, item.name, item.phone].filter(Boolean).join(" · ")
+                }
+                isOptionEqualToValue={(option, value) => idOf(option) === idOf(value)}
+                renderOption={(props, item) => (
+                  <li {...props} key={idOf(item)}>
+                    <SoftBox display="flex" alignItems="center" gap={1}>
+                      <EntityThumbnail entity={item} type="customer" size={36} />
+                      <SoftBox>
+                        <SoftTypography variant="button" fontWeight="bold">
+                          {item.name}
+                        </SoftTypography>
+                        <SoftTypography variant="caption" color="text" display="block">
+                          {[item.code, item.phone].filter(Boolean).join(" · ")}
+                        </SoftTypography>
+                      </SoftBox>
+                    </SoftBox>
+                  </li>
+                )}
+                renderInput={(params) => <TextField {...params} placeholder="Chọn khách hàng" />}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <SoftTypography variant="caption">Nguồn xuất hàng khuyến mãi *</SoftTypography>
+              <Autocomplete
+                options={stockSourceOptions}
+                value={selectedStockSource}
+                onChange={(_, value) => selectStockSource(value)}
+                getOptionLabel={(item) => item.name || "Xe bán hàng"}
+                isOptionEqualToValue={(option, value) =>
+                  option.sourceType === "WAREHOUSE"
+                    ? value?.sourceType === "WAREHOUSE"
+                    : idOf(option) === idOf(value)
+                }
+                renderOption={(props, item) => (
+                  <li {...props} key={`${item.sourceType}-${idOf(item)}`}>
+                    <SoftBox>
+                      <SoftTypography variant="button" fontWeight="bold" display="block">
+                        {item.name || "Xe bán hàng"}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        {item.subtitle}
+                      </SoftTypography>
+                    </SoftBox>
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField {...params} placeholder="Chọn kho chính hoặc xe xuất quà" />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4} md={2}>
+              <SoftTypography variant="caption">Số lượng muốn tặng *</SoftTypography>
+              <SoftInput
+                type="number"
+                value={form.giftQuantity}
+                inputProps={{ min: 1, step: 1 }}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, giftQuantity: event.target.value }))
+                }
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <SoftBox
+                height="100%"
+                minHeight={40}
+                px={1.5}
+                py={1}
+                borderRadius={2}
+                bgcolor={!canCheckStock ? "#f5f7fa" : hasEnoughStock ? "#e8f5e9" : "#ffebee"}
+                sx={{
+                  border: "1px solid",
+                  borderColor: !canCheckStock ? "#dfe4ea" : hasEnoughStock ? "#a5d6a7" : "#ef9a9a",
+                }}
+              >
+                <SoftTypography
+                  variant="button"
+                  fontWeight="bold"
+                  color={!canCheckStock ? "text" : hasEnoughStock ? "success" : "error"}
+                >
+                  {!canCheckStock
+                    ? "Chọn sản phẩm và nguồn để kiểm tra tồn"
+                    : hasEnoughStock
+                    ? `Có thể tặng ${requestedGiftQuantity} · Còn ${availableQuantity} ${
+                        form.product?.unit || ""
+                      }`
+                    : `Cảnh báo: nguồn chỉ còn ${availableQuantity} ${
+                        form.product?.unit || ""
+                      }, không đủ tặng ${requestedGiftQuantity}`}
+                </SoftTypography>
+              </SoftBox>
+            </Grid>
+            <Grid item xs={12}>
+              <SoftTypography variant="caption">Mã hoàn chỉnh — có thể chỉnh sửa</SoftTypography>
+              <SoftBox display="flex" gap={1} alignItems="stretch" flexWrap="wrap">
+                <SoftBox flex={1} minWidth={240}>
+                  <SoftInput
+                    value={form.code}
+                    onChange={(event) => {
+                      setCodeEdited(true);
+                      setForm((current) => ({
+                        ...current,
+                        code: event.target.value.toUpperCase(),
+                      }));
+                    }}
+                    placeholder="KM/SANPHAM/NGAY/SALE/KHACH"
+                  />
+                </SoftBox>
+                <SoftButton
+                  color="secondary"
+                  variant="outlined"
+                  onClick={() => {
+                    setCodeEdited(false);
+                    setForm((current) => ({ ...current, code: generatedCode() }));
+                  }}
+                >
+                  <Icon>autorenew</Icon>&nbsp;Tạo lại
+                </SoftButton>
+                <SoftButton
+                  color="info"
+                  variant="outlined"
+                  disabled={!form.code}
+                  onClick={() => copy(form.code)}
+                >
+                  <Icon>content_copy</Icon>&nbsp;Copy
+                </SoftButton>
+                <SoftButton color="info" variant="gradient" disabled={saving} onClick={save}>
+                  <Icon>save</Icon>&nbsp;
+                  {saving ? "Đang lưu..." : editingId ? "Lưu chỉnh sửa" : "Tạo mã"}
+                </SoftButton>
+                {editingId && (
+                  <SoftButton color="secondary" variant="text" onClick={reset}>
+                    Hủy sửa
+                  </SoftButton>
+                )}
+              </SoftBox>
+              <SoftTypography variant="caption" color="text">
+                Ngày tạo trong mã: {datePart()} · Mẫu: KM/NOILAU/120826/THOAI/123
+              </SoftTypography>
+            </Grid>
+          </Grid>
+        </SoftBox>
+      </Card>
+
+      <Card sx={{ mt: 2 }}>
+        <SoftBox p={{ xs: 1.5, md: 3 }}>
+          <SoftBox
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+            gap={1}
+            flexWrap="wrap"
+            mb={2}
+          >
+            <SoftBox>
+              <SoftTypography variant="h6" fontWeight="bold">
+                Mã đã lưu
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text">
+                Có thể tìm, sao chép hoặc mở lại để chỉnh sửa.
+              </SoftTypography>
+            </SoftBox>
+            <SoftBox minWidth={{ xs: "100%", sm: 300 }}>
+              <SoftInput
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    setPage(1);
+                    setSubmittedSearch(search.trim());
+                  }
+                }}
+                placeholder="Tìm mã, khách, sale, sản phẩm..."
+                icon={{ component: "search", direction: "left" }}
+              />
+            </SoftBox>
+          </SoftBox>
+          <Grid container spacing={1.25}>
+            {codes.map((item) => (
+              <Grid item xs={12} lg={6} key={idOf(item)}>
+                <SoftBox p={1.5} borderRadius={2.5} sx={{ border: "1px solid #dfe5ec" }}>
+                  <SoftBox display="flex" justifyContent="space-between" gap={1}>
+                    <SoftBox minWidth={0}>
+                      <SoftTypography
+                        variant="button"
+                        fontWeight="bold"
+                        color="info"
+                        sx={{ wordBreak: "break-word" }}
+                      >
+                        {item.code}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text" display="block" mt={0.5}>
+                        {item.productName || item.productCode} · SL tặng:{" "}
+                        {Number(item.giftQuantity) || 1} · {item.customerName} ·{" "}
+                        {item.salespersonName}
+                      </SoftTypography>
+                      <SoftTypography
+                        variant="caption"
+                        display="block"
+                        color={item.stockWarning ? "error" : "success"}
+                        fontWeight="bold"
+                      >
+                        {item.stockSource === "TRUCK"
+                          ? "Xuất từ xe: " +
+                            (item.sourceTruckCode || "") +
+                            " · " +
+                            (item.sourceTruckName || "")
+                          : "Xuất từ kho chính"}
+                        {" · "}
+                        {item.stockWarning
+                          ? "Không đủ hàng tại thời điểm tạo"
+                          : "Tồn lúc tạo: " + Number(item.availableQuantityAtCreation || 0)}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        {new Date(item.activatedAt || item.createdAt).toLocaleString("vi-VN")} ·{" "}
+                        {item.status === "ACTIVE"
+                          ? "Chưa sử dụng"
+                          : item.status === "USED"
+                          ? `Đã sử dụng${item.invoiceCode ? ` · Hóa đơn ${item.invoiceCode}` : ""}`
+                          : item.status === "CANCELLED"
+                          ? "Đã hủy"
+                          : item.status === "REVOKED"
+                          ? "Đã thu hồi"
+                          : item.status}
+                      </SoftTypography>
+                    </SoftBox>
+                    <SoftBox display="flex" alignItems="flex-start">
+                      <Tooltip title="Sao chép mã">
+                        <IconButton onClick={() => copy(item.code)}>
+                          <Icon color="info">content_copy</Icon>
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip
+                        title={
+                          item.status === "USED" ? "Mã đã sử dụng không thể chỉnh sửa" : "Chỉnh sửa"
+                        }
+                      >
+                        <span>
+                          <IconButton disabled={item.status === "USED"} onClick={() => edit(item)}>
+                            <Icon>edit</Icon>
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </SoftBox>
+                  </SoftBox>
+                </SoftBox>
+              </Grid>
+            ))}
+          </Grid>
+          {!loading && !codes.length && (
+            <SoftBox py={4} textAlign="center">
+              <SoftTypography variant="button" color="text">
+                Chưa có mã khuyến mãi tạo nhanh
+              </SoftTypography>
+            </SoftBox>
+          )}
+          <MobileLoadMore
+            loading={loading}
+            hasMore={page < Number(meta.totalPages || 1)}
+            onLoadMore={() => setPage((current) => current + 1)}
+          />
+        </SoftBox>
+      </Card>
+    </SoftBox>
+  );
+}
+
 export default function KhuyenMai() {
   const [promotions, setPromotions] = useState([]);
   const [summary, setSummary] = useState({});
@@ -1551,6 +2215,7 @@ export default function KhuyenMai() {
     <DashboardLayout>
       <DashboardNavbar />
       <SoftBox py={3}>
+        <QuickCustomerPromotionCodes />
         <SoftBox className="admin-summary-grid" display="flex" gap={2} mb={3} flexWrap="wrap">
           {[
             ["Tổng chương trình", summary.totalPrograms || 0, "local_offer", "#1565C0"],
