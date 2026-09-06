@@ -32,6 +32,7 @@ import WebsiteContents from "layouts/website-contents";
 import WebsiteContentEditor from "layouts/website-content-editor";
 import Leads from "layouts/leads";
 import CustomerCoins from "layouts/customer-coins";
+import DocumentSafety from "layouts/document-safety";
 
 const routes = [
   {
@@ -290,6 +291,16 @@ const routes = [
     route: "/backup-data",
     noCollapse: true,
     component: <BackupData />,
+    permission: ["admin"],
+  },
+  {
+    type: "collapse",
+    name: "Vùng an toàn chứng từ",
+    key: "document-safety",
+    icon: <Document size="12px" />,
+    route: "/document-safety",
+    noCollapse: true,
+    component: <DocumentSafety />,
     permission: ["admin"],
   },
 
