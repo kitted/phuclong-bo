@@ -33,6 +33,7 @@ import WebsiteContentEditor from "layouts/website-content-editor";
 import Leads from "layouts/leads";
 import CustomerCoins from "layouts/customer-coins";
 import DocumentSafety from "layouts/document-safety";
+import WarrantyReturns from "layouts/warranty-returns";
 
 const routes = [
   {
@@ -190,6 +191,16 @@ const routes = [
     route: "/ton-kho",
     noCollapse: true,
     component: <TonKho />,
+    permission: ["admin"],
+  },
+  {
+    type: "collapse",
+    name: "Hàng bảo hành",
+    key: "warranty-returns",
+    icon: <Cube size="12px" />,
+    route: "/warranty-returns",
+    noCollapse: true,
+    component: <WarrantyReturns />,
     permission: ["admin"],
   },
 

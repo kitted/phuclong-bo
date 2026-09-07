@@ -76,7 +76,7 @@ function DebtTrend({ rows }) {
   );
 }
 
-export default function CustomerDebtHistory({ customerId, refreshKey = 0 }) {
+export default function CustomerDebtHistory({ customerId, refreshKey = 0, onSelect }) {
   const [rows, setRows] = useState([]);
   const [chart, setChart] = useState([]);
   const [summary, setSummary] = useState({});
@@ -152,7 +152,25 @@ export default function CustomerDebtHistory({ customerId, refreshKey = 0 }) {
           const decrease = Number(item.decreaseAmount) || 0;
           const isIncrease = increase > 0;
           return (
-            <SoftBox key={item.id} display="flex" gap={1.5} pb={2}>
+            <SoftBox
+              key={item.id}
+              component={onSelect ? "button" : "div"}
+              type={onSelect ? "button" : undefined}
+              onClick={onSelect ? () => onSelect(item) : undefined}
+              display="flex"
+              gap={1.5}
+              pb={2}
+              width="100%"
+              textAlign="left"
+              sx={{
+                border: 0,
+                background: "transparent",
+                color: "inherit",
+                cursor: onSelect ? "pointer" : "default",
+                p: 0,
+                font: "inherit",
+              }}
+            >
               <SoftBox
                 width={38}
                 height={38}

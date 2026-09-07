@@ -37,11 +37,7 @@ import { mergeUniqueItems } from "utils/infiniteList";
 import CustomerReturnModal, { InvoiceBusinessTypeSwitch } from "./customer-return-form";
 import CustomerReturnService from "services/customerReturnService";
 import EntityThumbnail from "components/EntityThumbnail";
-import {
-  formatBusinessDateTime,
-  toBusinessDateTime,
-  vietnamToday,
-} from "utils/businessDate";
+import { formatBusinessDateTime, toBusinessDateTime, vietnamToday } from "utils/businessDate";
 
 const money = (value = 0) =>
   new Intl.NumberFormat("vi-VN", {
@@ -4317,7 +4313,14 @@ function InvoicePaperView({ invoice }) {
   );
 }
 
-function InvoiceDetail({ id, document, onClose, mobile = false, isAdmin = false, onReversed }) {
+export function InvoiceDetail({
+  id,
+  document,
+  onClose,
+  mobile = false,
+  isAdmin = false,
+  onReversed,
+}) {
   const [invoice, setInvoice] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [reversing, setReversing] = useState(false);

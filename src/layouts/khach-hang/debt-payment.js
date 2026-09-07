@@ -296,7 +296,7 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
   );
 }
 
-export function DebtPaymentHistory({ customerId, refreshKey, onChanged }) {
+export function DebtPaymentHistory({ customerId, refreshKey, onChanged, onSelect }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exportingId, setExportingId] = useState("");
@@ -366,7 +366,20 @@ export function DebtPaymentHistory({ customerId, refreshKey, onChanged }) {
             </tr>
           )}
           {items.map((payment) => (
-            <tr key={idOf(payment)} style={{ borderBottom: "1px solid #eee" }}>
+            <tr
+              key={idOf(payment)}
+              onClick={() => onSelect?.(payment)}
+              onKeyDown={(event) => {
+                if ((event.key === "Enter" || event.key === " ") && onSelect) onSelect(payment);
+              }}
+              role={onSelect ? "button" : undefined}
+              tabIndex={onSelect ? 0 : undefined}
+              title={onSelect ? "Xem nhanh phiếu thu" : undefined}
+              style={{
+                borderBottom: "1px solid #eee",
+                cursor: onSelect ? "pointer" : "default",
+              }}
+            >
               <td style={{ padding: 10, fontWeight: 600 }}>{payment.code}</td>
               <td style={{ padding: 10 }}>{dateTime(payment.date || payment.createdAt)}</td>
               <td style={{ padding: 10 }}>{money(payment.amount)}</td>
@@ -384,7 +397,7 @@ export function DebtPaymentHistory({ customerId, refreshKey, onChanged }) {
                 )}
               </td>
               <td style={{ padding: 10 }}>{payment.status === "ACTIVE" ? "Đã thu" : "Đã hủy"}</td>
-              <td style={{ padding: 10 }}>
+              <td style={{ padding: 10 }} onClick={(event) => event.stopPropagation()}>
                 <SoftBox display="flex" gap={0.5} flexWrap="wrap">
                   <SoftButton
                     size="small"

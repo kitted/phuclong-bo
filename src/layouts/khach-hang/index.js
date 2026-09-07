@@ -32,6 +32,7 @@ import QuickSortBar from "components/QuickSortBar";
 import { mergeUniqueItems } from "utils/infiniteList";
 import CustomerDebtHistory from "./debt-history";
 import { formatBusinessDateTime } from "utils/businessDate";
+import { InvoiceDetail } from "layouts/hoa-don";
 
 const CustomerStoreProfile = lazy(() => import("./store-profile"));
 
@@ -354,6 +355,82 @@ const normalizeCustomerDetail = (response) => {
     interactions: Array.isArray(data.interactions) ? data.interactions : [],
   };
 };
+
+const detailValue = (value) => {
+  if (value === null || value === undefined || value === "") return "—";
+  return value;
+};
+
+function QuickRecordDetail({ detail, onClose }) {
+  return (
+    <Modal open={Boolean(detail)} onClose={onClose}>
+      <SoftBox
+        sx={{
+          position: "absolute",
+          top: { xs: 0, sm: "50%" },
+          left: { xs: 0, sm: "50%" },
+          transform: { xs: "none", sm: "translate(-50%, -50%)" },
+          width: { xs: "100%", sm: "calc(100% - 32px)" },
+          maxWidth: 680,
+          height: { xs: "100dvh", sm: "auto" },
+          maxHeight: { sm: "88vh" },
+          overflowY: "auto",
+          bgcolor: "background.paper",
+          borderRadius: { xs: 0, sm: 3 },
+          boxShadow: 24,
+          p: { xs: 2, sm: 3 },
+        }}
+      >
+        <SoftBox display="flex" alignItems="flex-start" justifyContent="space-between" gap={2}>
+          <SoftBox minWidth={0}>
+            <SoftTypography variant="h5" fontWeight="bold">
+              {detail?.title || "Chi tiết"}
+            </SoftTypography>
+            {detail?.subtitle && (
+              <SoftTypography variant="button" color="text">
+                {detail.subtitle}
+              </SoftTypography>
+            )}
+          </SoftBox>
+          <IconButton onClick={onClose} aria-label="Đóng chi tiết">
+            <Icon>close</Icon>
+          </IconButton>
+        </SoftBox>
+        <SoftBox
+          display="grid"
+          gap={1}
+          mt={2.5}
+          sx={{ gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" } }}
+        >
+          {(detail?.fields || []).map(([label, value, wide]) => (
+            <SoftBox
+              key={label}
+              p={1.5}
+              borderRadius={2}
+              bgcolor="#f6f8fb"
+              sx={{ gridColumn: wide ? "1 / -1" : "auto" }}
+            >
+              <SoftTypography variant="caption" color="text" display="block">
+                {label}
+              </SoftTypography>
+              <SoftTypography
+                variant="button"
+                fontWeight="bold"
+                display="block"
+                sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
+              >
+                {detailValue(value)}
+              </SoftTypography>
+            </SoftBox>
+          ))}
+        </SoftBox>
+        <SoftButton fullWidth variant="gradient" color="info" sx={{ mt: 3 }} onClick={onClose}>
+          Đóng
+        </SoftButton>
+      </SoftBox>
+    </Modal>
+  );
+}
 
 function CustomerForm({ open, customer, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -1008,6 +1085,8 @@ function CustomerDetail({
   const [debtRefreshKey, setDebtRefreshKey] = useState(0);
   const [codeOpen, setCodeOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [invoiceDetailId, setInvoiceDetailId] = useState(null);
+  const [quickDetail, setQuickDetail] = useState(null);
   const loadDetail = () =>
     CustomerService.getById(customerId).then((response) =>
       setCustomer(normalizeCustomerDetail(response))
@@ -1018,6 +1097,8 @@ function CustomerDetail({
       setCustomer(null);
       setActivations([]);
       setTab(0);
+      setInvoiceDetailId(null);
+      setQuickDetail(null);
       CustomerService.getById(customerId)
         .then((response) => {
           if (active) setCustomer(normalizeCustomerDetail(response));
@@ -1303,7 +1384,7 @@ function CustomerDetail({
               <Grid item xs={6} md={3}>
                 <Card className="admin-summary-card">
                   <SoftBox className="admin-summary-content" p={2}>
-                    <SoftTypography variant="caption">Coin hóa đơn</SoftTypography>
+                    <SoftTypography variant="caption">Điểm tích lũy hóa đơn</SoftTypography>
                     <SoftTypography variant="h6" fontWeight="bold" color="info">
                       {new Intl.NumberFormat("vi-VN").format(customer.invoiceCoinBalance || 0)}
                     </SoftTypography>
@@ -1313,7 +1394,7 @@ function CustomerDetail({
               <Grid item xs={6} md={3}>
                 <Card className="admin-summary-card">
                   <SoftBox className="admin-summary-content" p={2}>
-                    <SoftTypography variant="caption">Coin PlusEx</SoftTypography>
+                    <SoftTypography variant="caption">Điểm tích lũy PlusEx</SoftTypography>
                     <SoftTypography variant="h6" fontWeight="bold" color="success">
                       {new Intl.NumberFormat("vi-VN").format(customer.plusExCoinBalance || 0)}
                     </SoftTypography>
@@ -1463,6 +1544,8 @@ function CustomerDetail({
                         ? badge("Một phần", "#E65100", "#FFF3E0")
                         : badge("Chưa thanh toán", "#C62828", "#FFEBEE"),
                     ])}
+                    onRowClick={(index) => setInvoiceDetailId(customer.invoices[index]?.id)}
+                    rowLabel="Xem nhanh hóa đơn"
                   />
                 )}
                 {tab === 2 && (
@@ -1477,6 +1560,24 @@ function CustomerDetail({
                         ? badge("Có thể dùng", "#388E3C", "#E8F5E9")
                         : badge("Đã sử dụng", "#6B7280", "#F3F4F6"),
                     ])}
+                    onRowClick={(index) => {
+                      const item = customer.vouchers[index];
+                      setQuickDetail({
+                        title: `Voucher ${item.code || ""}`,
+                        subtitle: item.campaign,
+                        fields: [
+                          ["Mã voucher", item.code],
+                          [
+                            "Trạng thái",
+                            item.status === "ACTIVE" ? "Có thể sử dụng" : "Đã sử dụng",
+                          ],
+                          ["Chương trình", item.campaign, true],
+                          ["Ưu đãi", item.benefit],
+                          ["Hạn sử dụng", formatBusinessDateTime(item.expiresAt)],
+                        ],
+                      });
+                    }}
+                    rowLabel="Xem nhanh voucher"
                   />
                 )}
                 {tab === 3 && (
@@ -1503,6 +1604,28 @@ function CustomerDetail({
                             "#F3F4F6"
                           ),
                     ])}
+                    onRowClick={(index) => {
+                      const item = activations[index];
+                      setQuickDetail({
+                        title: `Mã kích hoạt ${item.code || ""}`,
+                        subtitle: item.promotionName,
+                        fields: [
+                          ["Mã kích hoạt", item.code],
+                          [
+                            "Trạng thái",
+                            item.status === "ACTIVE"
+                              ? "Đang hoạt động"
+                              : item.status === "CANCELLED"
+                              ? "Đã hủy"
+                              : "Đã thu hồi",
+                          ],
+                          ["Chương trình", item.promotionName, true],
+                          ["Hóa đơn", item.invoiceCode],
+                          ["Ngày kích hoạt", dateTime(item.activatedAt)],
+                        ],
+                      });
+                    }}
+                    rowLabel="Xem nhanh mã kích hoạt"
                   />
                 )}
                 {tab === 4 && (
@@ -1513,10 +1636,54 @@ function CustomerDetail({
                       await loadDetail();
                       setDebtRefreshKey((value) => value + 1);
                     }}
+                    onSelect={(item) =>
+                      setQuickDetail({
+                        title: `Phiếu thu ${item.code || ""}`,
+                        fields: [
+                          ["Ngày thu", dateTime(item.date || item.createdAt)],
+                          ["Trạng thái", item.status === "ACTIVE" ? "Đã thu" : "Đã hủy"],
+                          ["Số tiền", money(item.amount)],
+                          ["Công nợ trước", money(item.customerDebtBefore)],
+                          ["Công nợ sau", money(item.customerDebtAfter)],
+                          [
+                            "Phân bổ hóa đơn",
+                            (item.allocations || [])
+                              .map(
+                                (allocation) =>
+                                  `${allocation.invoiceCode || "Hóa đơn"}: ${money(
+                                    allocation.amount
+                                  )}`
+                              )
+                              .join("\n"),
+                            true,
+                          ],
+                          ["Ghi chú", item.note, true],
+                        ],
+                      })
+                    }
                   />
                 )}
                 {tab === 5 && (
-                  <CustomerDebtHistory customerId={customerId} refreshKey={debtRefreshKey} />
+                  <CustomerDebtHistory
+                    customerId={customerId}
+                    refreshKey={debtRefreshKey}
+                    onSelect={(item) =>
+                      setQuickDetail({
+                        title: "Chi tiết biến động công nợ",
+                        subtitle: item.referenceCode || item.referenceId,
+                        fields: [
+                          ["Loại biến động", item.type],
+                          ["Thời gian", dateTime(item.effectiveAt || item.occurredAt)],
+                          ["Công nợ trước", money(item.previousDebt)],
+                          ["Tăng", money(item.increaseAmount)],
+                          ["Giảm", money(item.decreaseAmount)],
+                          ["Công nợ sau", money(item.balanceAfter)],
+                          ["Người thực hiện", item.actor?.name],
+                          ["Ghi chú", item.note, true],
+                        ],
+                      })
+                    }
+                  />
                 )}
                 {tab === 6 && (
                   <Suspense
@@ -1561,6 +1728,22 @@ function CustomerDetail({
                       item.phone || customer.phone || "—",
                       item.note || item.result || "—",
                     ])}
+                    onRowClick={(index) => {
+                      const item = customer.interactions[index];
+                      setQuickDetail({
+                        title: "Chi tiết tương tác khách hàng",
+                        subtitle: formatBusinessDateTime(item.occurredAt || item.at),
+                        fields: [
+                          ["Kênh", item.channel],
+                          ["Số điện thoại", item.phone || customer.phone],
+                          ["Tình trạng Zalo", item.zaloStatus],
+                          ["Tình trạng hóa đơn", item.invoiceStatus],
+                          ["Nội dung tương tác", item.interaction || item.action, true],
+                          ["Ghi chú / Kết quả", item.note || item.result, true],
+                        ],
+                      });
+                    }}
+                    rowLabel="Xem nhanh tương tác"
                   />
                 )}
               </SoftBox>
@@ -1663,6 +1846,18 @@ function CustomerDetail({
                 setTab(4);
               }}
             />
+            <InvoiceDetail
+              id={invoiceDetailId}
+              onClose={() => setInvoiceDetailId(null)}
+              mobile={touchViewport}
+              isAdmin={!readOnly}
+              onReversed={async () => {
+                setInvoiceDetailId(null);
+                await loadDetail();
+                onChanged?.();
+              }}
+            />
+            <QuickRecordDetail detail={quickDetail} onClose={() => setQuickDetail(null)} />
           </>
         )}
       </SoftBox>
@@ -1670,7 +1865,7 @@ function CustomerDetail({
   );
 }
 
-function DataTable({ headers, rows }) {
+function DataTable({ headers, rows, onRowClick, rowLabel = "Xem nhanh chi tiết" }) {
   return (
     <SoftBox
       sx={{ width: "100%", maxWidth: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}
@@ -1688,13 +1883,14 @@ function DataTable({ headers, rows }) {
                 {item}
               </th>
             ))}
+            {onRowClick && <th aria-label="Thao tác" style={{ width: 42 }} />}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
             <tr>
               <td
-                colSpan={headers.length}
+                colSpan={headers.length + (onRowClick ? 1 : 0)}
                 style={{ textAlign: "center", padding: 24, color: "#9E9E9E" }}
               >
                 Chưa có dữ liệu
@@ -1702,12 +1898,37 @@ function DataTable({ headers, rows }) {
             </tr>
           )}
           {rows.map((row, index) => (
-            <tr key={index} style={{ borderBottom: "1px solid #eee" }}>
+            <tr
+              key={index}
+              onClick={onRowClick ? () => onRowClick(index) : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") onRowClick(index);
+                    }
+                  : undefined
+              }
+              role={onRowClick ? "button" : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              aria-label={onRowClick ? rowLabel : undefined}
+              title={onRowClick ? rowLabel : undefined}
+              style={{
+                borderBottom: "1px solid #eee",
+                cursor: onRowClick ? "pointer" : "default",
+              }}
+            >
               {row.map((cell, cellIndex) => (
                 <td key={cellIndex} style={{ padding: 10, fontSize: 13 }}>
                   {cell}
                 </td>
               ))}
+              {onRowClick && (
+                <td style={{ padding: 10, color: "#1877f2", whiteSpace: "nowrap" }}>
+                  <Icon sx={{ fontSize: "18px !important", verticalAlign: "middle" }}>
+                    visibility
+                  </Icon>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

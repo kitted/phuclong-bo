@@ -51,6 +51,16 @@ const typeMeta = {
     color: "#c62828",
     background: "#ffebee",
   },
+  WARRANTY_RETURN_CREATED: {
+    icon: "build_circle",
+    color: "#c62828",
+    background: "#ffebee",
+  },
+  WARRANTY_RETURN_COMPLETED: {
+    icon: "verified",
+    color: "#2e7d32",
+    background: "#e8f5e9",
+  },
 };
 const formatDateTime = (value) =>
   value
@@ -160,6 +170,8 @@ export default function NotificationCenter({ light = false }) {
           ? `/hoa-don?search=${encodeURIComponent(notification.entityCode)}`
           : "/hoa-don"
       );
+    } else if (notification.entityType === "WARRANTY_RETURN") {
+      navigate("/warranty-returns");
     } else if (
       ["TRUCK", "TRUCK_TRANSFER"].includes(notification.entityType) ||
       String(notification.type || "").includes("TRUCK") ||
