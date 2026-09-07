@@ -9,7 +9,7 @@ import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import LinearProgress from "@mui/material/LinearProgress";
 import L from "leaflet";
-import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -131,6 +131,15 @@ const mapLead = (lead = {}) => {
     pointType: "LEAD",
   };
 };
+const leadLocationLabel = (lead = {}) => {
+  const value = lead || {};
+  if (value.location?.address) return value.location.address;
+  const latitude = coordinate(value.location?.latitude);
+  const longitude = coordinate(value.location?.longitude);
+  return latitude !== null && longitude !== null
+    ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+    : "Chưa có vị trí";
+};
 const distanceKm = (from, to) => {
   if (!from || !to) return null;
   const radians = (value) => (value * Math.PI) / 180;
@@ -180,6 +189,47 @@ function MiniMapViewport({ currentLocation }) {
     }
   }, [currentLocation, map]);
   return null;
+}
+
+function LeadLocationMap({ lead, height = 180 }) {
+  const latitude = coordinate(lead?.location?.latitude);
+  const longitude = coordinate(lead?.location?.longitude);
+  if (latitude === null || longitude === null) return null;
+  return (
+    <SoftBox
+      height={height}
+      mt={1}
+      borderRadius={2}
+      overflow="hidden"
+      sx={{ border: "1px solid #e3e8ef", "& .leaflet-container": { zIndex: 1 } }}
+    >
+      <MapContainer
+        center={[latitude, longitude]}
+        zoom={16}
+        dragging={false}
+        scrollWheelZoom={false}
+        doubleClickZoom={false}
+        zoomControl={false}
+        attributionControl={false}
+        style={{ width: "100%", height: "100%" }}
+      >
+        <TileLayer
+          attribution="&copy; OpenStreetMap contributors"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <CircleMarker
+          center={[latitude, longitude]}
+          radius={10}
+          pathOptions={{
+            color: "#fff",
+            weight: 4,
+            fillColor: lead?.color || "#5e72e4",
+            fillOpacity: 1,
+          }}
+        />
+      </MapContainer>
+    </SoftBox>
+  );
 }
 
 const KPI_META = {
@@ -767,10 +817,16 @@ export default function StaffHome() {
               >
                 <SoftBox display="flex" alignItems="center" gap={1}>
                   <Avatar
+                    variant="rounded"
                     src={lead.imageUrl}
-                    sx={{ width: 34, height: 34, bgcolor: lead.color || "#5e72e4" }}
+                    sx={{
+                      width: 66,
+                      height: 66,
+                      bgcolor: lead.color || "#5e72e4",
+                      flexShrink: 0,
+                    }}
                   >
-                    {initials(lead.name)}
+                    <Icon>storefront</Icon>
                   </Avatar>
                   <SoftBox minWidth={0}>
                     <SoftTypography variant="button" fontWeight="bold" noWrap>
@@ -781,12 +837,19 @@ export default function StaffHome() {
                     </SoftTypography>
                   </SoftBox>
                 </SoftBox>
-                <SoftTypography display="block" variant="caption" color="text" mt={0.75} noWrap>
-                  {lead.location?.address ||
-                    `${Number(lead.location?.latitude || 0).toFixed(5)}, ${Number(
-                      lead.location?.longitude || 0
-                    ).toFixed(5)}`}
-                </SoftTypography>
+                <SoftBox display="flex" alignItems="flex-start" gap={0.5} mt={0.75}>
+                  <Icon sx={{ fontSize: "16px !important", color: lead.color || "#5e72e4" }}>
+                    location_on
+                  </Icon>
+                  <SoftTypography
+                    display="block"
+                    variant="caption"
+                    color="text"
+                    sx={{ lineHeight: 1.35 }}
+                  >
+                    {leadLocationLabel(lead)}
+                  </SoftTypography>
+                </SoftBox>
                 <SoftTypography display="block" variant="caption" color="text" noWrap>
                   Tạo bởi: {lead.createdByName || "Nhân viên"}
                   {lead.createdByCode ? ` · ${lead.createdByCode}` : ""}
@@ -1129,6 +1192,35 @@ export default function StaffHome() {
         <DialogTitle>Thông tin Lead</DialogTitle>
         <DialogContent>
           <SoftBox
+            width="100%"
+            height={190}
+            mb={1.25}
+            borderRadius={2}
+            overflow="hidden"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            sx={{ bgcolor: `${detailLead?.color || "#5e72e4"}18`, border: "1px solid #e3e8ef" }}
+          >
+            {detailLead?.imageUrl ? (
+              <SoftBox
+                component="img"
+                src={detailLead.imageUrl}
+                alt={`Ảnh điểm bán ${detailLead.name || "lead"}`}
+                width="100%"
+                height="100%"
+                sx={{ objectFit: "cover" }}
+              />
+            ) : (
+              <SoftBox textAlign="center" color={detailLead?.color || "#5e72e4"}>
+                <Icon sx={{ fontSize: "48px !important" }}>storefront</Icon>
+                <SoftTypography display="block" variant="caption" color="text">
+                  Lead chưa có ảnh điểm bán
+                </SoftTypography>
+              </SoftBox>
+            )}
+          </SoftBox>
+          <SoftBox
             p={1.25}
             borderRadius={2}
             sx={{ borderLeft: `5px solid ${detailLead?.color || "#5e72e4"}`, bgcolor: "#f8f9fa" }}
@@ -1137,9 +1229,14 @@ export default function StaffHome() {
               {detailLead?.name}
             </SoftTypography>
             <SoftTypography variant="button">{detailLead?.phone}</SoftTypography>
-            <SoftTypography display="block" variant="caption" color="text">
-              {detailLead?.location?.address || "Chưa có địa chỉ"}
-            </SoftTypography>
+            <SoftBox display="flex" gap={0.5} alignItems="flex-start" mt={0.25}>
+              <Icon sx={{ fontSize: "16px !important", color: detailLead?.color || "#5e72e4" }}>
+                location_on
+              </Icon>
+              <SoftTypography display="block" variant="caption" color="text">
+                {leadLocationLabel(detailLead)}
+              </SoftTypography>
+            </SoftBox>
             <SoftTypography display="block" variant="caption" color="text" mt={0.75}>
               Tạo bởi: {detailLead?.createdByName || "Nhân viên"}
               {detailLead?.createdByCode ? ` · ${detailLead.createdByCode}` : ""}
@@ -1160,6 +1257,7 @@ export default function StaffHome() {
               </SoftTypography>
             )}
           </SoftBox>
+          <LeadLocationMap lead={detailLead} />
           <SoftBox mt={2}>
             <SoftTypography variant="button" fontWeight="bold">
               Lịch sử tương tác

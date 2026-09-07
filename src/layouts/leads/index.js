@@ -4,6 +4,7 @@ import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import Modal from "@mui/material/Modal";
+import { useSelector } from "react-redux";
 import { CircleMarker, MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -63,9 +64,12 @@ function MapPicker({ lat, lon, onPick }) {
 }
 
 export function LeadModal({ open, lead, onClose, onSaved }) {
+  const isAdmin =
+    String(useSelector((state) => state.auth?.user?.role) || "").toLowerCase() === "admin";
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [imageFile, setImageFile] = useState(null);
+  const [locationMode, setLocationMode] = useState("MAP");
   const imageInput = useRef(null);
   useEffect(() => {
     if (open) {
@@ -86,6 +90,7 @@ export function LeadModal({ open, lead, onClose, onSaved }) {
           : { ...empty, latitude: 10.0452, longitude: 105.7469 }
       );
       setImageFile(null);
+      setLocationMode("MAP");
     }
   }, [open, lead]);
   const set = (key) => (event) => setForm((value) => ({ ...value, [key]: event.target.value }));
@@ -108,7 +113,14 @@ export function LeadModal({ open, lead, onClose, onSaved }) {
         address: form.address.trim() || undefined,
       },
     };
-    if (!Number.isFinite(payload.location.latitude) || !Number.isFinite(payload.location.longitude))
+    if (
+      !Number.isFinite(payload.location.latitude) ||
+      !Number.isFinite(payload.location.longitude) ||
+      payload.location.latitude < -90 ||
+      payload.location.latitude > 90 ||
+      payload.location.longitude < -180 ||
+      payload.location.longitude > 180
+    )
       return toast.error("Tọa độ không hợp lệ");
     try {
       setSaving(true);
@@ -219,48 +231,111 @@ export function LeadModal({ open, lead, onClose, onSaved }) {
             </SoftBox>
           </Grid>
           <Grid item xs={12}>
-            <SoftBox height={300} borderRadius={2} overflow="hidden">
-              <MapContainer
-                center={[Number(form.latitude) || 10.0452, Number(form.longitude) || 105.7469]}
-                zoom={16}
-                style={{ height: "100%", width: "100%" }}
-              >
-                <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <MapPicker
-                  lat={Number(form.latitude) || 10.0452}
-                  lon={Number(form.longitude) || 105.7469}
-                  onPick={(latitude, longitude) =>
-                    setForm((value) => ({
-                      ...value,
-                      latitude: latitude.toFixed(7),
-                      longitude: longitude.toFixed(7),
-                    }))
-                  }
-                />
-              </MapContainer>
+            <SoftBox display="flex" justifyContent="space-between" alignItems="center" gap={1} mb={1}>
+              <SoftTypography variant="caption" fontWeight="bold">
+                Vị trí điểm bán *
+              </SoftTypography>
+              {isAdmin && (
+                <SoftBox display="flex" gap={0.5}>
+                  <SoftButton
+                    size="small"
+                    color="info"
+                    variant={locationMode === "MAP" ? "gradient" : "outlined"}
+                    onClick={() => setLocationMode("MAP")}
+                  >
+                    <Icon>map</Icon>&nbsp;Chọn bản đồ
+                  </SoftButton>
+                  <SoftButton
+                    size="small"
+                    color="info"
+                    variant={locationMode === "COORDINATES" ? "gradient" : "outlined"}
+                    onClick={() => setLocationMode("COORDINATES")}
+                  >
+                    <Icon>pin_drop</Icon>&nbsp;Nhập lat-lon
+                  </SoftButton>
+                </SoftBox>
+              )}
             </SoftBox>
-            <SoftButton
-              size="small"
-              color="info"
-              variant="text"
-              onClick={() =>
-                navigator.geolocation?.getCurrentPosition(
-                  (position) =>
-                    setForm((value) => ({
-                      ...value,
-                      latitude: position.coords.latitude.toFixed(7),
-                      longitude: position.coords.longitude.toFixed(7),
-                    })),
-                  () => toast.error("Không thể lấy vị trí hiện tại"),
-                  { enableHighAccuracy: true }
-                )
-              }
-            >
-              <Icon>my_location</Icon>&nbsp;Lấy vị trí hiện tại
-            </SoftButton>
+            {locationMode === "MAP" || !isAdmin ? (
+              <>
+                <SoftBox height={300} borderRadius={2} overflow="hidden">
+                  <MapContainer
+                    center={[Number(form.latitude) || 10.0452, Number(form.longitude) || 105.7469]}
+                    zoom={16}
+                    style={{ height: "100%", width: "100%" }}
+                  >
+                    <TileLayer
+                      attribution="&copy; OpenStreetMap contributors"
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <MapPicker
+                      lat={Number(form.latitude) || 10.0452}
+                      lon={Number(form.longitude) || 105.7469}
+                      onPick={(latitude, longitude) =>
+                        setForm((value) => ({
+                          ...value,
+                          latitude: latitude.toFixed(7),
+                          longitude: longitude.toFixed(7),
+                        }))
+                      }
+                    />
+                  </MapContainer>
+                </SoftBox>
+                <SoftButton
+                  size="small"
+                  color="info"
+                  variant="text"
+                  onClick={() =>
+                    navigator.geolocation?.getCurrentPosition(
+                      (position) =>
+                        setForm((value) => ({
+                          ...value,
+                          latitude: position.coords.latitude.toFixed(7),
+                          longitude: position.coords.longitude.toFixed(7),
+                        })),
+                      () => toast.error("Không thể lấy vị trí hiện tại"),
+                      { enableHighAccuracy: true }
+                    )
+                  }
+                >
+                  <Icon>my_location</Icon>&nbsp;Lấy vị trí hiện tại
+                </SoftButton>
+              </>
+            ) : (
+              <SoftBox
+                display="grid"
+                gap={1}
+                sx={{ gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" } }}
+              >
+                <SoftBox>
+                  <SoftTypography variant="caption" color="text">
+                    Vĩ độ (lat), từ -90 đến 90
+                  </SoftTypography>
+                  <SoftInput
+                    type="number"
+                    inputProps={{ step: "0.0000001", min: -90, max: 90 }}
+                    value={form.latitude}
+                    onChange={set("latitude")}
+                    placeholder="10.013542"
+                  />
+                </SoftBox>
+                <SoftBox>
+                  <SoftTypography variant="caption" color="text">
+                    Kinh độ (lon), từ -180 đến 180
+                  </SoftTypography>
+                  <SoftInput
+                    type="number"
+                    inputProps={{ step: "0.0000001", min: -180, max: 180 }}
+                    value={form.longitude}
+                    onChange={set("longitude")}
+                    placeholder="105.7010937"
+                  />
+                </SoftBox>
+                <SoftTypography variant="caption" color="text" sx={{ gridColumn: "1 / -1" }}>
+                  Sau khi nhập, chuyển lại “Chọn bản đồ” để xem vị trí ghim trước khi lưu.
+                </SoftTypography>
+              </SoftBox>
+            )}
           </Grid>
           <Grid item xs={12}>
             <SoftTypography variant="caption" fontWeight="bold">
@@ -283,18 +358,6 @@ export function LeadModal({ open, lead, onClose, onSaved }) {
               onChange={set("note")}
               placeholder="Nhu cầu, thời gian phù hợp để ghé, thông tin cần lưu ý..."
             />
-          </Grid>
-          <Grid item xs={6}>
-            <SoftTypography variant="caption" fontWeight="bold">
-              Vĩ độ *
-            </SoftTypography>
-            <SoftInput type="number" value={form.latitude} onChange={set("latitude")} />
-          </Grid>
-          <Grid item xs={6}>
-            <SoftTypography variant="caption" fontWeight="bold">
-              Kinh độ *
-            </SoftTypography>
-            <SoftInput type="number" value={form.longitude} onChange={set("longitude")} />
           </Grid>
           <Grid item xs={12}>
             <SoftTypography variant="caption" fontWeight="bold">
