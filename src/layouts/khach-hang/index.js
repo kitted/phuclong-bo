@@ -31,6 +31,7 @@ import MobileLoadMore from "components/MobileLoadMore";
 import QuickSortBar from "components/QuickSortBar";
 import { mergeUniqueItems } from "utils/infiniteList";
 import CustomerDebtHistory from "./debt-history";
+import { formatBusinessDateTime } from "utils/businessDate";
 
 const CustomerStoreProfile = lazy(() => import("./store-profile"));
 
@@ -1453,7 +1454,7 @@ function CustomerDetail({
                     headers={["Mã hóa đơn", "Ngày", "Tổng tiền", "Đã thanh toán", "Trạng thái"]}
                     rows={customer.invoices.map((item) => [
                       item.code,
-                      dateTime(item.createdAt || item.date),
+                      formatBusinessDateTime(item.date || item.createdAt),
                       money(item.total),
                       money(item.paid),
                       item.status === "PAID"
@@ -1545,7 +1546,7 @@ function CustomerDetail({
                       "Note",
                     ]}
                     rows={customer.interactions.map((item) => [
-                      dateTime(item.occurredAt || item.at),
+                      formatBusinessDateTime(item.occurredAt || item.at),
                       item.zaloStatus === "CONNECTED"
                         ? badge("Đã kết bạn", "#2E7D32", "#E8F5E9")
                         : item.zaloStatus === "NOT_CONNECTED"

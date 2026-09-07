@@ -1,3 +1,5 @@
+import { formatBusinessDateTime, vietnamDateKey } from "./businessDate";
+
 const escapeHtml = (value) =>
   String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -153,6 +155,7 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
     )
   );
   const occurredAt = new Date(invoice.date || invoice.occurredAt || invoice.createdAt || Date.now());
+  const [businessYear, businessMonth, businessDay] = vietnamDateKey(occurredAt).split("-");
   const totalQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
   const rows = items
     .map((item, index) => {
@@ -428,13 +431,7 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
       <h1>${customerReturnDocument ? "PHIẾU HOÀN HÀNG - NHẬP LẠI XE" : "PHIẾU BÁN HÀNG - KIÊM XUẤT KHO"}</h1>
       <p><i>Số phiếu: ${escapeHtml(
         invoice.code || "—"
-      )} &nbsp; - &nbsp; Ngày ${occurredAt.toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })}</i></p>
+      )} &nbsp; - &nbsp; Ngày ${formatBusinessDateTime(occurredAt, "—")}</i></p>
     </div>
     <div class="customer">
       <div>
@@ -506,9 +503,9 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
         <div class="space"></div>
       </div>
       <div>
-        <div class="signature-date">Ngày ${occurredAt.getDate()} tháng ${
-    occurredAt.getMonth() + 1
-  } năm ${occurredAt.getFullYear()}</div>
+        <div class="signature-date">Ngày ${businessDay} tháng ${Number(
+    businessMonth
+  )} năm ${businessYear}</div>
         <strong>${customerReturnDocument ? "NGƯỜI TRẢ HÀNG" : "NGƯỜI NHẬN HÀNG"}</strong>
         <span>(ký, họ tên)</span>
         <div class="space"></div>

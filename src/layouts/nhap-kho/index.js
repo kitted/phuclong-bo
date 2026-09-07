@@ -20,6 +20,7 @@ import EntityThumbnail from "components/EntityThumbnail";
 
 import { ImportService, ProductService, SupplierService } from "services/warehouseService";
 import { toast } from "react-toastify";
+import { vietnamToday } from "utils/businessDate";
 
 const fmtCurrency = (n) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n || 0);
@@ -144,7 +145,7 @@ function NhapKho() {
     code: "",
     supplierId: "",
     note: "",
-    date: new Date().toISOString().split("T")[0],
+    date: vietnamToday(),
   });
   const [items, setItems] = useState([{ productId: "", qty: 1, price: 0 }]);
 
@@ -227,7 +228,7 @@ function NhapKho() {
 
       setModalOpen(false);
       // Reset form bao gồm cả `code`
-      setForm({ code: "", supplierId: "", note: "", date: new Date().toISOString().split("T")[0] });
+      setForm({ code: "", supplierId: "", note: "", date: vietnamToday() });
       setItems([{ productId: "", qty: 1, price: 0 }]);
 
       load();

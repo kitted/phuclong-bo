@@ -37,6 +37,11 @@ import { mergeUniqueItems } from "utils/infiniteList";
 import CustomerReturnModal, { InvoiceBusinessTypeSwitch } from "./customer-return-form";
 import CustomerReturnService from "services/customerReturnService";
 import EntityThumbnail from "components/EntityThumbnail";
+import {
+  formatBusinessDateTime,
+  toBusinessDateTime,
+  vietnamToday,
+} from "utils/businessDate";
 
 const money = (value = 0) =>
   new Intl.NumberFormat("vi-VN", {
@@ -58,19 +63,7 @@ const errorMessage = (error, fallback) => {
     ? value.join(", ")
     : value || fallback;
 };
-const today = () => {
-  const value = new Date();
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
-    value.getDate()
-  ).padStart(2, "0")}`;
-};
-const occurredAtWithCurrentTime = (date) => {
-  const now = new Date();
-  const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
-    .map((value) => String(value).padStart(2, "0"))
-    .join(":");
-  return `${date || today()}T${time}+07:00`;
-};
+const today = vietnamToday;
 const dateValue = (value) => {
   const date = value instanceof Date ? value : new Date(value);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
@@ -283,17 +276,7 @@ const enrichInvoiceDebtSnapshot = async (invoice = {}) => {
     return invoice;
   }
 };
-const dateTime = (value) =>
-  value
-    ? new Date(value).toLocaleString("vi-VN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      })
-    : "—";
+const dateTime = (value) => formatBusinessDateTime(value);
 const invoiceCustomer = (invoice = {}) => {
   const populatedCustomer =
     invoice.customerId && typeof invoice.customerId === "object" ? invoice.customerId : {};
@@ -1231,7 +1214,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
       try {
         setSubmitting(true);
         const response = await DebtPaymentService.create(getId(customer), {
-          date: occurredAtWithCurrentTime(form.date),
+          date: toBusinessDateTime(form.date),
           payments: debtPayments,
           invoiceIds: [],
           note: form.note.trim() || undefined,
@@ -1266,7 +1249,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
         });
       const response = await InvoiceService.create({
         code: form.code.trim() || undefined,
-        date: occurredAtWithCurrentTime(form.date),
+        date: toBusinessDateTime(form.date),
         customerId: getId(customer) || undefined,
         newCustomer: createsUnassignedCustomer
           ? {

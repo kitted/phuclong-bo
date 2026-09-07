@@ -7,21 +7,12 @@ import { mergeUniqueItems } from "utils/infiniteList";
 import SoftTypography from "components/SoftTypography";
 import { CustomerService } from "services/crmService";
 import { toast } from "react-toastify";
+import { formatBusinessDateTime } from "utils/businessDate";
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
 
-const dateTime = (value) =>
-  value
-    ? new Date(value).toLocaleString("vi-VN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      })
-    : "—";
+const dateTime = (value) => formatBusinessDateTime(value);
 
 const TYPE_LABELS = {
   OPENING_BALANCE: "Công nợ đầu kỳ",

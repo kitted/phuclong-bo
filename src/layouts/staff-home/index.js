@@ -28,6 +28,7 @@ import QuickCustomerLocation from "./quick-customer-location";
 import { LeadModal } from "layouts/leads";
 import QuickNoteService from "services/quickNoteService";
 import EntityThumbnail from "components/EntityThumbnail";
+import { formatBusinessDateTime } from "utils/businessDate";
 
 const CustomerRouteMap = lazy(() => import("./customer-route-map"));
 
@@ -992,7 +993,7 @@ export default function StaffHome() {
                       {invoice.code || "Hóa đơn"} · {customer.label}
                     </SoftTypography>
                     <SoftTypography variant="caption" color="text">
-                      {formatDateTime(invoice.createdAt || invoice.date)} ·{" "}
+                      {formatBusinessDateTime(invoice.date || invoice.createdAt)} ·{" "}
                       {invoice.paymentStatus === "PAID"
                         ? "Đã thanh toán"
                         : invoice.paymentStatus === "PARTIAL"

@@ -18,8 +18,9 @@ import EmployeeService from "services/employeeService";
 import { DailyReportService, GoodsAdvanceService } from "services/dailyOperationsService";
 import { downloadBlob } from "utils/excel";
 import { toast } from "react-toastify";
+import { formatBusinessDateTime, toBusinessDateTime, vietnamToday } from "utils/businessDate";
 
-const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+const today = vietnamToday;
 const unwrap = (response) => response?.data?.data ?? response?.data ?? response;
 const rows = (response) => {
   const value = unwrap(response);
@@ -27,12 +28,6 @@ const rows = (response) => {
 };
 const idOf = (value) => value?.id || value?._id || "";
 const money = (value) => `${Number(value || 0).toLocaleString("vi-VN")} đ`;
-const occurredAt = (date) => {
-  const now = new Date();
-  return `${date}T${[now.getHours(), now.getMinutes(), now.getSeconds()]
-    .map((part) => String(part).padStart(2, "0"))
-    .join(":")}+07:00`;
-};
 const statusStyle = {
   DRAFT: ["Bản nháp", "#fff3e0", "#e65100"],
   CONFIRMED: ["Đã xác nhận", "#e8f5e9", "#2e7d32"],
@@ -87,7 +82,7 @@ function AdvanceTab() {
     try {
       setSaving(true);
       await GoodsAdvanceService.create({
-        date: occurredAt(form.date),
+        date: toBusinessDateTime(form.date),
         employeeId: idOf(form.employee),
         truckId: idOf(form.truck),
         items: items.map((item) => ({
@@ -297,7 +292,7 @@ function AdvanceTab() {
                   </span>
                 </SoftBox>
                 <SoftTypography variant="caption" color="text" display="block">
-                  {new Date(doc.date).toLocaleString("vi-VN")} · {doc.employeeName}
+                  {formatBusinessDateTime(doc.date)} · {doc.employeeName}
                 </SoftTypography>
                 <SoftTypography variant="caption">
                   {doc.truckCode} · {doc.items?.length || 0} mặt hàng

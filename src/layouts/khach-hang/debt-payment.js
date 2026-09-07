@@ -10,21 +10,12 @@ import SoftTypography from "components/SoftTypography";
 import { DebtPaymentService } from "services/crmService";
 import { toast } from "react-toastify";
 import { debtPaymentToInvoice, printInvoice } from "utils/invoicePrint";
+import { formatBusinessDateTime } from "utils/businessDate";
 
 const money = (value) => `${Number(value || 0).toLocaleString("vi-VN")} ₫`;
 const numberValue = (value) => Number(String(value || "").replace(/\D/g, "")) || 0;
 const idOf = (value) => value?.id || value?._id;
-const dateTime = (value) =>
-  value
-    ? new Date(value).toLocaleString("vi-VN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      })
-    : "—";
+const dateTime = (value) => formatBusinessDateTime(value);
 
 export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = false }) {
   const [form, setForm] = useState({
@@ -264,7 +255,7 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
                         onChange={() => toggleInvoice(id)}
                       />
                     }
-                    label={`${invoice.code} · ${dateTime(invoice.createdAt || invoice.date)}`}
+                    label={`${invoice.code} · ${dateTime(invoice.date || invoice.createdAt)}`}
                   />
                   <SoftTypography variant="button" color="error">
                     Còn nợ {money(debt)}
@@ -377,7 +368,7 @@ export function DebtPaymentHistory({ customerId, refreshKey, onChanged }) {
           {items.map((payment) => (
             <tr key={idOf(payment)} style={{ borderBottom: "1px solid #eee" }}>
               <td style={{ padding: 10, fontWeight: 600 }}>{payment.code}</td>
-              <td style={{ padding: 10 }}>{dateTime(payment.createdAt || payment.date)}</td>
+              <td style={{ padding: 10 }}>{dateTime(payment.date || payment.createdAt)}</td>
               <td style={{ padding: 10 }}>{money(payment.amount)}</td>
               <td style={{ padding: 10 }}>
                 {money(payment.customerDebtBefore)} → {money(payment.customerDebtAfter)}

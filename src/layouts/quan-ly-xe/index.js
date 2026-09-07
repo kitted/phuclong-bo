@@ -28,6 +28,7 @@ import MobileLoadMore from "components/MobileLoadMore";
 import QuickSortBar from "components/QuickSortBar";
 import CustomerReturnService from "services/customerReturnService";
 import { mergeUniqueItems } from "utils/infiniteList";
+import { formatBusinessDateTime } from "utils/businessDate";
 
 const EMPTY_TRUCK = { code: "", name: "", licensePlate: "", driverId: "", status: "active" };
 const EMPTY_META = { totalPages: 1, totalItems: 0 };
@@ -3270,7 +3271,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                               </SoftTypography>
                             )}
                             <SoftTypography variant="caption" color="text" display="block">
-                              {date(invoice.createdAt || invoice.date)}
+                              {formatBusinessDateTime(invoice.date || invoice.createdAt)}
                             </SoftTypography>
                             <SoftTypography variant="caption" color="text" display="block" noWrap>
                               {invoiceCustomerLabel(invoice)}
@@ -5825,7 +5826,7 @@ function TransferTable({ transfers, onReverse, readOnly, touchMode = false }) {
                   {transfer.code}
                 </SoftTypography>
                 <SoftTypography variant="caption" color="text">
-                  {date(transfer.date || transfer.createdAt)}
+                  {formatBusinessDateTime(transfer.date || transfer.createdAt)}
                 </SoftTypography>
               </SoftBox>
               <SoftTypography variant="caption" fontWeight="bold" display="block">
@@ -5934,7 +5935,7 @@ function TransferTable({ transfers, onReverse, readOnly, touchMode = false }) {
               <tr key={getId(transfer)} style={{ borderBottom: "1px solid #eee" }}>
                 <td style={{ padding: 12, fontSize: 13, fontWeight: 600 }}>{transfer.code}</td>
                 <td style={{ padding: 12, fontSize: 13, whiteSpace: "nowrap" }}>
-                  {date(transfer.date || transfer.createdAt)}
+                  {formatBusinessDateTime(transfer.date || transfer.createdAt)}
                 </td>
                 <td style={{ padding: 12 }}>
                   <span
