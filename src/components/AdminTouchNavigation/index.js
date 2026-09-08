@@ -60,6 +60,7 @@ const menuGroups = [
     items: [
       { path: "/bao-cao", icon: "analytics", label: "Báo cáo", color: "#0277bd" },
       { path: "/nhan-vien", icon: "badge", label: "Nhân viên", color: "#00796b" },
+      { path: "/sales-routes", icon: "route", label: "Vị trí & tuyến", color: "#1976d2" },
       { path: "/audit-logs", icon: "history", label: "Nhật ký", color: "#546e7a" },
       { path: "/backup-data", icon: "cloud_sync", label: "Sao lưu", color: "#ad1457" },
     ],
@@ -78,6 +79,7 @@ const pageTitles = [
   ["/warranty-returns", "Quản lý hàng bảo hành"],
   ["/khuyen-mai", "Chương trình khuyến mãi"],
   ["/nhan-vien", "Quản lý nhân viên"],
+  ["/sales-routes", "Vị trí & tuyến đường"],
   ["/bao-cao", "Báo cáo"],
   ["/audit-logs", "Nhật ký hoạt động"],
   ["/backup-data", "Sao lưu dữ liệu"],

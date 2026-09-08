@@ -34,6 +34,7 @@ import Leads from "layouts/leads";
 import CustomerCoins from "layouts/customer-coins";
 import DocumentSafety from "layouts/document-safety";
 import WarrantyReturns from "layouts/warranty-returns";
+import SalesRoutes from "layouts/sales-routes";
 
 const routes = [
   {
@@ -282,6 +283,16 @@ const routes = [
     route: "/nhan-vien",
     noCollapse: true,
     component: <NhanVien />,
+    permission: ["admin"],
+  },
+  {
+    type: "collapse",
+    name: "Vị trí & tuyến đường",
+    key: "sales-routes",
+    icon: <SpaceShip size="12px" />,
+    route: "/sales-routes",
+    noCollapse: true,
+    component: <SalesRoutes />,
     permission: ["admin"],
   },
   {

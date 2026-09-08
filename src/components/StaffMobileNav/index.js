@@ -2,6 +2,7 @@ import Icon from "@mui/material/Icon";
 import { useLocation, useNavigate } from "react-router-dom";
 import SoftBox from "components/SoftBox";
 import SoftTypography from "components/SoftTypography";
+import SalesLocationTracker from "layouts/staff-home/sales-location-tracker";
 
 const items = [
   ["/staff-home", "home", "Bảng tin"],
@@ -28,6 +29,7 @@ export default function StaffMobileNav() {
       alignItems="center"
       sx={{ borderTop: "1px solid #d8dadf", paddingBottom: "env(safe-area-inset-bottom)" }}
     >
+      <SalesLocationTracker floating />
       {items.map(([path, icon, label]) => {
         const active = pathname === path;
         return (
