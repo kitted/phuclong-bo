@@ -34,8 +34,8 @@ export const InventoryService = {
       responseType: "blob",
     }),
 
-  previewStockCheckSync: (comparisonId) =>
-    AxiosInstance.post(`/admin/inventory-stock-checks/${comparisonId}/sync/preview`),
+  previewStockCheckSync: (comparisonId, payload = {}) =>
+    AxiosInstance.post(`/admin/inventory-stock-checks/${comparisonId}/sync/preview`, payload),
 
   syncStockCheck: (comparisonId, payload) =>
     AxiosInstance.post(`/admin/inventory-stock-checks/${comparisonId}/sync`, payload),

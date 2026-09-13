@@ -21,6 +21,8 @@ const STATUSES = {
   MATCHED: { label: "Khớp tồn", color: "#2e7d32", background: "#e8f5e9" },
   SHORTAGE: { label: "Thiếu hàng", color: "#c62828", background: "#ffebee" },
   SURPLUS: { label: "Thừa hàng", color: "#ef6c00", background: "#fff3e0" },
+  NEW_PRODUCT: { label: "Sẽ tạo mới", color: "#00695c", background: "#e0f2f1" },
+  MISSING_FROM_FILE: { label: "Không có trong file", color: "#6a1b9a", background: "#f3e5f5" },
   NOT_COUNTED: { label: "Chưa kiểm", color: "#607d8b", background: "#eceff1" },
   UNKNOWN: { label: "Mã không tồn tại", color: "#8d6e00", background: "#fff8e1" },
   INVALID: { label: "Dữ liệu lỗi", color: "#ad1457", background: "#fce4ec" },
@@ -171,7 +173,7 @@ function ActionModal({ action, loading, onClose, onSubmit }) {
           display="grid"
           gap={0.75}
           my={1.4}
-          sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+          sx={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
         >
           {(restore
             ? [
@@ -180,7 +182,8 @@ function ActionModal({ action, loading, onClose, onSubmit }) {
                 ["Giảm", `−${summary.lossQuantity || 0}`],
               ]
             : [
-                ["Đã kiểm", summary.countedProducts || 0],
+                ["Tạo mới", summary.createProducts || 0],
+                ["Xóa đã chọn", summary.deleteProducts || 0],
                 ["Thiếu", summary.totalShortageQuantity || 0],
                 ["Thừa", summary.totalSurplusQuantity || 0],
               ]
@@ -325,6 +328,9 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
   const [result, setResult] = useState(null);
   const [resultFilter, setResultFilter] = useState("ALL");
   const [resultVisibleLimit, setResultVisibleLimit] = useState(RESULT_RENDER_BATCH);
+  const [selectedDeleteIds, setSelectedDeleteIds] = useState([]);
+  const [removalSearch, setRemovalSearch] = useState("");
+  const [removalVisibleLimit, setRemovalVisibleLimit] = useState(50);
   const [action, setAction] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [backups, setBackups] = useState([]);
@@ -464,6 +470,23 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
     [resultItems, resultFilter]
   );
   const visibleResultItems = filteredResultItems.slice(0, resultVisibleLimit);
+  const newProductItems = useMemo(
+    () => resultItems.filter((item) => item.status === "NEW_PRODUCT"),
+    [resultItems]
+  );
+  const deletionCandidates = useMemo(
+    () => resultItems.filter((item) => item.status === "MISSING_FROM_FILE"),
+    [resultItems]
+  );
+  const filteredDeletionCandidates = useMemo(() => {
+    const keyword = removalSearch.trim().toLocaleLowerCase("vi");
+    if (!keyword) return deletionCandidates;
+    return deletionCandidates.filter(
+      (item) =>
+        String(item.productCode || "").toLocaleLowerCase("vi").includes(keyword) ||
+        String(item.productName || "").toLocaleLowerCase("vi").includes(keyword)
+    );
+  }, [deletionCandidates, removalSearch]);
 
   useEffect(() => {
     setDirectVisibleLimit(DIRECT_RENDER_BATCH);
@@ -485,6 +508,9 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
       });
       setResultFilter("ALL");
       setResultVisibleLimit(RESULT_RENDER_BATCH);
+      setSelectedDeleteIds([]);
+      setRemovalSearch("");
+      setRemovalVisibleLimit(50);
       toast.success("Đã đối chiếu tồn kho thực tế với số lượng trên app");
     } catch (error) {
       toast.error(apiError(error, "Không thể đối chiếu tồn kho"));
@@ -524,6 +550,7 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
     if (selected.size > 10 * 1024 * 1024) return toast.error("File Excel không được vượt quá 10MB");
     setFile(selected);
     setResult(null);
+    setSelectedDeleteIds([]);
   };
 
   const downloadTemplate = async () => {
@@ -554,11 +581,14 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
   const previewSync = async () => {
     try {
       setActionLoading(true);
-      const response = await InventoryService.previewStockCheckSync(result.comparisonId);
+      const response = await InventoryService.previewStockCheckSync(result.comparisonId, {
+        deleteProductIds: selectedDeleteIds,
+      });
       setAction({
         type: "SYNC",
         preview: unwrap(response),
         idempotencyKey: makeKey("warehouse-sync"),
+        deleteProductIds: selectedDeleteIds,
       });
     } catch (error) {
       toast.error(apiError(error, "Không thể kiểm tra điều kiện đồng bộ"));
@@ -616,7 +646,11 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
       setActionLoading(true);
       const payload = { reason, confirmation, idempotencyKey: action.idempotencyKey };
       if (restore) await InventoryService.restoreBackup(getId(action.backup), payload);
-      else await InventoryService.syncStockCheck(result.comparisonId, payload);
+      else
+        await InventoryService.syncStockCheck(result.comparisonId, {
+          ...payload,
+          deleteProductIds: action.deleteProductIds || [],
+        });
       setAction(null);
       setResult(null);
       setCounts({});
@@ -1418,6 +1452,201 @@ export default function WarehouseStockCheckPanel({ onChanged }) {
               </Grid>
             ))}
           </Grid>
+          {(newProductItems.length > 0 || deletionCandidates.length > 0) && (
+            <SoftBox display="grid" gap={1.1} mb={1.35}>
+              {newProductItems.length > 0 && (
+                <SoftBox
+                  p={{ xs: 1.2, md: 1.4 }}
+                  borderRadius={2.25}
+                  bgcolor="#e0f2f1"
+                  sx={{ border: "1px solid #80cbc4" }}
+                >
+                  <SoftBox display="flex" alignItems="center" gap={0.8} mb={0.7}>
+                    <Icon sx={{ color: "#00796b" }}>add_box</Icon>
+                    <SoftTypography variant="button" fontWeight="bold" sx={{ color: "#00695c" }}>
+                      {newProductItems.length} mã mới sẽ được tạo
+                    </SoftTypography>
+                  </SoftBox>
+                  <SoftTypography variant="caption" color="text" display="block" mb={0.8}>
+                    Tên, đơn vị và tồn ban đầu được lấy từ file. Giá vốn và giá bán mặc định là 0 nếu
+                    file không có hai cột này.
+                  </SoftTypography>
+                  <SoftBox display="flex" gap={0.55} flexWrap="wrap">
+                    {newProductItems.slice(0, 20).map((item) => (
+                      <SoftBox
+                        key={`${item.productCode}-${item.rowNumber}`}
+                        px={0.8}
+                        py={0.4}
+                        borderRadius={1.4}
+                        bgcolor="#fff"
+                        sx={{ border: "1px solid #b2dfdb" }}
+                      >
+                        <SoftTypography variant="caption" fontWeight="bold">
+                          {item.productCode} · {item.productName}
+                        </SoftTypography>
+                      </SoftBox>
+                    ))}
+                    {newProductItems.length > 20 && (
+                      <SoftTypography variant="caption" color="text" alignSelf="center">
+                        và {newProductItems.length - 20} mã khác
+                      </SoftTypography>
+                    )}
+                  </SoftBox>
+                </SoftBox>
+              )}
+
+              {deletionCandidates.length > 0 && (
+                <SoftBox
+                  p={{ xs: 1.2, md: 1.4 }}
+                  borderRadius={2.25}
+                  bgcolor="#faf7fc"
+                  sx={{ border: "1px solid #ce93d8" }}
+                >
+                  <SoftBox
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    flexDirection={{ xs: "column", sm: "row" }}
+                    gap={0.7}
+                    mb={0.75}
+                  >
+                    <SoftBox>
+                      <SoftTypography variant="button" fontWeight="bold" sx={{ color: "#6a1b9a" }}>
+                        Hàng đang có trên hệ thống nhưng không còn trong file
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text" display="block">
+                        Chỉ những sản phẩm bạn đánh dấu mới bị xóa. Mặc định hệ thống giữ nguyên tất
+                        cả.
+                      </SoftTypography>
+                    </SoftBox>
+                    <SoftBox
+                      px={1}
+                      py={0.45}
+                      borderRadius={5}
+                      bgcolor={selectedDeleteIds.length ? "#ffebee" : "#fff"}
+                      sx={{ border: "1px solid #e1bee7", flexShrink: 0 }}
+                    >
+                      <SoftTypography
+                        variant="caption"
+                        fontWeight="bold"
+                        sx={{ color: selectedDeleteIds.length ? "#c62828" : "#6a1b9a" }}
+                      >
+                        Đã chọn xóa {selectedDeleteIds.length}/{deletionCandidates.length}
+                      </SoftTypography>
+                    </SoftBox>
+                  </SoftBox>
+                  <SoftBox display="flex" gap={0.7} mb={0.8} alignItems="center">
+                    <SoftBox flex={1}>
+                      <SoftInput
+                        value={removalSearch}
+                        onChange={(event) => {
+                          setRemovalSearch(event.target.value);
+                          setRemovalVisibleLimit(50);
+                        }}
+                        placeholder="Tìm mã hoặc tên sản phẩm cần xóa..."
+                        icon={{ component: "search", direction: "left" }}
+                      />
+                    </SoftBox>
+                    <SoftButton
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={() => {
+                        const ids = filteredDeletionCandidates.map((item) => String(item.productId));
+                        const allSelected = ids.every((id) => selectedDeleteIds.includes(id));
+                        setSelectedDeleteIds((current) =>
+                          allSelected
+                            ? current.filter((id) => !ids.includes(id))
+                            : [...new Set([...current, ...ids])]
+                        );
+                      }}
+                      sx={{ minWidth: "max-content" }}
+                    >
+                      {filteredDeletionCandidates.length > 0 &&
+                      filteredDeletionCandidates.every((item) =>
+                        selectedDeleteIds.includes(String(item.productId))
+                      )
+                        ? "Bỏ chọn lọc"
+                        : "Chọn kết quả lọc"}
+                    </SoftButton>
+                  </SoftBox>
+                  <SoftBox
+                    maxHeight={330}
+                    overflow="auto"
+                    borderRadius={1.8}
+                    bgcolor="#fff"
+                    sx={{ border: "1px solid #eadcf0" }}
+                  >
+                    {filteredDeletionCandidates.slice(0, removalVisibleLimit).map((item) => {
+                      const id = String(item.productId);
+                      const checked = selectedDeleteIds.includes(id);
+                      return (
+                        <SoftBox
+                          component="label"
+                          key={id}
+                          display="flex"
+                          alignItems="center"
+                          gap={1}
+                          px={1}
+                          py={0.75}
+                          bgcolor={checked ? "#ffebee" : "#fff"}
+                          sx={{ borderBottom: "1px solid #f0e7f3", cursor: "pointer" }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              setSelectedDeleteIds((current) =>
+                                event.target.checked
+                                  ? [...new Set([...current, id])]
+                                  : current.filter((value) => value !== id)
+                              )
+                            }
+                            style={{ width: 21, height: 21, flexShrink: 0 }}
+                          />
+                          <EntityThumbnail
+                            entity={
+                              products.find(
+                                (product) =>
+                                  String(product.productId || product.id || product._id) === id
+                              ) || item
+                            }
+                            size={36}
+                          />
+                          <SoftBox minWidth={0} flex={1}>
+                            <SoftTypography variant="caption" fontWeight="bold" display="block">
+                              {item.productName}
+                            </SoftTypography>
+                            <SoftTypography variant="caption" color="text">
+                              {item.productCode} · tồn {item.systemQuantity || 0} {item.unit || ""}
+                            </SoftTypography>
+                          </SoftBox>
+                          {checked && <Icon sx={{ color: "#c62828" }}>delete</Icon>}
+                        </SoftBox>
+                      );
+                    })}
+                    {!filteredDeletionCandidates.length && (
+                      <SoftTypography variant="caption" color="text" display="block" p={1.2}>
+                        Không có sản phẩm phù hợp từ khóa.
+                      </SoftTypography>
+                    )}
+                  </SoftBox>
+                  {removalVisibleLimit < filteredDeletionCandidates.length && (
+                    <SoftButton
+                      fullWidth
+                      size="small"
+                      variant="text"
+                      color="secondary"
+                      onClick={() => setRemovalVisibleLimit((current) => current + 50)}
+                      sx={{ mt: 0.6 }}
+                    >
+                      Hiện thêm ({filteredDeletionCandidates.length - removalVisibleLimit})
+                    </SoftButton>
+                  )}
+                </SoftBox>
+              )}
+            </SoftBox>
+          )}
           <SoftBox mb={1.2}>
             <QuickSortBar
               label="Lọc nhanh kết quả"
