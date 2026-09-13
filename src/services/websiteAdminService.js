@@ -115,3 +115,7 @@ export const WebsiteDataImportService = {
   preview: (file) => AxiosInstance.post("/admin/website-data/import/preview", fileForm(file)),
   apply: (file) => AxiosInstance.post("/admin/website-data/import", fileForm(file)),
 };
+
+export const WebsiteAnalyticsService = {
+  report: (params = {}) => AxiosInstance.get("/admin/website-analytics", { params }),
+};

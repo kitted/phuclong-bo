@@ -26,6 +26,7 @@ import {
 import { mergeUniqueItems } from "utils/infiniteList";
 import { downloadBlob } from "utils/excel";
 import { toast } from "react-toastify";
+import WebsiteAnalyticsTab from "./WebsiteAnalyticsTab";
 
 const idOf = (value) => value?.id || value?._id || "";
 const unwrap = (response) => response?.data?.data ?? response?.data;
@@ -631,8 +632,9 @@ export default function WebsiteAdmin() {
           >
             <Tab label="Đơn đặt hàng" />
             <Tab label="Import Excel" />
+            <Tab label="Lượt truy cập" />
           </Tabs>
-          {tab === 0 ? <OrdersTab /> : <WebsiteImportTab />}
+          {tab === 0 ? <OrdersTab /> : tab === 1 ? <WebsiteImportTab /> : <WebsiteAnalyticsTab />}
         </SoftBox>
       </SoftBox>
     </DashboardLayout>
