@@ -428,8 +428,8 @@ export const TruckService = {
     AxiosInstance.get(`/admin/truck-stock-checks/${comparisonId}/export`, {
       responseType: "blob",
     }),
-  previewStockCheckSync: (comparisonId) =>
-    AxiosInstance.post(`/admin/truck-stock-checks/${comparisonId}/sync/preview`),
+  previewStockCheckSync: (comparisonId, payload = {}) =>
+    AxiosInstance.post(`/admin/truck-stock-checks/${comparisonId}/sync/preview`, payload),
   syncStockCheck: (comparisonId, payload) =>
     AxiosInstance.post(`/admin/truck-stock-checks/${comparisonId}/sync`, payload),
   getInventoryBackups: (truckId, params = {}) =>

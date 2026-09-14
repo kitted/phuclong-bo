@@ -39,10 +39,16 @@ const STOCK_CHECK_STATUSES = {
   NOT_COUNTED: { label: "Chưa kiểm", color: "#607d8b", background: "#eceff1", icon: "pending" },
   UNKNOWN: { label: "Mã không tồn tại", color: "#8d6e00", background: "#fff8e1", icon: "help" },
   NOT_ON_TRUCK: {
-    label: "Không có trên xe",
-    color: "#8d6e00",
-    background: "#fff8e1",
-    icon: "warning",
+    label: "Sẽ thêm vào xe",
+    color: "#00695c",
+    background: "#e0f2f1",
+    icon: "add_box",
+  },
+  MISSING_FROM_FILE: {
+    label: "Không có trong file",
+    color: "#6a1b9a",
+    background: "#f3e5f5",
+    icon: "remove_circle_outline",
   },
   INVALID: { label: "Dữ liệu lỗi", color: "#ad1457", background: "#fce4ec", icon: "error" },
 };
@@ -1495,6 +1501,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
   const [stockCheckDownloading, setStockCheckDownloading] = useState(false);
   const [stockCheckComparing, setStockCheckComparing] = useState(false);
   const [stockCheckExporting, setStockCheckExporting] = useState(false);
+  const [selectedStockDeleteIds, setSelectedStockDeleteIds] = useState([]);
   const [stockCheckMode, setStockCheckMode] = useState("DIRECT");
   const [directCounts, setDirectCounts] = useState({});
   const [directNotes, setDirectNotes] = useState({});
@@ -1535,6 +1542,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
     setStockCheckFile(null);
     setStockCheckResult(null);
     setStockCheckFilter("ALL");
+    setSelectedStockDeleteIds([]);
     setStockCheckMode("DIRECT");
     setDirectSearch("");
     setDirectFilter("ALL");
@@ -2216,6 +2224,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
     setStockCheckFile(file);
     setStockCheckResult(null);
     setStockCheckFilter("ALL");
+    setSelectedStockDeleteIds([]);
   };
   const runStockCheckComparison = async (file) => {
     try {
@@ -2228,6 +2237,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
         items: Array.isArray(result.items) ? result.items : [],
       });
       setStockCheckFilter("ALL");
+      setSelectedStockDeleteIds([]);
       toast.success("Đã đối chiếu số lượng thực tế với tồn trên app");
     } catch (error) {
       toast.error(apiError(error, "Không thể đối chiếu file kiểm hàng"));
@@ -2302,11 +2312,14 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
     if (!stockCheckResult?.comparisonId) return;
     try {
       setStockActionLoading(true);
-      const response = await TruckService.previewStockCheckSync(stockCheckResult.comparisonId);
+      const response = await TruckService.previewStockCheckSync(stockCheckResult.comparisonId, {
+        deleteProductIds: selectedStockDeleteIds,
+      });
       setStockAction({
         type: "SYNC",
         preview: unwrap(response) || {},
         idempotencyKey: makeIdempotencyKey("stock-sync"),
+        deleteProductIds: selectedStockDeleteIds,
       });
       setStockActionReason("");
       setStockActionConfirmation("");
@@ -2383,7 +2396,10 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
       if (isRestore) {
         await TruckService.restoreInventoryBackup(getId(stockAction.backup), payload);
       } else {
-        await TruckService.syncStockCheck(stockCheckResult.comparisonId, payload);
+        await TruckService.syncStockCheck(stockCheckResult.comparisonId, {
+          ...payload,
+          deleteProductIds: stockAction.deleteProductIds || [],
+        });
         localStorage.removeItem(`truck-stock-check-draft-${getId(truck)}`);
         setDirectCounts({});
         setDirectNotes({});
@@ -2413,6 +2429,12 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
     }
   };
   const stockCheckItems = Array.isArray(stockCheckResult?.items) ? stockCheckResult.items : [];
+  const stockCheckCreateItems = stockCheckItems.filter(
+    (item) => item.status === "NOT_ON_TRUCK" && Number(item.actualQuantity) > 0
+  );
+  const stockCheckDeletionCandidates = stockCheckItems.filter(
+    (item) => item.status === "MISSING_FROM_FILE"
+  );
   const visibleStockCheckItems = stockCheckItems.filter(
     (item) => stockCheckFilter === "ALL" || item.status === stockCheckFilter
   );
@@ -4355,7 +4377,6 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                         [
                           "Cần xem lại",
                           Number(stockCheckResult.summary.unknownProducts || 0) +
-                            Number(stockCheckResult.summary.notOnTruckProducts || 0) +
                             Number(stockCheckResult.summary.invalidRows || 0),
                           "warning",
                           "#8d6e00",
@@ -4377,6 +4398,140 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                         </Grid>
                       ))}
                     </Grid>
+
+                    {(stockCheckCreateItems.length > 0 ||
+                      stockCheckDeletionCandidates.length > 0) && (
+                      <SoftBox display="grid" gap={1.1} mb={1.5}>
+                        {stockCheckCreateItems.length > 0 && (
+                          <SoftBox
+                            p={1.25}
+                            borderRadius={2}
+                            bgcolor="#e0f2f1"
+                            sx={{ border: "1px solid #80cbc4" }}
+                          >
+                            <SoftTypography
+                              variant="button"
+                              fontWeight="bold"
+                              sx={{ color: "#00695c" }}
+                            >
+                              <Icon sx={{ verticalAlign: "middle", mr: 0.6 }}>add_box</Icon>
+                              {stockCheckCreateItems.length} sản phẩm sẽ được thêm vào xe
+                            </SoftTypography>
+                            <SoftTypography variant="caption" color="text" display="block" mt={0.4}>
+                              Hệ thống dùng sản phẩm đã có trong danh mục và lấy số lượng thực tế từ
+                              file kiểm hàng.
+                            </SoftTypography>
+                          </SoftBox>
+                        )}
+
+                        {stockCheckDeletionCandidates.length > 0 && (
+                          <SoftBox
+                            p={1.25}
+                            borderRadius={2}
+                            bgcolor="#faf7fc"
+                            sx={{ border: "1px solid #ce93d8" }}
+                          >
+                            <SoftBox
+                              display="flex"
+                              justifyContent="space-between"
+                              alignItems="center"
+                              gap={1}
+                              mb={0.8}
+                              flexWrap="wrap"
+                            >
+                              <SoftBox>
+                                <SoftTypography
+                                  variant="button"
+                                  fontWeight="bold"
+                                  sx={{ color: "#6a1b9a" }}
+                                >
+                                  Hàng đang có trên xe nhưng không còn trong file
+                                </SoftTypography>
+                                <SoftTypography variant="caption" color="text" display="block">
+                                  Chỉ các dòng được đánh dấu mới bị xóa khỏi tồn xe.
+                                </SoftTypography>
+                              </SoftBox>
+                              <SoftButton
+                                size="small"
+                                variant="outlined"
+                                color="error"
+                                onClick={() => {
+                                  const ids = stockCheckDeletionCandidates.map((item) =>
+                                    String(item.productId)
+                                  );
+                                  const allSelected = ids.every((id) =>
+                                    selectedStockDeleteIds.includes(id)
+                                  );
+                                  setSelectedStockDeleteIds(allSelected ? [] : ids);
+                                }}
+                              >
+                                {selectedStockDeleteIds.length ===
+                                stockCheckDeletionCandidates.length
+                                  ? "Bỏ chọn tất cả"
+                                  : "Chọn xóa tất cả"}
+                              </SoftButton>
+                            </SoftBox>
+                            <SoftTypography variant="caption" fontWeight="bold" color="error">
+                              Đã chọn xóa {selectedStockDeleteIds.length}/
+                              {stockCheckDeletionCandidates.length}
+                            </SoftTypography>
+                            <SoftBox
+                              mt={0.7}
+                              maxHeight={240}
+                              overflow="auto"
+                              borderRadius={1.5}
+                              bgcolor="#fff"
+                              sx={{ border: "1px solid #eadcf0" }}
+                            >
+                              {stockCheckDeletionCandidates.map((item) => {
+                                const id = String(item.productId);
+                                const checked = selectedStockDeleteIds.includes(id);
+                                return (
+                                  <SoftBox
+                                    component="label"
+                                    key={id}
+                                    display="flex"
+                                    alignItems="center"
+                                    gap={1}
+                                    px={1}
+                                    py={0.75}
+                                    bgcolor={checked ? "#ffebee" : "#fff"}
+                                    sx={{ borderBottom: "1px solid #f0e7f3", cursor: "pointer" }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={(event) =>
+                                        setSelectedStockDeleteIds((current) =>
+                                          event.target.checked
+                                            ? [...new Set([...current, id])]
+                                            : current.filter((value) => value !== id)
+                                        )
+                                      }
+                                      style={{ width: 21, height: 21, flexShrink: 0 }}
+                                    />
+                                    <ProductThumbnail product={item} size={34} />
+                                    <SoftBox minWidth={0} flex={1}>
+                                      <SoftTypography
+                                        variant="caption"
+                                        fontWeight="bold"
+                                        display="block"
+                                      >
+                                        {item.productName}
+                                      </SoftTypography>
+                                      <SoftTypography variant="caption" color="text">
+                                        {item.productCode} · tồn {item.systemQuantity || 0}{" "}
+                                        {item.unit || ""}
+                                      </SoftTypography>
+                                    </SoftBox>
+                                  </SoftBox>
+                                );
+                              })}
+                            </SoftBox>
+                          </SoftBox>
+                        )}
+                      </SoftBox>
+                    )}
 
                     <SoftBox mb={1.5}>
                       <QuickSortBar
@@ -4638,6 +4793,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
               const allowed = isRestore ? preview.canRestore : preview.canSync;
               const requiredConfirmation = isRestore ? "KHOI PHUC TON XE" : "DONG BO TON XE";
               const blockers = Array.isArray(preview.blockers) ? preview.blockers : [];
+              const warnings = Array.isArray(preview.warnings) ? preview.warnings : [];
               const changes = Array.isArray(preview.changes) ? preview.changes : [];
               return (
                 <>
@@ -4722,11 +4878,25 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                     </SoftBox>
                   ))}
 
+                  {warnings.map((warning, index) => (
+                    <SoftBox
+                      key={`${warning}-${index}`}
+                      p={0.9}
+                      mb={0.65}
+                      borderRadius={1.5}
+                      bgcolor="#fff8e1"
+                    >
+                      <SoftTypography variant="caption" fontWeight="bold" sx={{ color: "#e65100" }}>
+                        {warning}
+                      </SoftTypography>
+                    </SoftBox>
+                  ))}
+
                   <SoftBox
                     display="grid"
                     gap={0.75}
                     mb={1.5}
-                    sx={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+                    sx={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
                   >
                     {(isRestore
                       ? [
@@ -4735,7 +4905,8 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                           ["Số lượng giảm", `−${preview.summary?.lossQuantity || 0}`],
                         ]
                       : [
-                          ["Đã kiểm", preview.summary?.countedProducts || 0],
+                          ["Tự thêm", preview.summary?.createProducts || 0],
+                          ["Xóa đã chọn", preview.summary?.deleteProducts || 0],
                           [
                             "Thiếu",
                             preview.summary?.shortageQuantity ||
