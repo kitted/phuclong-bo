@@ -50,6 +50,26 @@ const listOf = (response) => {
   const data = unwrap(response);
   return Array.isArray(data) ? data : data?.items || data?.docs || data?.rows || [];
 };
+const metaOf = (response) => response?.data?.meta || response?.data?.data?.meta || response?.meta;
+const normalizeSearch = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase()
+    .trim();
+const loadAllPages = async (request, params = {}) => {
+  const firstResponse = await request({ ...params, page: 1, limit: 100 });
+  const rows = [...listOf(firstResponse)];
+  const totalPages = Math.max(1, Number(metaOf(firstResponse)?.totalPages) || 1);
+
+  for (let page = 2; page <= totalPages; page += 1) {
+    const response = await request({ ...params, page, limit: 100 });
+    rows.push(...listOf(response));
+  }
+
+  return [...new Map(rows.map((row) => [idOf(row), row])).values()];
+};
 const dateTime = (value) =>
   value
     ? new Date(value).toLocaleString("vi-VN", {
@@ -86,34 +106,65 @@ function CreateWarrantyDialog({ open, onClose, onSaved }) {
   const [search, setSearch] = useState("");
   const [items, setItems] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [loadingSources, setLoadingSources] = useState(false);
+  const [loadingTruck, setLoadingTruck] = useState(false);
+  const [visibleChoiceLimit, setVisibleChoiceLimit] = useState(50);
 
   useEffect(() => {
     if (!open) return;
+    let active = true;
     setStep(1);
     setForm(emptyForm);
     setItems([]);
     setSearch("");
     setTruck(null);
+    setLoadingSources(true);
     Promise.all([
-      ProductService.getAll({ page: 1, limit: 100 }),
-      TruckService.getAll({ page: 1, limit: 100 }),
+      loadAllPages(ProductService.getAll),
+      loadAllPages(TruckService.getAll),
     ])
-      .then(([productResult, truckResult]) => {
-        setProducts(listOf(productResult));
-        setTrucks(listOf(truckResult));
+      .then(([productRows, truckRows]) => {
+        if (!active) return;
+        setProducts(productRows);
+        setTrucks(truckRows);
       })
-      .catch(() => toast.error("Không thể tải nguồn hàng"));
+      .catch(() => {
+        if (active) toast.error("Không thể tải đầy đủ nguồn hàng");
+      })
+      .finally(() => {
+        if (active) setLoadingSources(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [open]);
 
   useEffect(() => {
     if (!form.sourceTruckId) {
       setTruck(null);
+      setLoadingTruck(false);
       return;
     }
+    let active = true;
+    setLoadingTruck(true);
     TruckService.getById(form.sourceTruckId)
-      .then((response) => setTruck(unwrap(response)))
-      .catch(() => toast.error("Không thể tải tồn xe"));
+      .then((response) => {
+        if (active) setTruck(unwrap(response));
+      })
+      .catch(() => {
+        if (active) toast.error("Không thể tải tồn xe");
+      })
+      .finally(() => {
+        if (active) setLoadingTruck(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [form.sourceTruckId]);
+
+  useEffect(() => {
+    setVisibleChoiceLimit(50);
+  }, [search, form.sourceType, form.sourceTruckId]);
 
   const available = useMemo(() => {
     if (form.sourceType === "WAREHOUSE") {
@@ -130,6 +181,7 @@ function CreateWarrantyDialog({ open, onClose, onSaved }) {
       const fallback = products.find((item) => idOf(item) === productId) || {};
       return {
         ...fallback,
+        ...row,
         ...(typeof product === "object" ? product : {}),
         id: productId,
         _id: productId,
@@ -138,19 +190,22 @@ function CreateWarrantyDialog({ open, onClose, onSaved }) {
     });
   }, [form.sourceType, products, truck]);
 
-  const choices = useMemo(() => {
-    const keyword = search.trim().toLocaleLowerCase("vi");
+  const matchingChoices = useMemo(() => {
+    const keyword = normalizeSearch(search);
     return available
       .filter((product) => !items.some((item) => item.productId === idOf(product)))
       .filter(
         (product) =>
           !keyword ||
-          `${product.code || ""} ${product.name || ""} ${product.barcode || ""}`
-            .toLocaleLowerCase("vi")
-            .includes(keyword)
-      )
-      .slice(0, 30);
+          normalizeSearch(
+            `${product.code || ""} ${product.name || ""} ${product.barcode || ""}`
+          ).includes(keyword)
+      );
   }, [available, items, search]);
+  const choices = useMemo(
+    () => matchingChoices.slice(0, visibleChoiceLimit),
+    [matchingChoices, visibleChoiceLimit]
+  );
 
   const changeSource = (sourceType) => {
     setForm((value) => ({ ...value, sourceType, sourceTruckId: "" }));
@@ -200,8 +255,11 @@ function CreateWarrantyDialog({ open, onClose, onSaved }) {
   };
 
   const nextStep = () => {
+    if (step === 1 && loadingSources) return toast.info("Đang tải đầy đủ danh sách nguồn hàng");
     if (step === 1 && form.sourceType === "TRUCK" && !form.sourceTruckId)
       return toast.error("Hãy chọn xe đang giữ hàng bảo hành");
+    if (step === 1 && form.sourceType === "TRUCK" && loadingTruck)
+      return toast.info("Đang tải tồn xe");
     if (step === 2 && !validateItems()) return;
     setStep((value) => Math.min(3, value + 1));
   };
@@ -384,7 +442,9 @@ function CreateWarrantyDialog({ open, onClose, onSaved }) {
                     setItems([]);
                   }}
                 >
-                  <MenuItem value="">Bấm để chọn xe</MenuItem>
+                  <MenuItem value="">
+                    {loadingSources ? "Đang tải danh sách xe..." : "Bấm để chọn xe"}
+                  </MenuItem>
                   {trucks.map((item) => (
                     <MenuItem key={idOf(item)} value={idOf(item)}>
                       {item.code} · {item.name} · {item.licensePlate}
@@ -428,6 +488,11 @@ function CreateWarrantyDialog({ open, onClose, onSaved }) {
               placeholder="Tìm nhanh theo tên, mã hoặc barcode..."
               icon={{ component: "search", direction: "left" }}
             />
+            <SoftTypography variant="caption" color="text" display="block" mt={0.5}>
+              {loadingTruck
+                ? "Đang tải tồn xe..."
+                : `Tìm thấy ${matchingChoices.length} sản phẩm phù hợp`}
+            </SoftTypography>
             <SoftBox
               mt={1}
               maxHeight={240}
@@ -468,10 +533,22 @@ function CreateWarrantyDialog({ open, onClose, onSaved }) {
               ))}
               {!choices.length && (
                 <SoftTypography variant="caption" color="text" textAlign="center" py={2}>
-                  {items.length
+                  {loadingTruck
+                    ? "Đang tải tồn xe..."
+                    : items.length
                     ? "Không còn sản phẩm phù hợp để chọn."
                     : "Nguồn này chưa có hàng phù hợp."}
                 </SoftTypography>
+              )}
+              {choices.length < matchingChoices.length && (
+                <SoftButton
+                  size="small"
+                  color="secondary"
+                  variant="outlined"
+                  onClick={() => setVisibleChoiceLimit((value) => value + 50)}
+                >
+                  Xem thêm ({matchingChoices.length - choices.length})
+                </SoftButton>
               )}
             </SoftBox>
             {!!items.length && (
@@ -665,10 +742,16 @@ function CreateWarrantyDialog({ open, onClose, onSaved }) {
           color="info"
           variant="gradient"
           fullWidth
-          disabled={saving}
+          disabled={saving || loadingSources || (form.sourceType === "TRUCK" && loadingTruck)}
           onClick={step === 3 ? save : nextStep}
         >
-          {saving ? "Đang tạo phiếu..." : step === 3 ? "Xác nhận tạo phiếu" : "Tiếp tục"}
+          {saving
+            ? "Đang tạo phiếu..."
+            : loadingSources || (form.sourceType === "TRUCK" && loadingTruck)
+            ? "Đang tải dữ liệu..."
+            : step === 3
+            ? "Xác nhận tạo phiếu"
+            : "Tiếp tục"}
         </SoftButton>
       </DialogActions>
     </Dialog>
