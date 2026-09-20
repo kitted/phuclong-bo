@@ -43,10 +43,17 @@ export const BackupService = {
     });
   },
 
-  restore: (restoreToken, payload) =>
-    AxiosInstance.post(`/admin/backups/${encodeURIComponent(restoreToken)}/restore`, payload, {
+  restore: (file, payload) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    Object.entries(payload || {}).forEach(([key, value]) =>
+      formData.append(key, String(value))
+    );
+    return AxiosInstance.post("/admin/backups/restore", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
       timeout: 10 * 60 * 1000,
-    }),
+    });
+  },
 
   getJob: (jobId) => AxiosInstance.get(`/admin/backups/jobs/${encodeURIComponent(jobId)}`),
 };

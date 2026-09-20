@@ -394,15 +394,13 @@ export default function BackupData() {
   };
 
   const restore = async () => {
-    const restoreToken =
-      inspection?.restoreToken || inspection?.token || inspection?.uploadId || inspection?.id;
-    if (!restoreToken) return toast.error("Phiên kiểm tra file đã hết hạn. Vui lòng kiểm tra lại.");
+    if (!file) return toast.error("Vui lòng chọn lại file backup");
     if (confirmation.trim().toUpperCase() !== CONFIRMATION_TEXT)
       return toast.error(`Vui lòng nhập đúng “${CONFIRMATION_TEXT}”`);
     if (!currentPassword) return toast.error("Vui lòng nhập mật khẩu admin hiện tại");
     try {
       setRestoring(true);
-      const response = await BackupService.restore(restoreToken, {
+      const response = await BackupService.restore(file, {
         mode: restoreMode,
         createSafetyBackup,
         currentPassword,
