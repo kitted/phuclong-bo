@@ -5154,8 +5154,7 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                 Xem trước ảnh hàng hóa trên xe
               </SoftTypography>
               <SoftTypography variant="caption" color="text" display="block">
-                {currentTruck.code} · {currentTruck.name} · Trang {inventoryImagePage + 1}/
-                {inventoryImagePages.length || 1}
+                {currentTruck.code} · {currentTruck.name} · Một ảnh duy nhất, danh sách chia hai cột
               </SoftTypography>
             </SoftBox>
             <IconButton
@@ -5224,27 +5223,12 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
             )}
             <SoftButton
               fullWidth
-              color="info"
-              variant="outlined"
-              disabled={!currentInventoryImage}
-              onClick={() =>
-                currentInventoryImage &&
-                downloadDataImage(currentInventoryImage.url, currentInventoryImage.fileName)
-              }
-            >
-              <Icon>download</Icon>&nbsp;Tải trang hiện tại
-            </SoftButton>
-            <SoftButton
-              fullWidth
               color="success"
               variant="gradient"
               disabled={!inventoryImagePages.length}
               onClick={downloadAllInventoryImages}
             >
-              <Icon>download_for_offline</Icon>&nbsp;
-              {inventoryImagePages.length > 1
-                ? `Tải tất cả ${inventoryImagePages.length} ảnh`
-                : "Tải ảnh PNG"}
+              <Icon>download_for_offline</Icon>&nbsp;Tải ảnh PNG
             </SoftButton>
           </SoftBox>
         </SoftBox>
