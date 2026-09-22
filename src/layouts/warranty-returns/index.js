@@ -81,6 +81,17 @@ const dateTime = (value) =>
         hour12: false,
       })
     : "—";
+const daysSince = (value) => {
+  if (!value) return 0;
+  return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86400000));
+};
+const todayLabel = () =>
+  new Date().toLocaleDateString("vi-VN", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 
 function StatusBadge({ status }) {
   const value = STATUS[status] || STATUS.RECEIVED;
@@ -947,6 +958,7 @@ export default function WarrantyReturns() {
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [workingId, setWorkingId] = useState("");
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -977,6 +989,20 @@ export default function WarrantyReturns() {
     setDetail(null);
     load();
   };
+  const startNow = async (event, document) => {
+    event.stopPropagation();
+    const id = idOf(document);
+    setWorkingId(id);
+    try {
+      await WarrantyReturnService.start(id);
+      toast.success(`Đã bắt đầu xử lý ${document.code}`);
+      await load();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Không thể bắt đầu xử lý phiếu");
+    } finally {
+      setWorkingId("");
+    }
+  };
   return (
     <DashboardLayout>
       <DashboardNavbar />
@@ -991,32 +1017,89 @@ export default function WarrantyReturns() {
         >
           <SoftBox>
             <SoftTypography variant="h4" fontWeight="bold">
-              Quản lý hàng bảo hành
+              Vận hành hàng bảo hành
             </SoftTypography>
-            <SoftTypography variant="caption" color="text">
-              Theo dõi hàng lỗi tách từ tồn kho chính hoặc tồn xe và xử lý nhập trả an toàn.
+            <SoftTypography variant="body2" color="text" sx={{ textTransform: "capitalize" }}>
+              {todayLabel()} · Theo dõi và xử lý công việc bảo hành trong ngày
             </SoftTypography>
           </SoftBox>
-          <SoftButton color="info" variant="gradient" onClick={() => setCreateOpen(true)}>
-            <Icon>add</Icon>&nbsp;Nhận hàng bảo hành
-          </SoftButton>
+          <SoftBox display="flex" gap={1}>
+            <SoftButton color="secondary" variant="outlined" disabled={loading} onClick={load}>
+              <Icon>refresh</Icon>&nbsp;Làm mới
+            </SoftButton>
+            <SoftButton color="info" variant="gradient" onClick={() => setCreateOpen(true)}>
+              <Icon>add</Icon>&nbsp;Tiếp nhận hàng
+            </SoftButton>
+          </SoftBox>
         </SoftBox>
         <Grid container spacing={1.25} mb={2}>
           {[
-            ["Phiếu đang xử lý", summary.activeDocuments || 0, "build", "#1565c0"],
-            ["Số lượng đang giữ", summary.activeQuantity || 0, "inventory_2", "#ef6c00"],
-            ["Từ kho chính", summary.warehouseDocuments || 0, "warehouse", "#2e7d32"],
-            ["Từ xe", summary.truckDocuments || 0, "local_shipping", "#7b1fa2"],
-          ].map(([label, value, icon, color]) => (
+            [
+              "Chờ bắt đầu",
+              summary.receivedDocuments || 0,
+              "inbox",
+              "#1565c0",
+              "#e3f2fd",
+              "RECEIVED",
+            ],
+            [
+              "Đang bảo hành",
+              summary.processingDocuments || 0,
+              "build",
+              "#ef6c00",
+              "#fff3e0",
+              "PROCESSING",
+            ],
+            [
+              "Tồn quá 7 ngày",
+              summary.staleDocuments || 0,
+              "warning_amber",
+              "#c62828",
+              "#ffebee",
+              "",
+            ],
+            [
+              "Hoàn tất hôm nay",
+              summary.completedToday || 0,
+              "task_alt",
+              "#2e7d32",
+              "#e8f5e9",
+              "",
+            ],
+          ].map(([label, value, icon, color, background, status]) => (
             <Grid item xs={6} md={3} key={label}>
-              <Card sx={{ p: 1.5, boxShadow: "none", border: "1px solid #e4e9f0" }}>
-                <SoftBox display="flex" gap={1} alignItems="center">
-                  <Icon sx={{ color }}>{icon}</Icon>
+              <Card
+                onClick={() =>
+                  status && setFilters((current) => ({ ...current, status, page: 1 }))
+                }
+                sx={{
+                  p: 1.5,
+                  height: "100%",
+                  boxShadow: "none",
+                  border: `1px solid ${background}`,
+                  bgcolor: background,
+                  cursor: status ? "pointer" : "default",
+                  transition: "transform 150ms ease, box-shadow 150ms ease",
+                  "&:hover": status ? { transform: "translateY(-2px)", boxShadow: 2 } : {},
+                }}
+              >
+                <SoftBox display="flex" gap={1.25} alignItems="center">
+                  <SoftBox
+                    width={42}
+                    height={42}
+                    borderRadius={2}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    sx={{ bgcolor: "#fff", color }}
+                  >
+                    <Icon>{icon}</Icon>
+                  </SoftBox>
                   <SoftBox>
-                    <SoftTypography variant="caption" color="text">
+                    <SoftTypography variant="caption" color="text" fontWeight="bold">
                       {label}
                     </SoftTypography>
-                    <SoftTypography variant="h5" fontWeight="bold">
+                    <SoftTypography variant="h4" fontWeight="bold" sx={{ color }}>
                       {value}
                     </SoftTypography>
                   </SoftBox>
@@ -1026,6 +1109,43 @@ export default function WarrantyReturns() {
           ))}
         </Grid>
         <Card sx={{ p: { xs: 1.25, md: 2 }, boxShadow: "none" }}>
+          <SoftBox
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+            gap={1}
+            flexWrap="wrap"
+            mb={1.5}
+          >
+            <SoftBox>
+              <SoftTypography variant="h6" fontWeight="bold">
+                Danh sách công việc
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text">
+                Đang giữ {summary.activeQuantity || 0} sản phẩm trong quy trình bảo hành
+              </SoftTypography>
+            </SoftBox>
+            <SoftBox display="flex" gap={0.75} flexWrap="wrap">
+              {[
+                ["", "Tất cả"],
+                ["RECEIVED", "Chờ bắt đầu"],
+                ["PROCESSING", "Đang xử lý"],
+                ["COMPLETED", "Đã hoàn tất"],
+              ].map(([value, label]) => (
+                <SoftButton
+                  key={value || "ALL"}
+                  size="small"
+                  color={filters.status === value ? "info" : "secondary"}
+                  variant={filters.status === value ? "gradient" : "outlined"}
+                  onClick={() =>
+                    setFilters((current) => ({ ...current, status: value, page: 1 }))
+                  }
+                >
+                  {label}
+                </SoftButton>
+              ))}
+            </SoftBox>
+          </SoftBox>
           <Grid container spacing={1}>
             <Grid item xs={12} md={6}>
               <SoftInput
@@ -1072,68 +1192,178 @@ export default function WarrantyReturns() {
             </Grid>
           </Grid>
           <SoftBox mt={1.5} display="flex" flexDirection="column" gap={1}>
-            {documents.map((document) => (
-              <SoftBox
-                key={idOf(document)}
-                component="button"
-                type="button"
-                onClick={() => setDetail(document)}
-                p={1.5}
-                borderRadius={2}
-                textAlign="left"
-                sx={{
-                  border: "1px solid #e2e7ee",
-                  bgcolor: "#fff",
-                  cursor: "pointer",
-                  font: "inherit",
-                }}
-              >
+            {documents.map((document) => {
+              const age = daysSince(document.createdAt);
+              const active = ["RECEIVED", "PROCESSING"].includes(document.status);
+              const stale =
+                active && Date.now() - new Date(document.createdAt).getTime() > 7 * 86400000;
+              return (
                 <SoftBox
-                  display="flex"
-                  justifyContent="space-between"
-                  gap={1}
-                  alignItems="flex-start"
+                  key={idOf(document)}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetail(document)}
+                  onKeyDown={(event) => event.key === "Enter" && setDetail(document)}
+                  p={1.5}
+                  borderRadius={2}
+                  sx={{
+                    border: stale ? "1px solid #ef9a9a" : "1px solid #e2e7ee",
+                    borderLeft: stale ? "4px solid #d32f2f" : "4px solid #90caf9",
+                    bgcolor: stale ? "#fffafa" : "#fff",
+                    cursor: "pointer",
+                    transition: "box-shadow 150ms ease, border-color 150ms ease",
+                    "&:hover": { boxShadow: 2, borderColor: stale ? "#d32f2f" : "#90caf9" },
+                  }}
                 >
-                  <SoftBox>
-                    <SoftTypography variant="button" fontWeight="bold" display="block">
-                      {document.code}
-                    </SoftTypography>
-                    <SoftTypography variant="caption" color="text">
-                      {SOURCE[document.sourceType]}
-                      {document.sourceTruckCode
-                        ? ` · ${document.sourceTruckCode} · ${document.sourceTruckName}`
-                        : ""}{" "}
-                      · {dateTime(document.createdAt)}
-                    </SoftTypography>
-                  </SoftBox>
-                  <StatusBadge status={document.status} />
-                </SoftBox>
-                <SoftBox display="flex" gap={0.75} mt={1} sx={{ overflowX: "auto" }}>
-                  {document.items?.slice(0, 5).map((item) => (
-                    <SoftBox
-                      key={String(item.productId)}
-                      display="flex"
-                      gap={0.5}
-                      alignItems="center"
-                      minWidth={150}
-                    >
-                      <EntityThumbnail entity={item} size={34} />
-                      <SoftBox minWidth={0}>
-                        <SoftTypography variant="caption" fontWeight="bold" noWrap display="block">
-                          {item.productName}
+                  <SoftBox
+                    display="flex"
+                    justifyContent="space-between"
+                    gap={1}
+                    alignItems="flex-start"
+                  >
+                    <SoftBox minWidth={0}>
+                      <SoftBox display="flex" alignItems="center" gap={0.75} flexWrap="wrap">
+                        <SoftTypography variant="button" fontWeight="bold">
+                          {document.code}
                         </SoftTypography>
-                        <SoftTypography variant="caption" color="text">
-                          {item.quantity} {item.unit}
+                        {active && (
+                          <SoftBox
+                            component="span"
+                            px={0.75}
+                            py={0.25}
+                            borderRadius={1.5}
+                            sx={{
+                              bgcolor: stale ? "#ffebee" : "#f1f4f8",
+                              color: stale ? "#c62828" : "#607d8b",
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {age === 0 ? "Mới hôm nay" : `${age} ngày`}
+                          </SoftBox>
+                        )}
+                      </SoftBox>
+                      <SoftTypography variant="caption" color="text" display="block">
+                        {SOURCE[document.sourceType]}
+                        {document.sourceTruckCode
+                          ? ` · ${document.sourceTruckCode} · ${document.sourceTruckName}`
+                          : ""}{" "}
+                        · {dateTime(document.createdAt)}
+                      </SoftTypography>
+                    </SoftBox>
+                    <StatusBadge status={document.status} />
+                  </SoftBox>
+
+                  <SoftBox mt={1} display="flex" gap={1} alignItems="flex-start">
+                    <SoftBox flex={1} minWidth={0}>
+                      <SoftTypography variant="caption" fontWeight="bold" display="block">
+                        {document.reason}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        {document.customerName || "Chưa ghi khách hàng"}
+                        {document.customerPhone ? ` · ${document.customerPhone}` : ""}
+                        {document.supplierName ? ` · Nơi nhận: ${document.supplierName}` : ""}
+                      </SoftTypography>
+                    </SoftBox>
+                    <SoftBox textAlign="right" sx={{ flexShrink: 0 }}>
+                      <SoftTypography variant="button" fontWeight="bold" display="block">
+                        {document.totalQuantity || 0}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        sản phẩm
+                      </SoftTypography>
+                    </SoftBox>
+                  </SoftBox>
+
+                  <SoftBox display="flex" gap={0.75} mt={1} sx={{ overflowX: "auto" }}>
+                    {document.items?.slice(0, 4).map((item) => (
+                      <SoftBox
+                        key={String(item.productId)}
+                        display="flex"
+                        gap={0.5}
+                        alignItems="center"
+                        minWidth={150}
+                        p={0.5}
+                        borderRadius={1.5}
+                        sx={{ bgcolor: "#f7f9fc" }}
+                      >
+                        <EntityThumbnail entity={item} size={34} />
+                        <SoftBox minWidth={0}>
+                          <SoftTypography variant="caption" fontWeight="bold" noWrap display="block">
+                            {item.productName}
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text">
+                            {item.quantity} {item.unit}
+                          </SoftTypography>
+                        </SoftBox>
+                      </SoftBox>
+                    ))}
+                    {(document.items?.length || 0) > 4 && (
+                      <SoftBox
+                        minWidth={70}
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        borderRadius={1.5}
+                        sx={{ bgcolor: "#f1f4f8" }}
+                      >
+                        <SoftTypography variant="caption" fontWeight="bold">
+                          +{document.items.length - 4} món
                         </SoftTypography>
                       </SoftBox>
-                    </SoftBox>
-                  ))}
+                    )}
+                  </SoftBox>
+
+                  <SoftBox mt={1.25} display="flex" justifyContent="flex-end" gap={0.75}>
+                    {document.status === "RECEIVED" && (
+                      <SoftButton
+                        size="small"
+                        color="warning"
+                        variant="gradient"
+                        disabled={workingId === idOf(document)}
+                        onClick={(event) => startNow(event, document)}
+                      >
+                        <Icon>play_arrow</Icon>&nbsp;
+                        {workingId === idOf(document) ? "Đang xử lý..." : "Bắt đầu xử lý"}
+                      </SoftButton>
+                    )}
+                    {document.status === "PROCESSING" && (
+                      <SoftButton
+                        size="small"
+                        color="success"
+                        variant="gradient"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDetail(document);
+                        }}
+                      >
+                        <Icon>task_alt</Icon>&nbsp;Ghi nhận kết quả
+                      </SoftButton>
+                    )}
+                    {!active && (
+                      <SoftButton
+                        size="small"
+                        color="secondary"
+                        variant="outlined"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDetail(document);
+                        }}
+                      >
+                        Xem phiếu
+                      </SoftButton>
+                    )}
+                  </SoftBox>
                 </SoftBox>
-                <SoftTypography variant="caption" color="text" display="block" mt={0.75}>
-                  {document.reason}
+              );
+            })}
+            {loading && (
+              <SoftBox py={2} textAlign="center">
+                <SoftTypography variant="caption" color="text">
+                  Đang cập nhật danh sách công việc...
                 </SoftTypography>
               </SoftBox>
-            ))}
+            )}
             {!loading && !documents.length && (
               <SoftBox py={5} textAlign="center">
                 <Icon color="disabled">build_circle</Icon>

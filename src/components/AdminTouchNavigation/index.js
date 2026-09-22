@@ -38,6 +38,12 @@ const menuGroups = [
   {
     title: "Kho & vận hành",
     items: [
+      {
+        path: "/nghiep-vu-ngay",
+        icon: "today",
+        label: "Nghiệp vụ hằng ngày",
+        color: "#00897b",
+      },
       { path: "/ton-kho", icon: "inventory_2", label: "Tồn kho", color: "#ef6c00" },
       { path: "/hang-hoa", icon: "category", label: "Hàng hóa", color: "#1565c0" },
       { path: "/nhap-kho", icon: "move_to_inbox", label: "Nhập kho", color: "#2e7d32" },
@@ -72,6 +78,7 @@ const pageTitles = [
   ["/hoa-don", "Quản lý hóa đơn"],
   ["/khach-hang", "Quản lý khách hàng"],
   ["/customer-coins", "Điểm khách hàng"],
+  ["/nghiep-vu-ngay", "Nghiệp vụ hằng ngày"],
   ["/ton-kho", "Tồn kho chính"],
   ["/hang-hoa", "Quản lý hàng hóa"],
   ["/nhap-kho", "Nhập kho"],
