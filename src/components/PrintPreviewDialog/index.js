@@ -10,7 +10,16 @@ import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftTypography from "components/SoftTypography";
 
-function PrintPreviewDialog({ open, title, html, onClose }) {
+function PrintPreviewDialog({
+  open,
+  title,
+  html,
+  onClose,
+  description,
+  onConfirm,
+  confirmLabel,
+  confirming,
+}) {
   const iframeRef = useRef(null);
 
   const handlePrint = () => {
@@ -33,7 +42,7 @@ function PrintPreviewDialog({ open, title, html, onClose }) {
           {title}
         </SoftTypography>
         <SoftTypography variant="caption" color="text">
-          Kiểm tra đúng một trang A4 rồi chọn In / Lưu PDF.
+          {description}
         </SoftTypography>
         <IconButton
           aria-label="Đóng xem trước"
@@ -60,6 +69,17 @@ function PrintPreviewDialog({ open, title, html, onClose }) {
         <SoftButton variant="outlined" color="secondary" onClick={onClose}>
           Đóng
         </SoftButton>
+        {onConfirm && (
+          <SoftButton
+            variant="gradient"
+            color="success"
+            onClick={onConfirm}
+            disabled={!html || confirming}
+          >
+            <Icon>check_circle</Icon>&nbsp;
+            {confirming ? "Đang lưu..." : confirmLabel}
+          </SoftButton>
+        )}
         <SoftButton variant="gradient" color="info" onClick={handlePrint} disabled={!html}>
           <Icon>print</Icon>&nbsp;In / Lưu PDF
         </SoftButton>
@@ -73,10 +93,18 @@ PrintPreviewDialog.propTypes = {
   title: PropTypes.string.isRequired,
   html: PropTypes.string,
   onClose: PropTypes.func.isRequired,
+  description: PropTypes.string,
+  onConfirm: PropTypes.func,
+  confirmLabel: PropTypes.string,
+  confirming: PropTypes.bool,
 };
 
 PrintPreviewDialog.defaultProps = {
   html: "",
+  description: "Kiểm tra đúng một trang A4 rồi chọn In / Lưu PDF.",
+  onConfirm: undefined,
+  confirmLabel: "Xác nhận lưu",
+  confirming: false,
 };
 
 export default PrintPreviewDialog;

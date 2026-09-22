@@ -142,31 +142,86 @@ export default function QuickTruckOperations() {
       })
     );
 
-  const submit = async () => {
+  const buildRequest = () => {
     if (!sourceTruck)
-      return toast.error(operationType === "LOAD" ? "Chọn xe nhận hàng" : "Chọn xe nguồn");
+      return void toast.error(operationType === "LOAD" ? "Chọn xe nhận hàng" : "Chọn xe nguồn");
     if (operationType === "TRUCK_TO_TRUCK" && !destinationTruck)
-      return toast.error("Chọn xe nhận hàng");
-    if (!items.length) return toast.error("Chọn ít nhất một mặt hàng");
+      return void toast.error("Chọn xe nhận hàng");
+    if (!items.length) return void toast.error("Chọn ít nhất một mặt hàng");
     if (items.some((item) => !Number.isInteger(Number(item.qty)) || Number(item.qty) < 1))
-      return toast.error("Số lượng phải là số nguyên dương");
+      return void toast.error("Số lượng phải là số nguyên dương");
     const payload = {
       date: `${date}T00:00:00+07:00`,
       note: note.trim() || undefined,
       items: items.map((item) => ({ productId: item.productId, qty: Number(item.qty) })),
     };
+    return {
+      payload,
+      transferPayload:
+        operationType === "TRUCK_TO_TRUCK"
+          ? { ...payload, destinationTruckId: idOf(destinationTruck) }
+          : payload,
+    };
+  };
+
+  const openSavePreview = async () => {
+    const request = buildRequest();
+    if (!request) return;
+    try {
+      setSaving(true);
+      const serverPreview =
+        operationType === "TRUCK_TO_TRUCK"
+          ? unwrap(
+              await TruckService.previewTruckTransfer(idOf(sourceTruck), request.transferPayload)
+            )
+          : null;
+      const previewItems = serverPreview?.items?.length
+        ? serverPreview.items
+        : items.map((item) => ({
+            productId: item.productId,
+            productCode: item.product.code,
+            productName: item.product.name,
+            unit: item.product.unit,
+            qty: Number(item.qty),
+          }));
+      const draft = {
+        code: "BẢN XEM TRƯỚC",
+        type: operationType,
+        date: request.payload.date,
+        note: request.payload.note,
+        truck: sourceTruck,
+        driver: sourceTruck.driver,
+        sourceTruck: serverPreview?.sourceTruck || sourceTruck,
+        destinationTruck: serverPreview?.destinationTruck || destinationTruck,
+        items: previewItems,
+      };
+      setPrintPreview({
+        title: `Xem trước · ${currentOperation.title}`,
+        html: buildTruckOperationPdfHtml(draft),
+        pending: request,
+      });
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể tạo bản xem trước nghiệp vụ xe");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submit = async () => {
+    const request = printPreview?.pending;
+    if (!request) return;
     try {
       setSaving(true);
       let response;
       if (operationType === "LOAD")
-        response = await TruckService.loadGoods(idOf(sourceTruck), payload);
+        response = await TruckService.loadGoods(idOf(sourceTruck), request.payload);
       else if (operationType === "RETURN")
-        response = await TruckService.returnGoods(idOf(sourceTruck), payload);
-      else {
-        const transferPayload = { ...payload, destinationTruckId: idOf(destinationTruck) };
-        await TruckService.previewTruckTransfer(idOf(sourceTruck), transferPayload);
-        response = await TruckService.transferToTruck(idOf(sourceTruck), transferPayload);
-      }
+        response = await TruckService.returnGoods(idOf(sourceTruck), request.payload);
+      else
+        response = await TruckService.transferToTruck(
+          idOf(sourceTruck),
+          request.transferPayload
+        );
       const result = unwrap(response);
       const transfer = result?.transfer || result;
       toast.success(`Đã hoàn tất ${operationName[operationType].toLowerCase()}`);
@@ -380,12 +435,12 @@ export default function QuickTruckOperations() {
           variant="gradient"
           sx={{ mt: 1.5 }}
           disabled={saving}
-          onClick={submit}
+          onClick={openSavePreview}
         >
-          <Icon>picture_as_pdf</Icon>&nbsp;
+          <Icon>visibility</Icon>&nbsp;
           {saving
-            ? "Đang xử lý..."
-            : `Hoàn tất ${currentOperation.title.toLowerCase()} & xem phiếu`}
+            ? "Đang tạo bản xem trước..."
+            : `Xem trước ${currentOperation.title.toLowerCase()}`}
         </SoftButton>
       </SoftBox>
       <SoftTypography variant="h6" fontWeight="bold" mt={2.5} mb={1}>
@@ -425,6 +480,14 @@ export default function QuickTruckOperations() {
         title={printPreview?.title || "Xem trước phiếu PDF"}
         html={printPreview?.html || ""}
         onClose={() => setPrintPreview(null)}
+        description={
+          printPreview?.pending
+            ? "Kiểm tra phiếu trước khi xác nhận lưu và thay đổi tồn kho, tồn xe."
+            : "Phiếu đã được lưu. Bạn có thể in hoặc lưu PDF."
+        }
+        onConfirm={printPreview?.pending ? submit : undefined}
+        confirmLabel={`Xác nhận ${currentOperation.title.toLowerCase()}`}
+        confirming={saving}
       />
     </SoftBox>
   );
