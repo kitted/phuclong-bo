@@ -29,6 +29,7 @@ import QuickSortBar from "components/QuickSortBar";
 import CustomerReturnService from "services/customerReturnService";
 import { mergeUniqueItems } from "utils/infiniteList";
 import { formatBusinessDateTime } from "utils/businessDate";
+import { createTruckInventoryImages, downloadDataImage } from "utils/truckInventoryImage";
 
 const EMPTY_TRUCK = { code: "", name: "", licensePlate: "", driverId: "", status: "active" };
 const EMPTY_META = { totalPages: 1, totalItems: 0 };
@@ -1495,6 +1496,9 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
   const [goodsReport, setGoodsReport] = useState({ summary: {}, data: [] });
   const [goodsReportLoading, setGoodsReportLoading] = useState(false);
   const [goodsReportExporting, setGoodsReportExporting] = useState(false);
+  const [inventoryImagePreview, setInventoryImagePreview] = useState(null);
+  const [inventoryImagePage, setInventoryImagePage] = useState(0);
+  const [inventoryImageCreating, setInventoryImageCreating] = useState(false);
   const [stockCheckFile, setStockCheckFile] = useState(null);
   const [stockCheckResult, setStockCheckResult] = useState(null);
   const [stockCheckFilter, setStockCheckFilter] = useState("ALL");
@@ -1539,6 +1543,8 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
     setSalesSort("desc");
     setSalesInvoices([]);
     setGoodsReport({ summary: {}, data: [] });
+    setInventoryImagePreview(null);
+    setInventoryImagePage(0);
     setStockCheckFile(null);
     setStockCheckResult(null);
     setStockCheckFilter("ALL");
@@ -2103,6 +2109,38 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
     (sum, item) => sum + productDetail(item).sellPrice * quantityOf(item),
     0
   );
+  const openInventoryImagePreview = () => {
+    if (!inventory.length) {
+      toast.error("Xe hiện không có hàng để xuất ảnh");
+      return;
+    }
+    setInventoryImageCreating(true);
+    window.requestAnimationFrame(() => {
+      try {
+        const pages = createTruckInventoryImages({
+          truck: currentTruck,
+          driverName,
+          driverPhone,
+          rows: inventory.map(productDetail),
+        });
+        setInventoryImagePreview({ pages });
+        setInventoryImagePage(0);
+      } catch (error) {
+        toast.error(error?.message || "Không thể tạo ảnh hàng hóa trên xe");
+      } finally {
+        setInventoryImageCreating(false);
+      }
+    });
+  };
+  const downloadAllInventoryImages = () => {
+    const pages = inventoryImagePreview?.pages || [];
+    pages.forEach((page, index) => {
+      window.setTimeout(() => downloadDataImage(page.url, page.fileName), index * 250);
+    });
+    toast.success(
+      pages.length > 1 ? `Đang tải ${pages.length} ảnh báo cáo` : "Đã tải ảnh báo cáo"
+    );
+  };
   const directStockRows = inventory.map((item, index) => {
     const product = productDetail(item);
     const code =
@@ -2438,6 +2476,8 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
   const visibleStockCheckItems = stockCheckItems.filter(
     (item) => stockCheckFilter === "ALL" || item.status === stockCheckFilter
   );
+  const inventoryImagePages = inventoryImagePreview?.pages || [];
+  const currentInventoryImage = inventoryImagePages[inventoryImagePage];
 
   return (
     <>
@@ -2605,16 +2645,33 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                     {visibleInventory.length} / {inventory.length} loại hàng
                   </SoftTypography>
                 </SoftBox>
-                {inventory.length > 5 && (
-                  <SoftBox width={{ xs: "100%", md: 330 }}>
-                    <SoftInput
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Tìm tên, mã hoặc barcode..."
-                      icon={{ component: "search", direction: "left" }}
-                    />
-                  </SoftBox>
-                )}
+                <SoftBox
+                  display="flex"
+                  gap={1}
+                  width={{ xs: "100%", md: "auto" }}
+                  flexDirection={{ xs: "column", sm: "row" }}
+                >
+                  {inventory.length > 5 && (
+                    <SoftBox width={{ xs: "100%", md: 330 }}>
+                      <SoftInput
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Tìm tên, mã hoặc barcode..."
+                        icon={{ component: "search", direction: "left" }}
+                      />
+                    </SoftBox>
+                  )}
+                  <SoftButton
+                    color="info"
+                    variant="gradient"
+                    startIcon={<Icon>image</Icon>}
+                    disabled={loading || pricesLoading || !inventory.length || inventoryImageCreating}
+                    onClick={openInventoryImagePreview}
+                    sx={{ whiteSpace: "nowrap" }}
+                  >
+                    {inventoryImageCreating ? "Đang tạo ảnh..." : "Xuất ảnh"}
+                  </SoftButton>
+                </SoftBox>
               </SoftBox>
 
               {loading && (
@@ -5059,6 +5116,137 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
                 </>
               );
             })()}
+        </SoftBox>
+      </Modal>
+
+      <Modal
+        open={Boolean(inventoryImagePreview)}
+        onClose={() => setInventoryImagePreview(null)}
+      >
+        <SoftBox
+          sx={{
+            position: "absolute",
+            top: { xs: 0, md: "50%" },
+            left: { xs: 0, md: "50%" },
+            transform: { xs: "none", md: "translate(-50%, -50%)" },
+            width: { xs: "100%", md: "min(980px, 96vw)" },
+            height: { xs: "100dvh", md: "auto" },
+            maxHeight: { md: "94vh" },
+            bgcolor: "#fff",
+            borderRadius: { xs: 0, md: 3 },
+            boxShadow: 24,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <SoftBox
+            px={{ xs: 1.5, md: 2.5 }}
+            py={1.5}
+            display="flex"
+            alignItems="center"
+            justifyContent="space-between"
+            gap={1}
+            sx={{ borderBottom: "1px solid #e2e8f0" }}
+          >
+            <SoftBox minWidth={0}>
+              <SoftTypography variant="h6" fontWeight="bold">
+                Xem trước ảnh hàng hóa trên xe
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text" display="block">
+                {currentTruck.code} · {currentTruck.name} · Trang {inventoryImagePage + 1}/
+                {inventoryImagePages.length || 1}
+              </SoftTypography>
+            </SoftBox>
+            <IconButton
+              aria-label="Đóng xem trước"
+              onClick={() => setInventoryImagePreview(null)}
+            >
+              <Icon>close</Icon>
+            </IconButton>
+          </SoftBox>
+
+          <SoftBox
+            flex={1}
+            minHeight={0}
+            overflow="auto"
+            p={{ xs: 1, md: 2 }}
+            bgcolor="#263238"
+            textAlign="center"
+          >
+            {currentInventoryImage && (
+              <img
+                src={currentInventoryImage.url}
+                alt={`Hàng hóa hiện có trên xe ${currentTruck.code} - trang ${
+                  inventoryImagePage + 1
+                }`}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  maxWidth: 860,
+                  height: "auto",
+                  margin: "0 auto",
+                  background: "#fff",
+                  boxShadow: "0 8px 30px rgba(0,0,0,0.28)",
+                }}
+              />
+            )}
+          </SoftBox>
+
+          <SoftBox
+            p={{ xs: 1.25, md: 1.75 }}
+            display="flex"
+            gap={1}
+            flexDirection={{ xs: "column", sm: "row" }}
+            sx={{ borderTop: "1px solid #e2e8f0" }}
+          >
+            {inventoryImagePages.length > 1 && (
+              <SoftBox display="flex" gap={1} flex={1}>
+                <SoftButton
+                  fullWidth
+                  color="secondary"
+                  variant="outlined"
+                  disabled={inventoryImagePage <= 0}
+                  onClick={() => setInventoryImagePage((page) => page - 1)}
+                >
+                  <Icon>chevron_left</Icon>&nbsp;Trang trước
+                </SoftButton>
+                <SoftButton
+                  fullWidth
+                  color="secondary"
+                  variant="outlined"
+                  disabled={inventoryImagePage >= inventoryImagePages.length - 1}
+                  onClick={() => setInventoryImagePage((page) => page + 1)}
+                >
+                  Trang sau&nbsp;<Icon>chevron_right</Icon>
+                </SoftButton>
+              </SoftBox>
+            )}
+            <SoftButton
+              fullWidth
+              color="info"
+              variant="outlined"
+              disabled={!currentInventoryImage}
+              onClick={() =>
+                currentInventoryImage &&
+                downloadDataImage(currentInventoryImage.url, currentInventoryImage.fileName)
+              }
+            >
+              <Icon>download</Icon>&nbsp;Tải trang hiện tại
+            </SoftButton>
+            <SoftButton
+              fullWidth
+              color="success"
+              variant="gradient"
+              disabled={!inventoryImagePages.length}
+              onClick={downloadAllInventoryImages}
+            >
+              <Icon>download_for_offline</Icon>&nbsp;
+              {inventoryImagePages.length > 1
+                ? `Tải tất cả ${inventoryImagePages.length} ảnh`
+                : "Tải ảnh PNG"}
+            </SoftButton>
+          </SoftBox>
         </SoftBox>
       </Modal>
 
