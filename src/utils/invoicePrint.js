@@ -115,10 +115,6 @@ export const debtPaymentToInvoice = (payment = {}, customer = {}) => {
 const buildInvoiceDocument = (invoice, autoPrint = false) => {
   if (!invoice) return;
   const customerReturnDocument = invoice.documentType === "CUSTOMER_RETURN";
-  const logoUrl = new URL(
-    `${process.env.PUBLIC_URL || ""}/og-1200x1200.png`,
-    window.location.origin
-  ).href;
   const customer = invoice.customerId || invoice.customerSnapshot || {};
   const customerName = customer.name || invoice.customerName || invoice.customer || "Khách lẻ";
   const phoneValues = [
@@ -223,17 +219,43 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
       min-height: 37mm;
       align-items: start;
     }
-    .invoice-print-logo {
-      display: block;
-      width: 42mm;
-      min-width: 42mm;
-      max-width: 42mm;
+    .invoice-print-brand {
+      width: 48mm;
       height: 37mm;
-      min-height: 37mm;
-      max-height: 37mm;
-      margin-left: 1mm;
-      object-fit: contain;
-      object-position: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #0d47a1;
+    }
+    .invoice-print-brand .brand-badge {
+      width: 25mm;
+      height: 25mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1.2mm solid #0d47a1;
+      border-radius: 50%;
+      font-family: Arial, sans-serif;
+      font-size: 20pt;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: -1.5pt;
+      position: relative;
+    }
+    .invoice-print-brand .brand-plus {
+      color: #f4511e;
+      font-size: 12pt;
+      margin-left: 0.5mm;
+    }
+    .invoice-print-brand .brand-name {
+      margin-top: 1.5mm;
+      font-family: Arial, sans-serif;
+      font-size: 8.5pt;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: 1.2pt;
+      white-space: nowrap;
     }
     .company {
       padding-top: 1.5mm;
@@ -425,9 +447,10 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
     }
   </style></head><body><main class="invoice-sheet">
     <div class="head">
-      <img class="invoice-print-logo" width="159" height="140" src="${escapeHtml(
-        logoUrl
-      )}" alt="Phúc Long"/>
+      <div class="invoice-print-brand" aria-label="Phúc Long">
+        <div class="brand-badge">PL<span class="brand-plus">+</span></div>
+        <div class="brand-name">PHÚC LONG</div>
+      </div>
       <div class="company">
         <h3>NPP PHÚC LONG</h3>
         <p>

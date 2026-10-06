@@ -48,8 +48,8 @@ export const dailyOperationFileName = (date, operation, subject) =>
   `${fileDate(date)}_${fileToken(operation, "NGHIEPVU")}_${fileToken(subject, "KHONGRO")}`;
 
 const money = (value) => Number(value || 0).toLocaleString("vi-VN");
-const logoUrl = () =>
-  new URL(`${process.env.PUBLIC_URL || ""}/phuc-long-print-logo.svg`, window.location.origin).href;
+const symbolicLogo = () =>
+  `<div class="print-brand" aria-label="Phúc Long"><div class="print-brand-badge">PL<span>+</span></div><div class="print-brand-name">PHÚC LONG</div></div>`;
 
 const baseStyles = `
   @page{size:A4 portrait;margin:10mm 12mm}
@@ -58,7 +58,9 @@ const baseStyles = `
   body{background:#e9edf2;color:#111;font-family:"Times New Roman",Times,serif;font-size:10.5pt;line-height:1.25;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .page{width:186mm;max-width:186mm;margin:8mm auto;padding:0;background:#fff;box-shadow:0 2mm 8mm rgba(0,0,0,.16)}
   .header{display:grid;grid-template-columns:31mm minmax(0,1fr) 31mm;align-items:start;min-height:27mm;column-gap:2mm}
-  .logo{display:block;width:24mm;height:22mm;object-fit:contain;object-position:center}
+  .print-brand{width:28mm;height:25mm;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#0d47a1}
+  .print-brand-badge{width:17mm;height:17mm;display:flex;align-items:center;justify-content:center;border:.8mm solid #0d47a1;border-radius:50%;font-family:Arial,sans-serif;font-size:13pt;line-height:1;font-weight:900;letter-spacing:-1pt}
+  .print-brand-badge span{color:#f4511e;font-size:8pt;margin-left:.3mm}.print-brand-name{margin-top:1mm;font-family:Arial,sans-serif;font-size:6.5pt;line-height:1;font-weight:900;letter-spacing:.7pt;white-space:nowrap}
   .title{text-align:center;font-size:16pt;line-height:1.1;font-weight:700;margin:1mm 0 2.5mm;text-transform:uppercase}
   .meta{font-size:10.5pt;line-height:1.45}.meta-row{display:flex;gap:1.5mm}.meta-label{font-weight:700;min-width:29mm;white-space:nowrap}
   .code{text-align:right;font-weight:700;font-size:9.5pt;padding-top:1.5mm;overflow-wrap:anywhere}
@@ -143,9 +145,7 @@ export const buildTruckOperationPdfHtml = (transfer) => {
   }).join("");
   return documentHtml(
     `<main class="page">
-    <header class="header"><img class="logo" src="${logoUrl()}" alt="Phúc Long"><div><h1 class="title">${
-      config.title
-    }</h1>
+    <header class="header">${symbolicLogo()}<div><h1 class="title">${config.title}</h1>
       <div class="meta"><div class="meta-row"><span class="meta-label">• Thời gian:</span><span>${escapeHtml(
         formatDate(transfer?.date)
       )}</span></div><div class="meta-row"><span class="meta-label">• Người thực hiện:</span><span>${escapeHtml(
@@ -211,7 +211,7 @@ export const buildDailyReportPdfHtml = (report) => {
     .join("");
   return documentHtml(
     `<main class="page">
-    <header class="header"><img class="logo" src="${logoUrl()}" alt="Phúc Long"><div><h1 class="title">BÁO CÁO CUỐI NGÀY THEO SALE</h1>
+    <header class="header">${symbolicLogo()}<div><h1 class="title">BÁO CÁO CUỐI NGÀY THEO SALE</h1>
       <div class="meta"><div class="meta-row"><span class="meta-label">• Thời gian:</span><span>${escapeHtml(
         formatDate(report?.reportDate || snapshot?.reportDate)
       )}</span></div><div class="meta-row"><span class="meta-label">• Địa bàn:</span><span>${escapeHtml(
@@ -245,10 +245,6 @@ export const buildDailyReportPdfHtml = (report) => {
       report?.issues || ""
     )}</div><div class="line">${escapeHtml(report?.notes || "")}</div></section>
   </main>`,
-    dailyOperationFileName(
-      report?.reportDate || snapshot?.reportDate,
-      "BAOCAO",
-      salespersonName
-    )
+    dailyOperationFileName(report?.reportDate || snapshot?.reportDate, "BAOCAO", salespersonName)
   );
 };
