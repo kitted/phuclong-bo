@@ -36,11 +36,12 @@ const createExportFrame = (html, viewportWidth) =>
     frame.setAttribute("aria-hidden", "true");
     frame.style.cssText = [
       "position:fixed",
-      "left:-100000px",
+      "left:0",
       "top:0",
       `width:${viewportWidth}px`,
-      "height:1px",
+      "height:100vh",
       "border:0",
+      "z-index:-2147483647",
       "pointer-events:none",
     ].join(";");
     frame.onload = () => resolve(frame);
@@ -75,9 +76,18 @@ export async function downloadHtmlDocumentImage({
     exportDocument.body.style.margin = "0";
     exportDocument.body.style.background = "#ffffff";
 
-    const width = Math.ceil(Math.max(target.scrollWidth, target.getBoundingClientRect().width));
-    const height = Math.ceil(Math.max(target.scrollHeight, target.getBoundingClientRect().height));
+    let width = Math.ceil(Math.max(target.scrollWidth, target.getBoundingClientRect().width));
+    let height = Math.ceil(Math.max(target.scrollHeight, target.getBoundingClientRect().height));
     if (!width || !height) throw new Error("Kích thước tài liệu không hợp lệ");
+
+    // html2canvas cần iframe có viewport thật bằng tài liệu. Nếu iframe bị đặt
+    // ngoài màn hình hoặc chỉ cao 1px, Safari/Chrome có thể lấy sai tọa độ và
+    // cắt mất mép trái hoặc phần cuối ảnh.
+    frame.style.width = `${Math.max(viewportWidth, width)}px`;
+    frame.style.height = `${height}px`;
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    width = Math.ceil(Math.max(target.scrollWidth, target.getBoundingClientRect().width));
+    height = Math.ceil(Math.max(target.scrollHeight, target.getBoundingClientRect().height));
 
     // Giữ ảnh sắc nét nhưng tự hạ tỉ lệ khi tài liệu rất dài để canvas không
     // vượt giới hạn trình duyệt và làm mất phần cuối của bảng/ghi chú/chữ ký.
@@ -99,12 +109,8 @@ export async function downloadHtmlDocumentImage({
           allowTaint: false,
           backgroundColor: "#ffffff",
           logging: false,
-          width,
-          height,
           windowWidth: Math.max(viewportWidth, width),
           windowHeight: height,
-          scrollX: 0,
-          scrollY: 0,
         },
       })
       .from(target)

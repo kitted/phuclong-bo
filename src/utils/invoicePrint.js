@@ -223,9 +223,14 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
       min-height: 37mm;
       align-items: start;
     }
-    .logo {
+    .invoice-print-logo {
+      display: block;
       width: 42mm;
+      min-width: 42mm;
+      max-width: 42mm;
       height: 37mm;
+      min-height: 37mm;
+      max-height: 37mm;
       margin-left: 1mm;
       object-fit: contain;
       object-position: center;
@@ -420,7 +425,9 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
     }
   </style></head><body><main class="invoice-sheet">
     <div class="head">
-      <img class="logo" src="${escapeHtml(logoUrl)}" alt="Phúc Long"/>
+      <img class="invoice-print-logo" width="159" height="140" src="${escapeHtml(
+        logoUrl
+      )}" alt="Phúc Long"/>
       <div class="company">
         <h3>NPP PHÚC LONG</h3>
         <p>
