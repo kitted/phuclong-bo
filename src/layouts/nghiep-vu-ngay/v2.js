@@ -14,7 +14,6 @@ import SoftTypography from "components/SoftTypography";
 import EntityThumbnail from "components/EntityThumbnail";
 import PrintPreviewDialog from "components/PrintPreviewDialog";
 import { DailyReportService } from "services/dailyOperationsService";
-import EmployeeService from "services/employeeService";
 import WarrantyReturnService from "services/warrantyReturnService";
 import { TruckService } from "services/warehouseService";
 import { buildDailyReportPdfHtml } from "utils/dailyOperationsPrint";
@@ -134,11 +133,11 @@ function DailyReportTab() {
       );
       return;
     }
-    EmployeeService.getAll({ role: "staff", status: "ACTIVE", page: 1, limit: 100 })
+    DailyReportService.salespeople(date)
       .then((response) => {
         const availableSalespeople = rows(response);
         setSalespeople(availableSalespeople);
-        setSalesperson((current) => current || availableSalespeople[0] || null);
+        setSalesperson(availableSalespeople[0] || null);
         if (availableSalespeople[0])
           setMeta((current) =>
             current.performerName
@@ -155,7 +154,7 @@ function DailyReportTab() {
         setSalesperson(null);
         toast.error("Không thể tải danh sách sale");
       });
-  }, [authUser, isAdmin]);
+  }, [authUser, date, isAdmin]);
   useEffect(() => {
     loadPreview();
     loadList();
@@ -257,7 +256,13 @@ function DailyReportTab() {
             value={salesperson}
             disabled={!isAdmin}
             getOptionLabel={(option) =>
-              [option?.employeeCode, option?.fullName || option?.username].filter(Boolean).join(" · ")
+              [
+                option?.employeeCode,
+                option?.fullName || option?.username,
+                option?.historical ? "Lịch sử" : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")
             }
             isOptionEqualToValue={(option, value) => idOf(option) === idOf(value)}
             onChange={(_, value) => {

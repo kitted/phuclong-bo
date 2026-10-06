@@ -12,6 +12,8 @@ export const GoodsAdvanceService = {
 };
 
 export const DailyReportService = {
+  salespeople: (date) =>
+    AxiosInstance.get("/admin/daily-reports/salespeople", { params: { date } }),
   preview: (date, salespersonId) =>
     AxiosInstance.get("/admin/daily-reports/preview", { params: { date, salespersonId } }),
   list: (params = {}) => AxiosInstance.get("/admin/daily-reports", { params }),
