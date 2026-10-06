@@ -1,4 +1,5 @@
 import { formatBusinessDateTime, vietnamDateKey } from "./businessDate";
+import { downloadHtmlDocumentImage } from "./htmlDocumentImage";
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -528,62 +529,14 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
 const invoiceFileName = (invoice) =>
   `${String(invoice?.code || "hoa-don").replace(/[^a-zA-Z0-9_-]/g, "-")}.png`;
 
-const downloadBlob = (blob, fileName) => {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.rel = "noopener";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-};
-
 export async function saveInvoiceImage(invoice) {
   if (!invoice) throw new Error("Không tìm thấy dữ liệu hóa đơn");
-  const html2pdfModule = await import("html2pdf.js/dist/html2pdf.bundle.min.js");
-  const html2pdf = html2pdfModule.default || html2pdfModule;
-  const html = buildInvoiceDocument(invoice, false);
-  const worker = html2pdf()
-    .set({
-      margin: 0,
-      filename: invoiceFileName(invoice),
-      image: { type: "png", quality: 1 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: "#ffffff",
-        logging: false,
-        windowWidth: 1120,
-      },
-      jsPDF: { unit: "mm", format: "a3", orientation: "portrait" },
-    })
-    .from(html, "string")
-    .toCanvas();
-  const canvas = await worker.get("canvas");
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png", 1));
-  if (!blob) throw new Error("Không thể tạo ảnh hóa đơn");
-
-  const fileName = invoiceFileName(invoice);
-  const file =
-    typeof File === "function" ? new File([blob], fileName, { type: "image/png" }) : null;
-  if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: `Hóa đơn ${invoice.code || ""}`,
-        text: "Chọn “Lưu hình ảnh” để lưu hóa đơn vào thư viện ảnh.",
-      });
-      return { shared: true };
-    } catch (error) {
-      if (error?.name === "AbortError") return { cancelled: true };
-    }
-  }
-
-  downloadBlob(blob, fileName);
-  return { downloaded: true };
+  return downloadHtmlDocumentImage({
+    html: buildInvoiceDocument(invoice, false),
+    fileName: invoiceFileName(invoice),
+    selector: ".invoice-sheet",
+    viewportWidth: 1200,
+  });
 }
 
 export async function printInvoice(invoice, options = {}) {
