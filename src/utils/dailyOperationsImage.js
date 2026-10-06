@@ -1,5 +1,10 @@
 import { dailyOperationFileName } from "./dailyOperationsPrint";
-import { drawCanvasLines, downloadDataImage, wrapCanvasText } from "./truckInventoryImage";
+import {
+  drawCanvasLines,
+  downloadDataImage,
+  fitCanvasToA3,
+  wrapCanvasText,
+} from "./truckInventoryImage";
 
 const money = (value) => Number(value || 0).toLocaleString("vi-VN");
 const dateText = (value) => {
@@ -18,21 +23,21 @@ const createContext = (width) => {
 };
 
 const drawBrandHeader = (context, width, title, code, metaLines) => {
-  context.fillStyle = "#0f4c81";
+  context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, 205);
-  context.strokeStyle = "#ffffff";
+  context.strokeStyle = "#0d47a1";
   context.lineWidth = 5;
   context.beginPath();
   context.arc(82, 75, 43, 0, Math.PI * 2);
   context.stroke();
-  context.fillStyle = "#ffffff";
+  context.fillStyle = "#0d47a1";
   context.textAlign = "center";
   context.font = "900 34px Arial, sans-serif";
   context.fillText("PL", 76, 87);
   context.fillStyle = "#ff7043";
   context.font = "900 19px Arial, sans-serif";
   context.fillText("+", 103, 77);
-  context.fillStyle = "#ffffff";
+  context.fillStyle = "#0d47a1";
   context.font = "800 14px Arial, sans-serif";
   context.fillText("PHÚC LONG", 82, 140);
   context.font = "800 29px Arial, sans-serif";
@@ -43,13 +48,20 @@ const drawBrandHeader = (context, width, title, code, metaLines) => {
   context.textAlign = "right";
   context.font = "700 17px Arial, sans-serif";
   context.fillText(code || "BẢN XEM TRƯỚC", width - 40, 185);
+  context.strokeStyle = "#64748b";
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(40, 204);
+  context.lineTo(width - 40, 204);
+  context.stroke();
   context.textAlign = "left";
 };
 
 const finishImage = (canvas, fileName) => {
-  const url = canvas.toDataURL("image/png");
+  const a3Canvas = fitCanvasToA3(canvas);
+  const url = a3Canvas.toDataURL("image/png");
   downloadDataImage(url, `${fileName}.png`);
-  return { downloaded: true, width: canvas.width, height: canvas.height };
+  return { downloaded: true, width: a3Canvas.width, height: a3Canvas.height };
 };
 
 const operationConfig = {
@@ -96,7 +108,7 @@ export const createTruckOperationCanvasImage = (transfer) => {
   const height = 205 + 30 + 58 + rows.reduce((sum, row) => sum + row.height, 0) + notesHeight + 185;
   canvas.height = height;
   const context = canvas.getContext("2d");
-  context.fillStyle = "#ffffff";
+  context.fillStyle = "#111827";
   context.fillRect(0, 0, width, height);
   drawBrandHeader(context, width, config.title, transfer?.code, [
     `Ngày: ${dateText(transfer?.date)}`,
@@ -104,13 +116,13 @@ export const createTruckOperationCanvasImage = (transfer) => {
     `Xe / tuyến: ${route || "—"}`,
   ]);
   let y = 235;
-  context.fillStyle = "#173f64";
+  context.fillStyle = "#eeeeee";
   context.fillRect(margin, y, contentWidth, 58);
   const headers = ["STT", "HÀNG HÓA", "SỐ LƯỢNG", "GHI CHÚ"];
   let x = margin;
   context.font = "700 18px Arial, sans-serif";
   headers.forEach((header, index) => {
-    context.fillStyle = "#ffffff";
+    context.fillStyle = "#111827";
     context.textAlign = "center";
     context.fillText(header, x + columns[index] / 2, y + 36);
     x += columns[index];
@@ -119,7 +131,7 @@ export const createTruckOperationCanvasImage = (transfer) => {
   rows.forEach(({ item, nameLines, noteLines: itemNotes, height: rowHeight }, index) => {
     context.fillStyle = index % 2 ? "#f8fafc" : "#ffffff";
     context.fillRect(margin, y, contentWidth, rowHeight);
-    context.strokeStyle = "#cbd5e1";
+    context.strokeStyle = "#222222";
     context.strokeRect(margin, y, contentWidth, rowHeight);
     x = margin;
     columns.forEach((columnWidth, columnIndex) => {
@@ -228,13 +240,13 @@ export const createDailyReportCanvasImage = (report) => {
     `Địa bàn: ${report?.area || "—"}`,
   ]);
   let y = 215;
-  context.fillStyle = "#173f64";
+  context.fillStyle = "#eeeeee";
   context.fillRect(margin, y, contentWidth, 58);
   const headers = ["STT", "KHÁCH HÀNG", "NGHIỆP VỤ", "TM/CK", "SỐ TIỀN", "GHI CHÚ"];
   let x = margin;
   context.font = "700 17px Arial, sans-serif";
   headers.forEach((header, index) => {
-    context.fillStyle = "#ffffff";
+    context.fillStyle = "#111827";
     context.textAlign = "center";
     context.fillText(header, x + columns[index] / 2, y + 36);
     x += columns[index];
@@ -244,7 +256,7 @@ export const createDailyReportCanvasImage = (report) => {
   rows.forEach(({ item, customerLines, noteLines: rowNotes, height: rowHeight }, index) => {
     context.fillStyle = index % 2 ? "#f8fafc" : "#ffffff";
     context.fillRect(margin, y, contentWidth, rowHeight);
-    context.strokeStyle = "#cbd5e1";
+    context.strokeStyle = "#222222";
     context.strokeRect(margin, y, contentWidth, rowHeight);
     const values = [
       String(index + 1),

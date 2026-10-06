@@ -70,6 +70,37 @@ export const drawCanvasLines = (context, lines, x, y, lineHeight, alignment = "l
   lines.forEach((line, index) => context.fillText(line, x, y + index * lineHeight));
 };
 
+export const A3_IMAGE_WIDTH = 1754;
+export const A3_IMAGE_HEIGHT = 2480;
+
+export const fitCanvasToA3 = (sourceCanvas, padding = 54) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = A3_IMAGE_WIDTH;
+  canvas.height = A3_IMAGE_HEIGHT;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Trình duyệt không hỗ trợ tạo ảnh A3");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  const availableWidth = canvas.width - padding * 2;
+  const availableHeight = canvas.height - padding * 2;
+  const scale = Math.min(
+    availableWidth / sourceCanvas.width,
+    availableHeight / sourceCanvas.height
+  );
+  const renderedWidth = Math.round(sourceCanvas.width * scale);
+  const renderedHeight = Math.round(sourceCanvas.height * scale);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(
+    sourceCanvas,
+    Math.round((canvas.width - renderedWidth) / 2),
+    padding,
+    renderedWidth,
+    renderedHeight
+  );
+  return canvas;
+};
+
 export const downloadDataImage = (url, fileName) => {
   const anchor = document.createElement("a");
   anchor.href = url;

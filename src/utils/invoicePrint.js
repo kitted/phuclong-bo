@@ -1,5 +1,10 @@
 import { formatBusinessDateTime, vietnamDateKey } from "./businessDate";
-import { downloadDataImage, drawCanvasLines, wrapCanvasText } from "./truckInventoryImage";
+import {
+  downloadDataImage,
+  drawCanvasLines,
+  fitCanvasToA3,
+  wrapCanvasText,
+} from "./truckInventoryImage";
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -623,36 +628,36 @@ export async function saveInvoiceImage(invoice) {
     };
   });
   const noteLines = wrapCanvasText(measure, invoice.note || "", contentWidth - 40);
-  const height =
+  const contentHeight =
     320 +
     80 +
     rowLayouts.reduce((sum, row) => sum + row.height, 0) +
     7 * 48 +
     Math.max(70, noteLines.length * 28 + 36) +
     400;
+  const height = Math.max(contentHeight, Math.round((width * 2480) / 1754));
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Trình duyệt không hỗ trợ tạo ảnh hóa đơn");
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
-  context.fillStyle = "#0f4c81";
-  context.fillRect(0, 0, width, 185);
-  context.strokeStyle = "#ffffff";
+  context.strokeStyle = "#0d47a1";
   context.lineWidth = 6;
   context.beginPath();
   context.arc(112, 86, 52, 0, Math.PI * 2);
   context.stroke();
-  context.fillStyle = "#ffffff";
+  context.fillStyle = "#0d47a1";
   context.font = "900 42px Arial, sans-serif";
   context.textAlign = "center";
   context.fillText("PL", 105, 101);
   context.fillStyle = "#ff7043";
   context.font = "900 23px Arial, sans-serif";
   context.fillText("+", 137, 88);
-  context.fillStyle = "#ffffff";
+  context.fillStyle = "#0d47a1";
   context.font = "900 22px Arial, sans-serif";
   context.fillText("PHÚC LONG", 112, 161);
+  context.fillStyle = "#111827";
   context.textAlign = "left";
   context.font = "700 24px Arial, sans-serif";
   context.fillText("NPP PHÚC LONG", 205, 55);
@@ -682,12 +687,12 @@ export async function saveInvoiceImage(invoice) {
   context.fillText(`Địa chỉ: ${customerAddress}`, margin, 350);
   let y = 382;
   const headers = ["STT", "Tên hàng hóa", "ĐVT", "Số lượng", "Đơn giá", "Thành tiền", "Ghi chú"];
-  context.fillStyle = "#173f64";
+  context.fillStyle = "#eeeeee";
   context.fillRect(margin, y, contentWidth, 64);
   let x = margin;
   context.font = "700 18px Arial, sans-serif";
   headers.forEach((header, index) => {
-    context.fillStyle = "#ffffff";
+    context.fillStyle = "#111827";
     context.textAlign = "center";
     context.fillText(header, x + columns[index] / 2, y + 39);
     x += columns[index];
@@ -696,7 +701,7 @@ export async function saveInvoiceImage(invoice) {
   rowLayouts.forEach(({ item, productLines, noteLines: rowNotes, height: rowHeight }, index) => {
     context.fillStyle = index % 2 ? "#f8fafc" : "#ffffff";
     context.fillRect(margin, y, contentWidth, rowHeight);
-    context.strokeStyle = "#cbd5e1";
+    context.strokeStyle = "#222222";
     context.strokeRect(margin, y, contentWidth, rowHeight);
     const values = [
       String(index + 1),
@@ -710,7 +715,7 @@ export async function saveInvoiceImage(invoice) {
     x = margin;
     context.font = "400 20px Arial, sans-serif";
     values.forEach((value, columnIndex) => {
-      context.strokeStyle = "#cbd5e1";
+      context.strokeStyle = "#222222";
       context.beginPath();
       context.moveTo(x, y);
       context.lineTo(x, y + rowHeight);
@@ -746,7 +751,7 @@ export async function saveInvoiceImage(invoice) {
   summaryRows.forEach(([label, value], index) => {
     context.fillStyle = index === summaryRows.length - 1 ? "#e8f5e9" : "#f8fafc";
     context.fillRect(margin, y, contentWidth, 48);
-    context.strokeStyle = "#cbd5e1";
+    context.strokeStyle = "#222222";
     context.strokeRect(margin, y, contentWidth, 48);
     context.fillStyle = "#111827";
     context.font = `${index >= 3 ? "700" : "500"} 20px Arial, sans-serif`;
@@ -776,10 +781,14 @@ export async function saveInvoiceImage(invoice) {
   context.font = "italic 16px Arial, sans-serif";
   context.fillText("(ký, ghi rõ họ tên)", 350, y + 52);
   context.fillText("(ký, ghi rõ họ tên)", 1050, y + 52);
-  y += 155;
-  context.fillStyle = "#0f4c81";
-  context.fillRect(0, y, width, height - y);
-  context.fillStyle = "#ffffff";
+  y = Math.max(y + 155, height - 100);
+  context.strokeStyle = "#666666";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(120, y + 8);
+  context.lineTo(width - 120, y + 8);
+  context.stroke();
+  context.fillStyle = "#111827";
   context.font = "700 19px Arial, sans-serif";
   context.fillText("NHÀ PHÂN PHỐI PHỤ TÙNG DẦU NHỚT PHÚC LONG", width / 2, y + 38);
   context.font = "400 16px Arial, sans-serif";
@@ -788,9 +797,10 @@ export async function saveInvoiceImage(invoice) {
     width / 2,
     y + 68
   );
-  const url = canvas.toDataURL("image/png");
+  const a3Canvas = fitCanvasToA3(canvas);
+  const url = a3Canvas.toDataURL("image/png");
   downloadDataImage(url, invoiceFileName(invoice));
-  return { downloaded: true, width, height };
+  return { downloaded: true, width: a3Canvas.width, height: a3Canvas.height };
 }
 
 export async function printInvoice(invoice, options = {}) {
