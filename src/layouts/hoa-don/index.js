@@ -800,9 +800,10 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
         })),
     [items]
   );
+  const hasGiftRows = gifts.length > 0;
   const loadPreview = useCallback(
     async (voucher = appliedVoucher, silent = true) => {
-      if (!previewItems.length && !voucher) {
+      if (!previewItems.length && !voucher && !hasGiftRows) {
         setPreview(null);
         return null;
       }
@@ -824,16 +825,16 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
         return null;
       }
     },
-    [appliedVoucher, customer, previewItems]
+    [appliedVoucher, customer, hasGiftRows, previewItems]
   );
   useEffect(() => {
-    if (!open || (!previewItems.length && !appliedVoucher)) {
+    if (!open || (!previewItems.length && !appliedVoucher && !hasGiftRows)) {
       setPreview(null);
       return undefined;
     }
     const timer = setTimeout(() => loadPreview(appliedVoucher, true), 350);
     return () => clearTimeout(timer);
-  }, [open, loadPreview, previewItems.length, appliedVoucher]);
+  }, [open, loadPreview, previewItems.length, appliedVoucher, hasGiftRows]);
   /* Promotion rule UI is temporarily disabled. Direct invoice gifts are used instead. */
   useEffect(() => {
     if (true) return undefined;
@@ -1003,6 +1004,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
   const currentDebt = Number(customer?.debt || 0);
   const debtLimit = Number(customer?.debtLimit || 0);
   const isDebtPaymentOnly = previewItems.length === 0 && gifts.length === 0 && paidAmount > 0;
+  const isGiftOnlyInvoice = previewItems.length === 0 && gifts.length > 0 && paidAmount === 0;
   const paysExistingDebt = form.paymentMode === "PAY_WITH_DEBT";
   const invoicePaidAmount = Math.min(grandTotal, paidAmount);
   const previousDebtPaidAmount = isDebtPaymentOnly
@@ -1079,13 +1081,14 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
   useEffect(() => {
     if (!open) return;
     let paymentMode = "DEBT";
-    if (paidAmount > 0 && grandTotal <= 0) paymentMode = "DEBT_PAYMENT";
+    if (isGiftOnlyInvoice) paymentMode = "PAY_NOW";
+    else if (paidAmount > 0 && grandTotal <= 0) paymentMode = "DEBT_PAYMENT";
     else if (paidAmount > grandTotal && customer && currentDebt > 0) paymentMode = "PAY_WITH_DEBT";
     else if (paidAmount > 0) paymentMode = "PAY_NOW";
     setForm((current) =>
       current.paymentMode === paymentMode ? current : { ...current, paymentMode }
     );
-  }, [open, paidAmount, grandTotal, customer, currentDebt]);
+  }, [open, paidAmount, grandTotal, customer, currentDebt, isGiftOnlyInvoice]);
   const selectedQuantityFor = (product) => {
     const productId = getId(product) || product?.productId;
     if (!productId) return 0;
@@ -1159,7 +1162,11 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
     const hasManualPromotionGift = gifts.some(
       (gift) => gift.manualPromotionCode && gift.manualPromotionCode === appliedVoucher
     );
-    if ((!previewItems.length && !hasManualPromotionGift) || previewItems.length !== items.length)
+    const hasDirectGift = gifts.length > 0;
+    const hasSelectedSaleItem = items.some((item) => item.product);
+    if (!previewItems.length && !hasManualPromotionGift && !hasDirectGift)
+      return "Vui lòng chọn ít nhất một sản phẩm bán hoặc quà tặng";
+    if (hasSelectedSaleItem && previewItems.length !== items.length)
       return "Vui lòng chọn đầy đủ sản phẩm và số lượng";
     if (items.some((item) => item.customPriceEnabled && Number(item.customPrice || 0) <= 0))
       return "Giá bán điều chỉnh phải lớn hơn 0";
@@ -1171,7 +1178,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
       return "Vui lòng chọn đầy đủ sản phẩm quà tặng và số lượng";
     if (createsUnassignedCustomer && !newCustomer.name.trim())
       return "Vui lòng nhập tên khách hàng mới";
-    if (form.paymentMode === "DEBT" && !hasCustomerProfile)
+    if (grandTotal > 0 && form.paymentMode === "DEBT" && !hasCustomerProfile)
       return "Hóa đơn ghi nợ bắt buộc có hồ sơ khách hàng";
     if (paysExistingDebt && !customer) return "Vui lòng chọn khách hàng để thanh toán công nợ cũ";
     if (paysExistingDebt && currentDebt <= 0) return "Khách hàng hiện không có công nợ cũ";
@@ -2778,7 +2785,6 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                         <Icon>add</Icon>
                       </IconButton>
                       <IconButton
-                        disabled={items.length === 1}
                         onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
                         sx={{ bgcolor: "#ffebee", flexShrink: 0 }}
                       >
