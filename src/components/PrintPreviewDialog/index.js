@@ -21,6 +21,7 @@ function PrintPreviewDialog({
   onConfirm,
   confirmLabel,
   confirming,
+  onDownloadImage,
 }) {
   const iframeRef = useRef(null);
   const [exportingImage, setExportingImage] = useState(false);
@@ -43,7 +44,8 @@ function PrintPreviewDialog({
   const handleImage = async () => {
     try {
       setExportingImage(true);
-      await downloadHtmlDocumentImage({ html, fileName: title });
+      if (onDownloadImage) await onDownloadImage();
+      else await downloadHtmlDocumentImage({ html, fileName: title });
       toast.success("Đã tải ảnh PNG xuống thiết bị");
     } catch (error) {
       toast.error(error?.message || "Không thể xuất tài liệu thành ảnh");
@@ -128,6 +130,7 @@ PrintPreviewDialog.propTypes = {
   onConfirm: PropTypes.func,
   confirmLabel: PropTypes.string,
   confirming: PropTypes.bool,
+  onDownloadImage: PropTypes.func,
 };
 
 PrintPreviewDialog.defaultProps = {
@@ -136,6 +139,7 @@ PrintPreviewDialog.defaultProps = {
   onConfirm: undefined,
   confirmLabel: "Xác nhận lưu",
   confirming: false,
+  onDownloadImage: undefined,
 };
 
 export default PrintPreviewDialog;

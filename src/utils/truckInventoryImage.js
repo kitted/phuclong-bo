@@ -7,7 +7,7 @@ const safeFilePart = (value, fallback = "xe") =>
     .replace(/^-+|-+$/g, "")
     .toLowerCase() || fallback;
 
-const drawRoundedRect = (context, x, y, width, height, radius, fillStyle) => {
+export const drawRoundedRect = (context, x, y, width, height, radius, fillStyle) => {
   const safeRadius = Math.min(radius, width / 2, height / 2);
   context.beginPath();
   context.moveTo(x + safeRadius, y);
@@ -20,7 +20,7 @@ const drawRoundedRect = (context, x, y, width, height, radius, fillStyle) => {
   context.fill();
 };
 
-const fitText = (context, value, maxWidth) => {
+export const fitText = (context, value, maxWidth) => {
   const text = String(value ?? "");
   if (context.measureText(text).width <= maxWidth) return text;
   let shortened = text;
@@ -28,6 +28,46 @@ const fitText = (context, value, maxWidth) => {
     shortened = shortened.slice(0, -1);
   }
   return `${shortened}…`;
+};
+
+export const wrapCanvasText = (context, value, maxWidth) => {
+  const paragraphs = String(value ?? "").split(/\r?\n/);
+  const lines = [];
+  paragraphs.forEach((paragraph) => {
+    const words = paragraph.split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      lines.push("");
+      return;
+    }
+    let line = "";
+    words.forEach((word) => {
+      const candidate = line ? `${line} ${word}` : word;
+      if (context.measureText(candidate).width <= maxWidth) {
+        line = candidate;
+        return;
+      }
+      if (line) lines.push(line);
+      if (context.measureText(word).width <= maxWidth) {
+        line = word;
+        return;
+      }
+      let chunk = "";
+      [...word].forEach((character) => {
+        if (context.measureText(`${chunk}${character}`).width > maxWidth && chunk) {
+          lines.push(chunk);
+          chunk = character;
+        } else chunk += character;
+      });
+      line = chunk;
+    });
+    if (line) lines.push(line);
+  });
+  return lines.length ? lines : [""];
+};
+
+export const drawCanvasLines = (context, lines, x, y, lineHeight, alignment = "left") => {
+  context.textAlign = alignment;
+  lines.forEach((line, index) => context.fillText(line, x, y + index * lineHeight));
 };
 
 export const downloadDataImage = (url, fileName) => {
@@ -158,7 +198,9 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
       let valueX = panelX;
       columns.forEach(([, columnWidth, alignment], columnIndex) => {
         context.fillStyle = columnIndex === 3 ? "#1b5e20" : "#1e293b";
-        context.font = `${columnIndex === 1 || columnIndex === 3 ? "700" : "400"} 14px Arial, sans-serif`;
+        context.font = `${
+          columnIndex === 1 || columnIndex === 3 ? "700" : "400"
+        } 14px Arial, sans-serif`;
         context.textAlign = alignment;
         const x =
           alignment === "center"

@@ -17,6 +17,7 @@ import { DailyReportService } from "services/dailyOperationsService";
 import WarrantyReturnService from "services/warrantyReturnService";
 import { TruckService } from "services/warehouseService";
 import { buildDailyReportPdfHtml } from "utils/dailyOperationsPrint";
+import { createDailyReportCanvasImage } from "utils/dailyOperationsImage";
 import { createTruckInventoryImages, downloadDataImage } from "utils/truckInventoryImage";
 import QuickTruckOperations from "./QuickTruckOperations";
 import { toast } from "react-toastify";
@@ -195,6 +196,7 @@ function DailyReportTab() {
     setPrintPreview({
       title: `Xem trước · ${salesperson?.fullName || salesperson?.username || "Sale"} · ${date}`,
       html: buildDailyReportPdfHtml(draft),
+      document: draft,
       pending: payload,
     });
   };
@@ -213,6 +215,7 @@ function DailyReportTab() {
       setPrintPreview({
         title: `Báo cáo sale · ${report?.code || report?.reportDate || date}`,
         html: buildDailyReportPdfHtml(report),
+        document: report,
       });
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể chốt báo cáo");
@@ -229,6 +232,7 @@ function DailyReportTab() {
       setPrintPreview({
         title: `Báo cáo sale · ${report?.code || report?.reportDate || ""}`,
         html: buildDailyReportPdfHtml(report),
+        document: report,
       });
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể tạo bản xem trước");
@@ -240,7 +244,9 @@ function DailyReportTab() {
   const deleteReport = async (doc) => {
     if (
       !window.confirm(
-        `Xóa báo cáo ${doc.code || "đã chọn"}? Sau khi xóa, bạn có thể chốt lại báo cáo cho sale này trong cùng ngày.`
+        `Xóa báo cáo ${
+          doc.code || "đã chọn"
+        }? Sau khi xóa, bạn có thể chốt lại báo cáo cho sale này trong cùng ngày.`
       )
     )
       return;
@@ -529,6 +535,7 @@ function DailyReportTab() {
         open={Boolean(printPreview)}
         title={printPreview?.title || "Xem trước báo cáo"}
         html={printPreview?.html || ""}
+        onDownloadImage={() => createDailyReportCanvasImage(printPreview?.document)}
         onClose={() => setPrintPreview(null)}
         description={
           printPreview?.pending
@@ -612,21 +619,9 @@ function DailyWarrantyTab() {
       <Grid container spacing={1.25} mb={2}>
         {[
           ["Chờ bắt đầu", summary.receivedDocuments || 0, "inbox", "#e3f2fd", "#1565c0"],
-          [
-            "Đang bảo hành",
-            summary.processingDocuments || 0,
-            "build",
-            "#fff3e0",
-            "#ef6c00",
-          ],
+          ["Đang bảo hành", summary.processingDocuments || 0, "build", "#fff3e0", "#ef6c00"],
           ["Tồn quá 7 ngày", summary.staleDocuments || 0, "warning", "#ffebee", "#c62828"],
-          [
-            "Hoàn tất hôm nay",
-            summary.completedToday || 0,
-            "task_alt",
-            "#e8f5e9",
-            "#2e7d32",
-          ],
+          ["Hoàn tất hôm nay", summary.completedToday || 0, "task_alt", "#e8f5e9", "#2e7d32"],
         ].map(([label, value, icon, background, color]) => (
           <Grid item xs={6} md={3} key={label}>
             <SoftBox p={1.5} borderRadius={2} bgcolor={background} height="100%">
@@ -664,14 +659,20 @@ function DailyWarrantyTab() {
                     {document.code}
                   </SoftTypography>
                   <SoftTypography variant="caption" color="text" display="block">
-                    {dateTime(document.createdAt)} · {document.customerName || "Chưa ghi khách hàng"}
+                    {dateTime(document.createdAt)} ·{" "}
+                    {document.customerName || "Chưa ghi khách hàng"}
                   </SoftTypography>
                 </SoftBox>
                 <SoftBox
                   px={1}
                   py={0.4}
                   borderRadius={2}
-                  sx={{ bgcolor: status.background, color: status.color, fontSize: 12, fontWeight: 700 }}
+                  sx={{
+                    bgcolor: status.background,
+                    color: status.color,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
                 >
                   {status.label}
                 </SoftBox>
@@ -723,8 +724,9 @@ function TruckInventoryImageTab() {
     let active = true;
     TruckService.getAll({ page: 1, limit: 100, status: "active", sortBy: "code", sortOrder: "asc" })
       .then((response) => active && setTrucks(rows(response)))
-      .catch((error) =>
-        active && toast.error(error.response?.data?.message || "Không thể tải danh sách xe")
+      .catch(
+        (error) =>
+          active && toast.error(error.response?.data?.message || "Không thể tải danh sách xe")
       );
     return () => {
       active = false;
@@ -742,8 +744,10 @@ function TruckInventoryImageTab() {
     setImage(null);
     TruckService.getById(idOf(truck))
       .then((response) => active && setDetail(unwrap(response) || truck))
-      .catch((error) =>
-        active && toast.error(error.response?.data?.message || "Không thể tải hàng hiện có trên xe")
+      .catch(
+        (error) =>
+          active &&
+          toast.error(error.response?.data?.message || "Không thể tải hàng hiện có trên xe")
       )
       .finally(() => active && setLoading(false));
     return () => {
@@ -836,7 +840,13 @@ function TruckInventoryImageTab() {
           <img
             src={image.url}
             alt={`Hàng hóa hiện tại trên xe ${detail?.name || ""}`}
-            style={{ display: "block", width: "100%", maxWidth: 900, height: "auto", margin: "auto" }}
+            style={{
+              display: "block",
+              width: "100%",
+              maxWidth: 900,
+              height: "auto",
+              margin: "auto",
+            }}
           />
           <SoftButton
             fullWidth
@@ -932,9 +942,7 @@ export default function DailyOperationsV2() {
                       alignItems={{ xs: "flex-start", lg: "center" }}
                       gap={1.1}
                       sx={{
-                        border: selected
-                          ? `2px solid ${section.color}`
-                          : "1px solid #dfe5ec",
+                        border: selected ? `2px solid ${section.color}` : "1px solid #dfe5ec",
                         bgcolor: selected ? section.background : "#fff",
                         color: section.color,
                         position: "relative",
@@ -1014,7 +1022,10 @@ export default function DailyOperationsV2() {
                 display="flex"
                 alignItems="center"
                 gap={1.25}
-                sx={{ bgcolor: activeSection.background, borderBottom: `1px solid ${activeSection.color}22` }}
+                sx={{
+                  bgcolor: activeSection.background,
+                  borderBottom: `1px solid ${activeSection.color}22`,
+                }}
               >
                 <SoftBox
                   width={42}

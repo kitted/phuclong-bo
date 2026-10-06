@@ -12,6 +12,7 @@ import EntityThumbnail from "components/EntityThumbnail";
 import PrintPreviewDialog from "components/PrintPreviewDialog";
 import { ProductService, TruckService } from "services/warehouseService";
 import { buildTruckOperationPdfHtml } from "utils/dailyOperationsPrint";
+import { createTruckOperationCanvasImage } from "utils/dailyOperationsImage";
 import { toast } from "react-toastify";
 
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
@@ -198,6 +199,7 @@ export default function QuickTruckOperations() {
       setPrintPreview({
         title: `Xem trước · ${currentOperation.title}`,
         html: buildTruckOperationPdfHtml(draft),
+        document: draft,
         pending: request,
       });
     } catch (error) {
@@ -218,10 +220,7 @@ export default function QuickTruckOperations() {
       else if (operationType === "RETURN")
         response = await TruckService.returnGoods(idOf(sourceTruck), request.payload);
       else
-        response = await TruckService.transferToTruck(
-          idOf(sourceTruck),
-          request.transferPayload
-        );
+        response = await TruckService.transferToTruck(idOf(sourceTruck), request.transferPayload);
       const result = unwrap(response);
       const transfer = result?.transfer || result;
       toast.success(`Đã hoàn tất ${operationName[operationType].toLowerCase()}`);
@@ -231,6 +230,7 @@ export default function QuickTruckOperations() {
       setPrintPreview({
         title: `${operationName[transfer?.type] || "Phiếu nghiệp vụ"} · ${transfer?.code || ""}`,
         html: buildTruckOperationPdfHtml(transfer),
+        document: transfer,
       });
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể xử lý nghiệp vụ xe");
@@ -246,6 +246,7 @@ export default function QuickTruckOperations() {
       setPrintPreview({
         title: `${operationName[detail?.type] || "Phiếu nghiệp vụ"} · ${detail?.code || ""}`,
         html: buildTruckOperationPdfHtml(detail),
+        document: detail,
       });
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể tạo bản xem trước");
@@ -479,6 +480,7 @@ export default function QuickTruckOperations() {
         open={Boolean(printPreview)}
         title={printPreview?.title || "Xem trước phiếu"}
         html={printPreview?.html || ""}
+        onDownloadImage={() => createTruckOperationCanvasImage(printPreview?.document)}
         onClose={() => setPrintPreview(null)}
         description={
           printPreview?.pending

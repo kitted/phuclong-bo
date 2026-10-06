@@ -1,5 +1,5 @@
 import { formatBusinessDateTime, vietnamDateKey } from "./businessDate";
-import { downloadHtmlDocumentImage } from "./htmlDocumentImage";
+import { downloadDataImage, drawCanvasLines, wrapCanvasText } from "./truckInventoryImage";
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -561,12 +561,236 @@ const invoiceFileName = (invoice) =>
 
 export async function saveInvoiceImage(invoice) {
   if (!invoice) throw new Error("Không tìm thấy dữ liệu hóa đơn");
-  return downloadHtmlDocumentImage({
-    html: buildInvoiceDocument(invoice, false),
-    fileName: invoiceFileName(invoice),
-    selector: ".invoice-sheet",
-    viewportWidth: 1200,
+  const width = 1400;
+  const margin = 50;
+  const contentWidth = width - margin * 2;
+  const items = Array.isArray(invoice.items) ? invoice.items : [];
+  const customer = invoice.customerId || invoice.customerSnapshot || {};
+  const customerName = customer.name || invoice.customerName || invoice.customer || "Khách lẻ";
+  const customerPhone =
+    customer.phone || invoice.customerPhone || (invoice.customerPhones || []).join(", ") || "—";
+  const customerAddress = customer.address || invoice.customerAddress || "—";
+  const subtotal = Number(invoice.subtotal ?? invoice.totalAmount ?? 0);
+  const discount = Number(invoice.discountAmount || 0);
+  const grandTotal = Number(invoice.grandTotal ?? invoice.totalAmount ?? subtotal - discount);
+  const paid = Number(
+    invoice.receivedAmount ?? invoice.totalReceivedAmount ?? invoice.paidAmount ?? 0
+  );
+  const oldDebt = Number(
+    invoice.customerDebtBefore ??
+      invoice.debtPayment?.customerDebtBefore ??
+      invoice.debtPaymentSnapshot?.customerDebtBefore ??
+      invoice.previousDebt ??
+      invoice.oldDebt ??
+      0
+  );
+  const remainingDebt = Math.max(
+    0,
+    Number(
+      invoice.customerDebtAfter ??
+        invoice.debtPayment?.customerDebtAfter ??
+        invoice.debtPaymentSnapshot?.customerDebtAfter ??
+        oldDebt + grandTotal - paid
+    )
+  );
+  const occurredAt = new Date(
+    invoice.date || invoice.occurredAt || invoice.createdAt || Date.now()
+  );
+  const customerReturn = invoice.documentType === "CUSTOMER_RETURN";
+  const columns = [70, 425, 100, 120, 175, 180, 230];
+  const canvas = document.createElement("canvas");
+  const measure = canvas.getContext("2d");
+  if (!measure) throw new Error("Trình duyệt không hỗ trợ tạo ảnh hóa đơn");
+  measure.font = "400 22px Arial, sans-serif";
+  const rowLayouts = items.map((item) => {
+    const productLines = wrapCanvasText(
+      measure,
+      `${item.productName || item.productId?.name || "Sản phẩm"}${
+        item.lineType === "GIFT" ? " (QUÀ TẶNG)" : ""
+      }`,
+      columns[1] - 24
+    );
+    const noteLines = wrapCanvasText(
+      measure,
+      item.lineType === "GIFT" ? item.giftCode || invoice.giftCode || "Quà tặng" : item.note || "",
+      columns[6] - 24
+    );
+    return {
+      item,
+      productLines,
+      noteLines,
+      height: Math.max(58, 20 + Math.max(productLines.length, noteLines.length) * 28),
+    };
   });
+  const noteLines = wrapCanvasText(measure, invoice.note || "", contentWidth - 40);
+  const height =
+    320 +
+    80 +
+    rowLayouts.reduce((sum, row) => sum + row.height, 0) +
+    7 * 48 +
+    Math.max(70, noteLines.length * 28 + 36) +
+    400;
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Trình duyệt không hỗ trợ tạo ảnh hóa đơn");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#0f4c81";
+  context.fillRect(0, 0, width, 185);
+  context.strokeStyle = "#ffffff";
+  context.lineWidth = 6;
+  context.beginPath();
+  context.arc(112, 86, 52, 0, Math.PI * 2);
+  context.stroke();
+  context.fillStyle = "#ffffff";
+  context.font = "900 42px Arial, sans-serif";
+  context.textAlign = "center";
+  context.fillText("PL", 105, 101);
+  context.fillStyle = "#ff7043";
+  context.font = "900 23px Arial, sans-serif";
+  context.fillText("+", 137, 88);
+  context.fillStyle = "#ffffff";
+  context.font = "900 22px Arial, sans-serif";
+  context.fillText("PHÚC LONG", 112, 161);
+  context.textAlign = "left";
+  context.font = "700 24px Arial, sans-serif";
+  context.fillText("NPP PHÚC LONG", 205, 55);
+  context.font = "400 17px Arial, sans-serif";
+  COMPANY_INTRO_LINES.concat(`Với phương châm ${COMPANY_SLOGAN}`).forEach((line, index) =>
+    context.fillText(line, 205, 88 + index * 28)
+  );
+  context.fillStyle = "#111827";
+  context.font = "800 34px Arial, sans-serif";
+  context.textAlign = "center";
+  context.fillText(
+    customerReturn ? "PHIẾU HOÀN HÀNG - NHẬP LẠI XE" : "PHIẾU BÁN HÀNG - KIÊM XUẤT KHO",
+    width / 2,
+    235
+  );
+  context.font = "italic 20px Arial, sans-serif";
+  context.fillText(
+    `Số phiếu: ${invoice.code || "—"}  ·  ${formatBusinessDateTime(occurredAt, "—")}`,
+    width / 2,
+    272
+  );
+  context.textAlign = "left";
+  context.font = "600 20px Arial, sans-serif";
+  context.fillText(`Khách hàng: ${customerName}`, margin, 315);
+  context.fillText(`SĐT: ${customerPhone}`, 930, 315);
+  context.font = "400 19px Arial, sans-serif";
+  context.fillText(`Địa chỉ: ${customerAddress}`, margin, 350);
+  let y = 382;
+  const headers = ["STT", "Tên hàng hóa", "ĐVT", "Số lượng", "Đơn giá", "Thành tiền", "Ghi chú"];
+  context.fillStyle = "#173f64";
+  context.fillRect(margin, y, contentWidth, 64);
+  let x = margin;
+  context.font = "700 18px Arial, sans-serif";
+  headers.forEach((header, index) => {
+    context.fillStyle = "#ffffff";
+    context.textAlign = "center";
+    context.fillText(header, x + columns[index] / 2, y + 39);
+    x += columns[index];
+  });
+  y += 64;
+  rowLayouts.forEach(({ item, productLines, noteLines: rowNotes, height: rowHeight }, index) => {
+    context.fillStyle = index % 2 ? "#f8fafc" : "#ffffff";
+    context.fillRect(margin, y, contentWidth, rowHeight);
+    context.strokeStyle = "#cbd5e1";
+    context.strokeRect(margin, y, contentWidth, rowHeight);
+    const values = [
+      String(index + 1),
+      null,
+      item.unit || item.productId?.unit || "—",
+      number(item.qty),
+      number(item.lineType === "GIFT" ? 0 : item.price),
+      number(item.lineType === "GIFT" ? 0 : item.lineTotal),
+      null,
+    ];
+    x = margin;
+    context.font = "400 20px Arial, sans-serif";
+    values.forEach((value, columnIndex) => {
+      context.strokeStyle = "#cbd5e1";
+      context.beginPath();
+      context.moveTo(x, y);
+      context.lineTo(x, y + rowHeight);
+      context.stroke();
+      context.fillStyle = "#111827";
+      if (columnIndex === 1) {
+        context.font = "600 20px Arial, sans-serif";
+        drawCanvasLines(context, productLines, x + 12, y + 30, 28);
+      } else if (columnIndex === 6) {
+        context.font = "400 18px Arial, sans-serif";
+        drawCanvasLines(context, rowNotes, x + 12, y + 30, 26);
+      } else {
+        context.textAlign = columnIndex >= 3 ? "right" : "center";
+        context.fillText(
+          value,
+          columnIndex >= 3 ? x + columns[columnIndex] - 12 : x + columns[columnIndex] / 2,
+          y + 35
+        );
+      }
+      x += columns[columnIndex];
+    });
+    y += rowHeight;
+  });
+  const summaryRows = [
+    ["Thành tiền", subtotal],
+    ["VAT", Number(invoice.vatAmount || 0)],
+    ["Chiết khấu", discount],
+    ["Tổng cộng", grandTotal],
+    [customerReturn ? "Nợ trước hoàn" : "Nợ cũ", oldDebt],
+    [customerReturn ? "Giá trị hoàn / cấn nợ" : "Số tiền thanh toán", paid],
+    [customerReturn ? "Nợ sau hoàn" : "Còn nợ", remainingDebt],
+  ];
+  summaryRows.forEach(([label, value], index) => {
+    context.fillStyle = index === summaryRows.length - 1 ? "#e8f5e9" : "#f8fafc";
+    context.fillRect(margin, y, contentWidth, 48);
+    context.strokeStyle = "#cbd5e1";
+    context.strokeRect(margin, y, contentWidth, 48);
+    context.fillStyle = "#111827";
+    context.font = `${index >= 3 ? "700" : "500"} 20px Arial, sans-serif`;
+    context.textAlign = "right";
+    context.fillText(label, margin + 1000, y + 31);
+    context.fillText(number(value), width - margin - 15, y + 31);
+    y += 48;
+  });
+  context.textAlign = "left";
+  context.fillStyle = "#111827";
+  context.font = "600 19px Arial, sans-serif";
+  context.fillText("Ghi chú:", margin + 12, y + 30);
+  context.font = "400 19px Arial, sans-serif";
+  drawCanvasLines(context, noteLines, margin + 115, y + 30, 28);
+  y += Math.max(70, noteLines.length * 28 + 36);
+  context.font = "italic 19px Arial, sans-serif";
+  context.fillText(
+    `Số tiền bằng chữ: ${moneyInWords(customerReturn ? grandTotal : paid)}.`,
+    margin,
+    y + 32
+  );
+  y += 80;
+  context.textAlign = "center";
+  context.font = "700 20px Arial, sans-serif";
+  context.fillText("THỦ KHO", 350, y + 25);
+  context.fillText(customerReturn ? "NGƯỜI TRẢ HÀNG" : "NGƯỜI NHẬN HÀNG", 1050, y + 25);
+  context.font = "italic 16px Arial, sans-serif";
+  context.fillText("(ký, ghi rõ họ tên)", 350, y + 52);
+  context.fillText("(ký, ghi rõ họ tên)", 1050, y + 52);
+  y += 155;
+  context.fillStyle = "#0f4c81";
+  context.fillRect(0, y, width, height - y);
+  context.fillStyle = "#ffffff";
+  context.font = "700 19px Arial, sans-serif";
+  context.fillText("NHÀ PHÂN PHỐI PHỤ TÙNG DẦU NHỚT PHÚC LONG", width / 2, y + 38);
+  context.font = "400 16px Arial, sans-serif";
+  context.fillText(
+    "B1/19 Lê Hồng Phong, P. Bình Thủy, TP. Cần Thơ · 0939869861",
+    width / 2,
+    y + 68
+  );
+  const url = canvas.toDataURL("image/png");
+  downloadDataImage(url, invoiceFileName(invoice));
+  return { downloaded: true, width, height };
 }
 
 export async function printInvoice(invoice, options = {}) {
