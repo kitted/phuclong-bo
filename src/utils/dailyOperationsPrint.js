@@ -155,7 +155,11 @@ export const buildDailyReportPdfHtml = (report) => {
       (item) =>
         `<div>${escapeHtml(item.productName)}: <strong>${money(item.quantity)} ${escapeHtml(
           item.unit
-        )}</strong></div>`
+        )}</strong>${
+          Number(item.giftQuantity || 0) > 0
+            ? ` <small>(KM: ${money(item.giftQuantity)} ${escapeHtml(item.unit)})</small>`
+            : ""
+        }</div>`
     )
     .join("");
   return documentHtml(
@@ -189,7 +193,7 @@ export const buildDailyReportPdfHtml = (report) => {
       <div style="margin-top:2mm"><strong>Còn lại nộp: ${money(
         Number(summary.cash || 0) - totalExpenses
       )}</strong></div>
-    </div><div class="product-box"><div class="section-title">SỐ HÀNG BÁN TRONG NGÀY</div>${productRows}</div></section>
+    </div><div class="product-box"><div class="section-title">HÀNG BÁN VÀ KHUYẾN MÃI TRONG NGÀY</div>${productRows}</div></section>
     <section class="issues break-avoid"><strong><em>Các vấn đề cần giải quyết ngay:</em></strong><div class="line">${escapeHtml(
       report?.issues || ""
     )}</div><div class="line">${escapeHtml(report?.notes || "")}</div></section>

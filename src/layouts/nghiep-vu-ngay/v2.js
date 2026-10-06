@@ -384,7 +384,7 @@ function DailyReportTab() {
             </Grid>
             <Grid item xs={12} lg={5}>
               <SoftTypography variant="button" fontWeight="bold">
-                Số hàng bán trong ngày
+                Hàng bán và khuyến mãi trong ngày
               </SoftTypography>
               {(preview.products || []).map((product) => (
                 <SoftBox
@@ -403,6 +403,9 @@ function DailyReportTab() {
                   </SoftBox>
                   <SoftTypography variant="button" fontWeight="bold">
                     {product.quantity} {product.unit}
+                    {Number(product.giftQuantity || 0) > 0
+                      ? ` · KM ${product.giftQuantity} ${product.unit || ""}`
+                      : ""}
                   </SoftTypography>
                 </SoftBox>
               ))}
