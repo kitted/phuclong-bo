@@ -19,6 +19,34 @@ const formatDate = (value) => {
       });
 };
 
+const fileDate = (value) => {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "KHONGRO_NGAY";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    timeZone: "Asia/Ho_Chi_Minh",
+  }).formatToParts(date);
+  const part = (type) => parts.find((item) => item.type === type)?.value || "00";
+  return `${part("day")}-${part("month")}-${part("year")}`;
+};
+
+const fileToken = (value, fallback) => {
+  const normalized = String(value || fallback || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/gi, "D")
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]+/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return normalized || fallback;
+};
+
+export const dailyOperationFileName = (date, operation, subject) =>
+  `${fileDate(date)}_${fileToken(operation, "NGHIEPVU")}_${fileToken(subject, "KHONGRO")}`;
+
 const money = (value) => Number(value || 0).toLocaleString("vi-VN");
 const logoUrl = () =>
   new URL(`${process.env.PUBLIC_URL || ""}/phuc-long-print-logo.svg`, window.location.origin).href;
@@ -59,16 +87,19 @@ const documentHtml = (content, title) =>
 const operationConfig = {
   LOAD: {
     title: "PHIẾU TẠM ỨNG HÀNG",
+    fileOperation: "UNGHANG",
     executor: "Người tạm ứng",
     issuer: "Người xuất kho",
   },
   RETURN: {
     title: "PHIẾU HOÀN HÀNG VỀ KHO",
+    fileOperation: "HOANHANG",
     executor: "Người hoàn hàng",
     issuer: "Người nhận kho",
   },
   TRUCK_TO_TRUCK: {
     title: "PHIẾU CHUYỂN HÀNG GIỮA XE",
+    fileOperation: "CHUYENXE",
     executor: "Người giao hàng",
     issuer: "Người nhận hàng",
   },
@@ -82,6 +113,20 @@ export const buildTruckOperationPdfHtml = (transfer) => {
     transfer?.type === "TRUCK_TO_TRUCK"
       ? `${transfer?.sourceTruck?.code || ""} → ${transfer?.destinationTruck?.code || ""}`
       : `${transfer?.truck?.code || ""} · ${transfer?.truck?.name || ""}`;
+  const fileSubject =
+    transfer?.type === "TRUCK_TO_TRUCK"
+      ? [
+          transfer?.sourceTruck?.name || transfer?.sourceTruck?.code || transfer?.sourceTruckName,
+          transfer?.destinationTruck?.name ||
+            transfer?.destinationTruck?.code ||
+            transfer?.destinationTruckName,
+        ]
+          .filter(Boolean)
+          .join("-")
+      : transfer?.truck?.name ||
+        transfer?.truck?.code ||
+        transfer?.truckName ||
+        transfer?.truckCode;
   const items = transfer?.items || [];
   const rowCount = Math.max(15, items.length);
   const itemRows = Array.from({ length: rowCount }, (_, index) => {
@@ -121,7 +166,7 @@ export const buildTruckOperationPdfHtml = (transfer) => {
       config.executor
     }<small>(ký, ghi rõ họ tên)</small></div></div>
   </main>`,
-    transfer?.code || config.title
+    dailyOperationFileName(transfer?.date, config.fileOperation, fileSubject)
   );
 };
 
@@ -139,6 +184,8 @@ export const buildDailyReportPdfHtml = (report) => {
   const adjustments = report?.manualAdjustments || [];
   const expense = (type) => adjustments.find((item) => item.type === type)?.amount || 0;
   const totalExpenses = adjustments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const salespersonName =
+    report?.salespersonName || snapshot?.salesperson?.name || report?.performerName;
   const rowCount = Math.max(13, documents.length);
   const documentRows = Array.from({ length: rowCount }, (_, index) => {
     const item = documents[index];
@@ -198,6 +245,10 @@ export const buildDailyReportPdfHtml = (report) => {
       report?.issues || ""
     )}</div><div class="line">${escapeHtml(report?.notes || "")}</div></section>
   </main>`,
-    report?.code || "Báo cáo ngày"
+    dailyOperationFileName(
+      report?.reportDate || snapshot?.reportDate,
+      "BAOCAO",
+      salespersonName
+    )
   );
 };

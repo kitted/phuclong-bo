@@ -25,6 +25,14 @@ function PrintPreviewDialog({
   const handlePrint = () => {
     const printWindow = iframeRef.current?.contentWindow;
     if (!printWindow) return;
+    const previousTitle = document.title;
+    const fileName = printWindow.document?.title;
+    const restoreTitle = () => {
+      document.title = previousTitle;
+    };
+    if (fileName) document.title = fileName;
+    printWindow.addEventListener("afterprint", restoreTitle, { once: true });
+    window.setTimeout(restoreTitle, 60000);
     printWindow.focus();
     printWindow.print();
   };
