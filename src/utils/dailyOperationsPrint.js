@@ -160,7 +160,7 @@ export const buildDailyReportPdfHtml = (report) => {
     .join("");
   return documentHtml(
     `<main class="page">
-    <header class="header"><img class="logo" src="${logoUrl()}" alt="Phúc Long"><div><h1 class="title">TỔNG HỢP BÁO CÁO NGÀY</h1>
+    <header class="header"><img class="logo" src="${logoUrl()}" alt="Phúc Long"><div><h1 class="title">BÁO CÁO CUỐI NGÀY THEO XE</h1>
       <div class="meta"><div class="meta-row"><span class="meta-label">• Thời gian:</span><span>${escapeHtml(
         formatDate(report?.reportDate || snapshot?.reportDate)
       )}</span></div><div class="meta-row"><span class="meta-label">• Địa bàn:</span><span>${escapeHtml(
@@ -168,7 +168,9 @@ export const buildDailyReportPdfHtml = (report) => {
     )}</span></div><div class="meta-row"><span class="meta-label">• Người thực hiện:</span><span>${escapeHtml(
       report?.performerName || ""
     )}</span></div><div class="meta-row"><span class="meta-label">• Phương tiện:</span><span>${escapeHtml(
-      report?.vehicle || ""
+      report?.vehicle ||
+        [report?.truckName, report?.truckLicensePlate].filter(Boolean).join(" · ") ||
+        [snapshot?.truck?.name, snapshot?.truck?.licensePlate].filter(Boolean).join(" · ")
     )}</span></div></div></div><div class="code">${escapeHtml(report?.code || "")}</div></header>
     <table class="table"><colgroup><col style="width:7%"><col style="width:27%"><col style="width:17%"><col style="width:14%"><col style="width:17%"><col style="width:18%"></colgroup>
       <thead><tr><th>STT</th><th>Khách hàng</th><th>Nghiệp vụ PS</th><th>Thanh toán<br>TM/CK</th><th>Số tiền</th><th>Ghi chú</th></tr></thead><tbody>${documentRows}</tbody></table>

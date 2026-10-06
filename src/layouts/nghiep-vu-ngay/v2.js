@@ -47,7 +47,7 @@ const dailySections = [
   {
     title: "Báo cáo cuối ngày",
     shortTitle: "Báo cáo ngày",
-    description: "Tổng hợp doanh thu, chi phí và hàng đã bán",
+    description: "Tổng hợp doanh thu, chi phí và hàng đã bán theo từng xe",
     icon: "summarize",
     color: "#7b1fa2",
     background: "#f3e5f5",
@@ -83,6 +83,8 @@ const dateTime = (value) =>
 
 function DailyReportTab() {
   const [date, setDate] = useState(today());
+  const [trucks, setTrucks] = useState([]);
+  const [truck, setTruck] = useState(null);
   const [preview, setPreview] = useState(null);
   const [saved, setSaved] = useState([]);
   const [meta, setMeta] = useState(emptyMeta);
@@ -90,23 +92,54 @@ function DailyReportTab() {
   const [loading, setLoading] = useState(false);
   const [printPreview, setPrintPreview] = useState(null);
 
-  const loadList = useCallback(
-    () =>
-      DailyReportService.list({ page: 1, limit: 100 })
-        .then((response) => setSaved(rows(response)))
-        .catch(() => setSaved([])),
-    []
-  );
+  const loadList = useCallback(() => {
+    if (!idOf(truck)) {
+      setSaved([]);
+      return Promise.resolve();
+    }
+    return DailyReportService.list({ page: 1, limit: 100, truckId: idOf(truck) })
+      .then((response) => setSaved(rows(response)))
+      .catch(() => setSaved([]));
+  }, [truck]);
   const loadPreview = useCallback(async () => {
+    if (!idOf(truck)) {
+      setPreview(null);
+      return;
+    }
     try {
       setLoading(true);
-      setPreview(unwrap(await DailyReportService.preview(date)));
+      setPreview(unwrap(await DailyReportService.preview(date, idOf(truck))));
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể tổng hợp báo cáo");
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, truck]);
+  useEffect(() => {
+    TruckService.getAll({ page: 1, limit: 100 })
+      .then((response) => {
+        const availableTrucks = rows(response);
+        setTrucks(availableTrucks);
+        setTruck((current) => current || availableTrucks[0] || null);
+        if (availableTrucks[0])
+          setMeta((current) =>
+            current.vehicle
+              ? current
+              : {
+                  ...current,
+                  performerName: availableTrucks[0].driverName || availableTrucks[0].driver || "",
+                  vehicle: [availableTrucks[0].name, availableTrucks[0].licensePlate]
+                    .filter(Boolean)
+                    .join(" · "),
+                }
+          );
+      })
+      .catch(() => {
+        setTrucks([]);
+        setTruck(null);
+        toast.error("Không thể tải danh sách xe");
+      });
+  }, []);
   useEffect(() => {
     loadPreview();
     loadList();
@@ -114,10 +147,12 @@ function DailyReportTab() {
 
   const reportPayload = () => ({
     date,
+    truckId: idOf(truck),
     ...meta,
     area: meta.area || undefined,
     performerName: meta.performerName || undefined,
-    vehicle: meta.vehicle || undefined,
+    vehicle:
+      meta.vehicle || [truck?.name, truck?.licensePlate].filter(Boolean).join(" · ") || undefined,
     notes: meta.notes || undefined,
     issues: meta.issues || undefined,
     manualAdjustments: Object.entries(expenses)
@@ -136,11 +171,17 @@ function DailyReportTab() {
       code: "BẢN XEM TRƯỚC",
       reportDate: date,
       ...meta,
+      truckId: idOf(truck),
+      truckCode: truck?.code,
+      truckName: truck?.name,
+      truckLicensePlate: truck?.licensePlate,
+      driverName: truck?.driverName || truck?.driver,
+      vehicle: payload.vehicle,
       manualAdjustments: payload.manualAdjustments,
       snapshot: preview,
     };
     setPrintPreview({
-      title: `Xem trước báo cáo ngày · ${date}`,
+      title: `Xem trước · ${truck?.name || "Xe"} · ${date}`,
       html: buildDailyReportPdfHtml(draft),
       pending: payload,
     });
@@ -153,10 +194,10 @@ function DailyReportTab() {
       setLoading(true);
       const response = await DailyReportService.create(payload);
       const report = unwrap(response);
-      toast.success("Đã chốt báo cáo ngày");
+      toast.success(`Đã chốt báo cáo ngày cho ${truck?.name || "xe"}`);
       await loadList();
       setPrintPreview({
-        title: `Báo cáo ngày · ${report?.code || report?.reportDate || date}`,
+        title: `Báo cáo xe · ${report?.code || report?.reportDate || date}`,
         html: buildDailyReportPdfHtml(report),
       });
     } catch (error) {
@@ -172,7 +213,7 @@ function DailyReportTab() {
       const response = await DailyReportService.detail(idOf(doc));
       const report = unwrap(response);
       setPrintPreview({
-        title: `Báo cáo ngày · ${report?.code || report?.reportDate || ""}`,
+        title: `Báo cáo xe · ${report?.code || report?.reportDate || ""}`,
         html: buildDailyReportPdfHtml(report),
       });
     } catch (error) {
@@ -188,20 +229,46 @@ function DailyReportTab() {
       <SoftBox display="flex" justifyContent="space-between" gap={1} flexWrap="wrap" mb={2}>
         <SoftBox>
           <SoftTypography variant="h6" fontWeight="bold">
-            Tổng hợp báo cáo ngày
+            Báo cáo cuối ngày theo từng xe
           </SoftTypography>
           <SoftTypography variant="caption" color="text">
-            Dữ liệu được tổng hợp tự động; thông tin bổ sung sẽ xuất đúng mẫu giấy A4.
+            Chọn xe để tổng hợp riêng doanh thu, thu nợ, hoàn hàng và hàng đã bán trong ngày.
           </SoftTypography>
         </SoftBox>
         <SoftBox display="flex" gap={1} flexWrap="wrap">
+          <Autocomplete
+            size="small"
+            options={trucks}
+            value={truck}
+            getOptionLabel={(option) =>
+              [option?.name || option?.code, option?.licensePlate].filter(Boolean).join(" · ")
+            }
+            isOptionEqualToValue={(option, value) => idOf(option) === idOf(value)}
+            onChange={(_, value) => {
+              setTruck(value);
+              setPreview(null);
+              setExpenses(emptyExpenses);
+              setMeta({
+                ...emptyMeta,
+                performerName: value?.driverName || value?.driver || "",
+                vehicle: [value?.name, value?.licensePlate].filter(Boolean).join(" · "),
+              });
+            }}
+            renderInput={(params) => <TextField {...params} label="Xe lập báo cáo" />}
+            sx={{ width: { xs: "100%", sm: 280 } }}
+          />
           <SoftInput
             type="date"
             value={date}
             onChange={(event) => setDate(event.target.value)}
             sx={{ width: 190 }}
           />
-          <SoftButton color="info" variant="outlined" onClick={loadPreview} disabled={loading}>
+          <SoftButton
+            color="info"
+            variant="outlined"
+            onClick={loadPreview}
+            disabled={loading || !truck}
+          >
             <Icon>refresh</Icon>&nbsp;Tổng hợp lại
           </SoftButton>
         </SoftBox>
@@ -237,9 +304,8 @@ function DailyReportTab() {
               {[
                 ["area", "Địa bàn"],
                 ["performerName", "Người thực hiện"],
-                ["vehicle", "Phương tiện"],
               ].map(([key, label]) => (
-                <Grid item xs={12} md={4} key={key}>
+                <Grid item xs={12} md={6} key={key}>
                   <SoftInput
                     value={meta[key]}
                     onChange={(event) => setMeta({ ...meta, [key]: event.target.value })}
@@ -247,6 +313,16 @@ function DailyReportTab() {
                   />
                 </Grid>
               ))}
+              <Grid item xs={12}>
+                <SoftBox p={1.25} borderRadius={1.5} bgcolor="#eef5ff">
+                  <SoftTypography variant="caption" color="text" display="block">
+                    Xe lập báo cáo
+                  </SoftTypography>
+                  <SoftTypography variant="button" fontWeight="bold">
+                    {[truck?.code, truck?.name, truck?.licensePlate].filter(Boolean).join(" · ")}
+                  </SoftTypography>
+                </SoftBox>
+              </Grid>
             </Grid>
           </SoftBox>
           <Grid container spacing={2} mt={0.25}>
@@ -357,7 +433,7 @@ function DailyReportTab() {
             color="success"
             variant="gradient"
             sx={{ mt: 1.5 }}
-            disabled={loading}
+            disabled={loading || !truck}
             onClick={openSavePreview}
           >
             <Icon>visibility</Icon>&nbsp;Xem trước trước khi chốt báo cáo
@@ -365,7 +441,7 @@ function DailyReportTab() {
         </>
       )}
       <SoftTypography variant="h6" fontWeight="bold" mt={3} mb={1}>
-        Báo cáo đã chốt
+        Báo cáo đã chốt của {truck?.name || "xe đã chọn"}
       </SoftTypography>
       {saved.map((doc) => (
         <SoftBox
@@ -383,7 +459,10 @@ function DailyReportTab() {
               {doc.code}
             </SoftTypography>
             <SoftTypography variant="caption" display="block" color="text">
-              {doc.reportDate} · {doc.performerName || "Chưa ghi người thực hiện"}
+              {doc.reportDate} ·{" "}
+              {[doc.truckName, doc.truckLicensePlate].filter(Boolean).join(" · ") ||
+                doc.vehicle ||
+                "Chưa ghi xe"}
             </SoftTypography>
           </SoftBox>
           <SoftButton size="small" color="info" onClick={() => exportDoc(doc)} disabled={loading}>

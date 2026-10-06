@@ -12,7 +12,8 @@ export const GoodsAdvanceService = {
 };
 
 export const DailyReportService = {
-  preview: (date) => AxiosInstance.get("/admin/daily-reports/preview", { params: { date } }),
+  preview: (date, truckId) =>
+    AxiosInstance.get("/admin/daily-reports/preview", { params: { date, truckId } }),
   list: (params = {}) => AxiosInstance.get("/admin/daily-reports", { params }),
   detail: (id) => AxiosInstance.get(`/admin/daily-reports/${id}`),
   create: (payload) => AxiosInstance.post("/admin/daily-reports", payload),
@@ -20,4 +21,3 @@ export const DailyReportService = {
   export: (id) =>
     AxiosInstance.get(`/admin/daily-reports/${id}/export`, { responseType: "blob" }),
 };
-
