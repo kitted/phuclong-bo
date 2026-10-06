@@ -20,6 +20,7 @@ export const DailyReportService = {
   detail: (id) => AxiosInstance.get(`/admin/daily-reports/${id}`),
   create: (payload) => AxiosInstance.post("/admin/daily-reports", payload),
   update: (id, payload) => AxiosInstance.patch(`/admin/daily-reports/${id}`, payload),
+  remove: (id) => AxiosInstance.delete(`/admin/daily-reports/${id}`),
   export: (id) =>
     AxiosInstance.get(`/admin/daily-reports/${id}/export`, { responseType: "blob" }),
 };

@@ -237,6 +237,25 @@ function DailyReportTab() {
     }
   };
 
+  const deleteReport = async (doc) => {
+    if (
+      !window.confirm(
+        `Xóa báo cáo ${doc.code || "đã chọn"}? Sau khi xóa, bạn có thể chốt lại báo cáo cho sale này trong cùng ngày.`
+      )
+    )
+      return;
+    try {
+      setLoading(true);
+      await DailyReportService.remove(idOf(doc));
+      toast.success(`Đã xóa báo cáo ${doc.code || ""}`.trim());
+      await loadList();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể xóa báo cáo");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const summary = preview?.summary || {};
   return (
     <SoftBox>
@@ -490,9 +509,20 @@ function DailyReportTab() {
                 "Chưa ghi sale"}
             </SoftTypography>
           </SoftBox>
-          <SoftButton size="small" color="info" onClick={() => exportDoc(doc)} disabled={loading}>
-            <Icon>visibility</Icon>&nbsp;Xem PDF
-          </SoftButton>
+          <SoftBox display="flex" gap={0.75} flexWrap="wrap" justifyContent="flex-end">
+            <SoftButton size="small" color="info" onClick={() => exportDoc(doc)} disabled={loading}>
+              <Icon>visibility</Icon>&nbsp;Xem PDF
+            </SoftButton>
+            <SoftButton
+              size="small"
+              color="error"
+              variant="outlined"
+              onClick={() => deleteReport(doc)}
+              disabled={loading}
+            >
+              <Icon>delete</Icon>&nbsp;Xóa
+            </SoftButton>
+          </SoftBox>
         </SoftBox>
       ))}
       <PrintPreviewDialog
