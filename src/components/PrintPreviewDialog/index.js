@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import PropTypes from "prop-types";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
@@ -9,6 +9,26 @@ import IconButton from "@mui/material/IconButton";
 import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftTypography from "components/SoftTypography";
+import { toast } from "react-toastify";
+
+const safeImageFileName = (value) =>
+  `${
+    String(value || "tai-lieu")
+      .replace(/[<>:"/\\|?*]/g, "-")
+      .replace(/\s+/g, " ")
+      .trim() || "tai-lieu"
+  }.png`;
+
+const waitForImages = (document) =>
+  Promise.all(
+    [...document.images].map((image) => {
+      if (image.complete) return Promise.resolve();
+      return new Promise((resolve) => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", resolve, { once: true });
+      });
+    })
+  );
 
 function PrintPreviewDialog({
   open,
@@ -21,6 +41,7 @@ function PrintPreviewDialog({
   confirming,
 }) {
   const iframeRef = useRef(null);
+  const [exportingImage, setExportingImage] = useState(false);
 
   const handlePrint = () => {
     const printWindow = iframeRef.current?.contentWindow;
@@ -35,6 +56,52 @@ function PrintPreviewDialog({
     window.setTimeout(restoreTitle, 60000);
     printWindow.focus();
     printWindow.print();
+  };
+
+  const handleImage = async () => {
+    const previewDocument = iframeRef.current?.contentDocument;
+    const target = previewDocument?.querySelector(".page") || previewDocument?.body;
+    if (!previewDocument || !target) return;
+    try {
+      setExportingImage(true);
+      await previewDocument.fonts?.ready;
+      await waitForImages(previewDocument);
+      const html2pdfModule = await import("html2pdf.js/dist/html2pdf.bundle.min.js");
+      const html2pdf = html2pdfModule.default || html2pdfModule;
+      const worker = html2pdf()
+        .set({
+          html2canvas: {
+            scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
+            useCORS: true,
+            allowTaint: false,
+            backgroundColor: "#ffffff",
+            logging: false,
+            width: target.scrollWidth,
+            height: target.scrollHeight,
+            windowWidth: target.scrollWidth,
+            windowHeight: target.scrollHeight,
+          },
+        })
+        .from(target)
+        .toCanvas();
+      const canvas = await worker.get("canvas");
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png", 1));
+      if (!blob) throw new Error("Không thể tạo ảnh từ bản xem trước");
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = safeImageFileName(previewDocument.title || title);
+      anchor.rel = "noopener";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      toast.success("Đã tải ảnh PNG xuống thiết bị");
+    } catch (error) {
+      toast.error(error?.message || "Không thể xuất tài liệu thành ảnh");
+    } finally {
+      setExportingImage(false);
+    }
   };
 
   return (
@@ -73,7 +140,7 @@ function PrintPreviewDialog({
           />
         ) : null}
       </DialogContent>
-      <DialogActions sx={{ px: 2, py: 1.25 }}>
+      <DialogActions sx={{ px: 2, py: 1.25, flexWrap: "wrap", gap: 0.75 }}>
         <SoftButton variant="outlined" color="secondary" onClick={onClose}>
           Đóng
         </SoftButton>
@@ -90,6 +157,14 @@ function PrintPreviewDialog({
         )}
         <SoftButton variant="gradient" color="info" onClick={handlePrint} disabled={!html}>
           <Icon>print</Icon>&nbsp;In / Lưu PDF
+        </SoftButton>
+        <SoftButton
+          variant="gradient"
+          color="dark"
+          onClick={handleImage}
+          disabled={!html || exportingImage}
+        >
+          <Icon>image</Icon>&nbsp;{exportingImage ? "Đang tạo ảnh..." : "Tải ảnh PNG"}
         </SoftButton>
       </DialogActions>
     </Dialog>
@@ -109,7 +184,7 @@ PrintPreviewDialog.propTypes = {
 
 PrintPreviewDialog.defaultProps = {
   html: "",
-  description: "Kiểm tra đúng một trang A4 rồi chọn In / Lưu PDF.",
+  description: "Kiểm tra nội dung rồi chọn In / Lưu PDF hoặc Tải ảnh PNG.",
   onConfirm: undefined,
   confirmLabel: "Xác nhận lưu",
   confirming: false,

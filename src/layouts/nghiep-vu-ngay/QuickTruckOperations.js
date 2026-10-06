@@ -248,7 +248,7 @@ export default function QuickTruckOperations() {
         html: buildTruckOperationPdfHtml(detail),
       });
     } catch (error) {
-      toast.error(error.response?.data?.message || "Không thể tạo file PDF");
+      toast.error(error.response?.data?.message || "Không thể tạo bản xem trước");
     }
   };
 
@@ -477,13 +477,13 @@ export default function QuickTruckOperations() {
       </Grid>
       <PrintPreviewDialog
         open={Boolean(printPreview)}
-        title={printPreview?.title || "Xem trước phiếu PDF"}
+        title={printPreview?.title || "Xem trước phiếu"}
         html={printPreview?.html || ""}
         onClose={() => setPrintPreview(null)}
         description={
           printPreview?.pending
             ? "Kiểm tra phiếu trước khi xác nhận lưu và thay đổi tồn kho, tồn xe."
-            : "Phiếu đã được lưu. Bạn có thể in hoặc lưu PDF."
+            : "Phiếu đã được lưu. Bạn có thể in, lưu PDF hoặc tải ảnh PNG."
         }
         onConfirm={printPreview?.pending ? submit : undefined}
         confirmLabel={`Xác nhận ${currentOperation.title.toLowerCase()}`}

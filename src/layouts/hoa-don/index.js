@@ -589,7 +589,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
   const sourceAutoSelectedRef = useRef(false);
   const sourceCardsRef = useRef(null);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-  const printCreatedInvoice = async () => {
+  const printCreatedInvoice = async (format) => {
     try {
       setExportingInvoice(true);
       const id = getId(createdInvoice);
@@ -599,7 +599,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
           : id
           ? unwrap(await InvoiceService.getById(id))
           : createdInvoice;
-      const result = await printInvoice(printable);
+      const result = await printInvoice(printable, { format });
       if (result?.downloaded) toast.success("Đã tải ảnh hóa đơn xuống thiết bị");
     } catch (error) {
       toast.error(errorMessage(error, "Không thể xuất hóa đơn"));
@@ -1690,18 +1690,33 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
               Mã kích hoạt đã được lưu vào hồ sơ khách hàng và hóa đơn.
             </SoftTypography>
           )}
-          <SoftBox display="flex" gap={1.5} mt={3}>
+          <SoftBox display="flex" gap={1} mt={3} flexWrap="wrap">
             <SoftButton
               variant="outlined"
               color="info"
-              fullWidth
+              sx={{ flex: 1, minWidth: 130 }}
               disabled={exportingInvoice}
-              startIcon={<Icon>{isAdmin ? "print" : "image"}</Icon>}
-              onClick={printCreatedInvoice}
+              startIcon={<Icon>print</Icon>}
+              onClick={() => printCreatedInvoice("pdf")}
             >
-              {exportingInvoice ? "Đang tạo ảnh..." : isAdmin ? "Xuất hóa đơn" : "Lưu ảnh hóa đơn"}
+              {exportingInvoice ? "Đang tạo..." : "In / Lưu PDF"}
             </SoftButton>
-            <SoftButton variant="gradient" color="success" fullWidth onClick={onClose}>
+            <SoftButton
+              variant="outlined"
+              color="dark"
+              sx={{ flex: 1, minWidth: 130 }}
+              disabled={exportingInvoice}
+              startIcon={<Icon>image</Icon>}
+              onClick={() => printCreatedInvoice("image")}
+            >
+              {exportingInvoice ? "Đang tạo..." : "Tải ảnh PNG"}
+            </SoftButton>
+            <SoftButton
+              variant="gradient"
+              color="success"
+              sx={{ flex: 1, minWidth: 110 }}
+              onClick={onClose}
+            >
               Hoàn tất
             </SoftButton>
           </SoftBox>
@@ -4356,6 +4371,17 @@ export function InvoiceDetail({
     invoice?.status === "REVERSED" ||
     invoice?.invoiceStatus === "REVERSED" ||
     Boolean(invoice?.reversedAt);
+  const exportInvoice = async (format) => {
+    try {
+      setExporting(true);
+      const result = await printInvoice(invoice, { format });
+      if (result?.downloaded) toast.success("Đã tải ảnh hóa đơn xuống thiết bị");
+    } catch (error) {
+      toast.error(error.message || "Không thể xuất hóa đơn");
+    } finally {
+      setExporting(false);
+    }
+  };
   const reverseInvoice = async () => {
     const reason = window.prompt(
       `Nhập lý do hoàn hóa đơn ${invoice?.code || ""}. Nội dung này được lưu để truy xuất:`
@@ -4433,22 +4459,24 @@ export function InvoiceDetail({
           )}
         </SoftBox>
         <SoftBox
-          height={64}
+          minHeight={64}
           px={{ xs: 1.5, md: 2.5 }}
+          py={1}
           display="flex"
           alignItems="center"
           gap={1}
+          flexWrap="wrap"
           bgcolor="#fff"
           sx={{ borderTop: "1px solid #d7dce1" }}
         >
-          <SoftButton variant="outlined" color="secondary" fullWidth onClick={onClose}>
+          <SoftButton variant="outlined" color="secondary" sx={{ flex: 1 }} onClick={onClose}>
             Đóng
           </SoftButton>
           {isAdmin && !debtPaymentDocument && !customerReturnDocument && (
             <SoftButton
               variant="outlined"
               color="error"
-              fullWidth
+              sx={{ flex: 1 }}
               disabled={!invoice || reversed || reversing}
               startIcon={<Icon>undo</Icon>}
               onClick={reverseInvoice}
@@ -4459,22 +4487,22 @@ export function InvoiceDetail({
           <SoftButton
             variant="gradient"
             color="info"
-            fullWidth
+            sx={{ flex: 1 }}
             disabled={!invoice || exporting}
-            startIcon={<Icon>{mobile ? "image" : "print"}</Icon>}
-            onClick={async () => {
-              try {
-                setExporting(true);
-                const result = await printInvoice(invoice);
-                if (result?.downloaded) toast.success("Đã tải ảnh hóa đơn xuống thiết bị");
-              } catch (error) {
-                toast.error(error.message || "Không thể xuất hóa đơn");
-              } finally {
-                setExporting(false);
-              }
-            }}
+            startIcon={<Icon>print</Icon>}
+            onClick={() => exportInvoice("pdf")}
           >
-            {exporting ? "Đang tạo ảnh..." : mobile ? "Lưu ảnh hóa đơn" : "Xuất hóa đơn"}
+            {exporting ? "Đang tạo..." : "PDF"}
+          </SoftButton>
+          <SoftButton
+            variant="gradient"
+            color="dark"
+            sx={{ flex: 1 }}
+            disabled={!invoice || exporting}
+            startIcon={<Icon>image</Icon>}
+            onClick={() => exportInvoice("image")}
+          >
+            {exporting ? "Đang tạo..." : "Ảnh PNG"}
           </SoftButton>
         </SoftBox>
       </SoftBox>

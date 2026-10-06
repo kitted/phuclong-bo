@@ -80,10 +80,10 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
       setSaving(false);
     }
   };
-  const exportCreatedPayment = async () => {
+  const exportCreatedPayment = async (format) => {
     try {
       setExporting(true);
-      const result = await printInvoice(debtPaymentToInvoice(createdPayment, customer));
+      const result = await printInvoice(debtPaymentToInvoice(createdPayment, customer), { format });
       if (result?.downloaded) toast.success("Đã tải ảnh phiếu thu xuống thiết bị");
     } catch (error) {
       toast.error(error.message || "Không thể xuất phiếu thu công nợ");
@@ -140,18 +140,27 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
           <SoftTypography variant="caption" color="text" display="block" mt={2}>
             Hóa đơn xuất ra sẽ có dòng hàng hóa “THANH TOÁN CÔNG NỢ”.
           </SoftTypography>
-          <SoftBox display="flex" gap={1.5} mt={3}>
+          <SoftBox display="flex" gap={1} mt={3} flexWrap="wrap">
             <SoftButton fullWidth variant="outlined" color="secondary" onClick={onClose}>
               Đóng
             </SoftButton>
             <SoftButton
-              fullWidth
               variant="gradient"
               color="info"
+              sx={{ flex: 1, minWidth: 125 }}
               disabled={exporting}
-              onClick={exportCreatedPayment}
+              onClick={() => exportCreatedPayment("pdf")}
             >
-              {exporting ? "Đang tạo..." : mobile ? "Lưu ảnh hóa đơn" : "Xuất hóa đơn"}
+              {exporting ? "Đang tạo..." : "In / Lưu PDF"}
+            </SoftButton>
+            <SoftButton
+              variant="gradient"
+              color="dark"
+              sx={{ flex: 1, minWidth: 125 }}
+              disabled={exporting}
+              onClick={() => exportCreatedPayment("image")}
+            >
+              {exporting ? "Đang tạo..." : "Tải ảnh PNG"}
             </SoftButton>
           </SoftBox>
         </SoftBox>
@@ -322,13 +331,13 @@ export function DebtPaymentHistory({ customerId, refreshKey, onChanged, onSelect
       toast.error(error.response?.data?.message || "Không thể hủy phiếu thu");
     }
   };
-  const exportPayment = async (payment) => {
+  const exportPayment = async (payment, format) => {
     const id = idOf(payment);
     try {
       setExportingId(String(id));
       const response = id ? await DebtPaymentService.getById(id) : null;
       const detail = response?.data?.data || response?.data || payment;
-      const result = await printInvoice(debtPaymentToInvoice(detail));
+      const result = await printInvoice(debtPaymentToInvoice(detail), { format });
       if (result?.downloaded) toast.success("Đã tải ảnh phiếu thu xuống thiết bị");
     } catch (error) {
       toast.error(error.response?.data?.message || error.message || "Không thể xuất phiếu thu");
@@ -404,9 +413,18 @@ export function DebtPaymentHistory({ customerId, refreshKey, onChanged, onSelect
                     variant="text"
                     color="info"
                     disabled={exportingId === String(idOf(payment))}
-                    onClick={() => exportPayment(payment)}
+                    onClick={() => exportPayment(payment, "pdf")}
                   >
-                    {exportingId === String(idOf(payment)) ? "Đang xuất..." : "Xuất hóa đơn"}
+                    {exportingId === String(idOf(payment)) ? "Đang xuất..." : "PDF"}
+                  </SoftButton>
+                  <SoftButton
+                    size="small"
+                    variant="text"
+                    color="dark"
+                    disabled={exportingId === String(idOf(payment))}
+                    onClick={() => exportPayment(payment, "image")}
+                  >
+                    {exportingId === String(idOf(payment)) ? "Đang xuất..." : "Ảnh PNG"}
                   </SoftButton>
                   {payment.status === "ACTIVE" && (
                     <SoftButton

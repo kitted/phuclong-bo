@@ -154,7 +154,9 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
         oldDebt + grandTotal - paid
     )
   );
-  const occurredAt = new Date(invoice.date || invoice.occurredAt || invoice.createdAt || Date.now());
+  const occurredAt = new Date(
+    invoice.date || invoice.occurredAt || invoice.createdAt || Date.now()
+  );
   const [businessYear, businessMonth, businessDay] = vietnamDateKey(occurredAt).split("-");
   const totalQuantity = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
   const rows = items
@@ -428,7 +430,9 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
       </div>
     </div>
     <div class="title">
-      <h1>${customerReturnDocument ? "PHIẾU HOÀN HÀNG - NHẬP LẠI XE" : "PHIẾU BÁN HÀNG - KIÊM XUẤT KHO"}</h1>
+      <h1>${
+        customerReturnDocument ? "PHIẾU HOÀN HÀNG - NHẬP LẠI XE" : "PHIẾU BÁN HÀNG - KIÊM XUẤT KHO"
+      }</h1>
       <p><i>Số phiếu: ${escapeHtml(
         invoice.code || "—"
       )} &nbsp; - &nbsp; Ngày ${formatBusinessDateTime(occurredAt, "—")}</i></p>
@@ -471,15 +475,15 @@ const buildInvoiceDocument = (invoice, autoPrint = false) => {
         <tr><td class="label" colspan="3">Tổng cộng (1)</td><td class="quantity-total">${number(
           totalQuantity
         )}</td><td></td><td class="amount">${number(grandTotal)}</td><td></td></tr>
-        <tr><td class="label" colspan="5">${customerReturnDocument ? "Nợ trước hoàn (2)" : "Nợ cũ (2)"}</td><td class="amount">${number(
-          oldDebt
-        )}</td><td></td></tr>
-        <tr><td class="label" colspan="5">${customerReturnDocument ? "Giá trị hoàn / cấn nợ (3)" : "Số tiền thanh toán (3)"}</td><td class="amount">${number(
-          paid
-        )}</td><td></td></tr>
-        <tr><td class="label" colspan="5">${customerReturnDocument ? "Nợ sau hoàn" : "Còn nợ (1 + 2 - 3)"}</td><td class="amount">${number(
-          remainingDebt
-        )}</td><td></td></tr>
+        <tr><td class="label" colspan="5">${
+          customerReturnDocument ? "Nợ trước hoàn (2)" : "Nợ cũ (2)"
+        }</td><td class="amount">${number(oldDebt)}</td><td></td></tr>
+        <tr><td class="label" colspan="5">${
+          customerReturnDocument ? "Giá trị hoàn / cấn nợ (3)" : "Số tiền thanh toán (3)"
+        }</td><td class="amount">${number(paid)}</td><td></td></tr>
+        <tr><td class="label" colspan="5">${
+          customerReturnDocument ? "Nợ sau hoàn" : "Còn nợ (1 + 2 - 3)"
+        }</td><td class="amount">${number(remainingDebt)}</td><td></td></tr>
       </tbody>
     </table>
     ${
@@ -588,7 +592,8 @@ export async function printInvoice(invoice, options = {}) {
     options.mobile ??
     window.matchMedia?.("(max-width: 767px), (pointer: coarse)")?.matches ??
     false;
-  if (isMobile) return saveInvoiceImage(invoice);
+  if (options.format === "image" || (options.format !== "pdf" && isMobile))
+    return saveInvoiceImage(invoice);
 
   const popup = window.open("", "_blank", "width=900,height=1000");
   if (!popup) throw new Error("Trình duyệt đang chặn cửa sổ in hóa đơn");

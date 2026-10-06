@@ -231,7 +231,7 @@ function DailyReportTab() {
         html: buildDailyReportPdfHtml(report),
       });
     } catch (error) {
-      toast.error(error.response?.data?.message || "Không thể tạo file PDF");
+      toast.error(error.response?.data?.message || "Không thể tạo bản xem trước");
     } finally {
       setLoading(false);
     }
@@ -511,7 +511,7 @@ function DailyReportTab() {
           </SoftBox>
           <SoftBox display="flex" gap={0.75} flexWrap="wrap" justifyContent="flex-end">
             <SoftButton size="small" color="info" onClick={() => exportDoc(doc)} disabled={loading}>
-              <Icon>visibility</Icon>&nbsp;Xem PDF
+              <Icon>visibility</Icon>&nbsp;Xem / Xuất
             </SoftButton>
             <SoftButton
               size="small"
@@ -527,13 +527,13 @@ function DailyReportTab() {
       ))}
       <PrintPreviewDialog
         open={Boolean(printPreview)}
-        title={printPreview?.title || "Xem trước báo cáo PDF"}
+        title={printPreview?.title || "Xem trước báo cáo"}
         html={printPreview?.html || ""}
         onClose={() => setPrintPreview(null)}
         description={
           printPreview?.pending
             ? "Kiểm tra toàn bộ báo cáo trước khi xác nhận chốt và lưu dữ liệu."
-            : "Báo cáo đã được chốt. Bạn có thể in hoặc lưu PDF."
+            : "Báo cáo đã được chốt. Bạn có thể in, lưu PDF hoặc tải ảnh PNG."
         }
         onConfirm={printPreview?.pending ? create : undefined}
         confirmLabel="Xác nhận chốt báo cáo"
