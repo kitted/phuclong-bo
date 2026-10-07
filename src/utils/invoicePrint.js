@@ -117,6 +117,55 @@ export const debtPaymentToInvoice = (payment = {}, customer = {}) => {
   };
 };
 
+export const customerReturnToInvoice = (document = {}) => {
+  const items = Array.isArray(document.items) ? document.items : [];
+  const returnAmount = Number(
+    document.returnAmount ??
+      document.totalReturnAmount ??
+      document.totalAmount ??
+      items.reduce(
+        (sum, item) =>
+          sum + Number(item.qty || 0) * Number(item.returnUnitPrice ?? item.price ?? 0),
+        0
+      )
+  );
+  return {
+    ...document,
+    documentType: "CUSTOMER_RETURN",
+    date: document.date || document.createdAt,
+    customerId: (typeof document.customerId === "object" ? document.customerId : null) ||
+      document.customerSnapshot || {
+        id: document.customerId,
+        code: document.customerCode,
+        name: document.customerName,
+        phone: document.customerPhone,
+        address: document.customerAddress,
+      },
+    items: items.map((item) => {
+      const price = Number(item.returnUnitPrice ?? item.price ?? 0);
+      return {
+        ...item,
+        productName: item.productName || item.manualName || item.productId?.name || "Hàng hoàn",
+        unit: item.unit || item.manualUnit || item.productId?.unit || "",
+        price,
+        lineTotal: Number(item.lineTotal ?? Number(item.qty || 0) * price),
+        lineType: "RETURN",
+      };
+    }),
+    subtotal: returnAmount,
+    grandTotal: returnAmount,
+    totalAmount: returnAmount,
+    receivedAmount: returnAmount,
+    paidAmount: returnAmount,
+    returnAmount,
+    debtReductionAmount: Number(document.debtReductionAmount || 0),
+    refundAmount: Number(document.refundAmount || 0),
+    customerDebtBefore: Number(document.customerDebtBefore || 0),
+    customerDebtAfter: Number(document.customerDebtAfter || 0),
+    paymentStatus: "PAID",
+  };
+};
+
 const buildInvoiceDocument = (invoice, autoPrint = false) => {
   if (!invoice) return;
   const customerReturnDocument = invoice.documentType === "CUSTOMER_RETURN";

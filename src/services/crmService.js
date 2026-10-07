@@ -44,6 +44,21 @@ export const CustomerService = {
       params,
       responseType: "blob",
     }),
+  getInvoiceFollowUps: (params = {}) =>
+    AxiosInstance.get("/admin/customers/invoice-follow-ups", { params }),
+  exportInvoiceFollowUps: (params = {}) =>
+    AxiosInstance.get("/admin/customers/invoice-follow-ups/export", {
+      params,
+      responseType: "blob",
+    }),
+  createInvoiceFollowUpDraft: (payload) =>
+    AxiosInstance.post("/admin/customers/invoice-follow-ups/drafts", payload),
+  updateInvoiceFollowUpDraft: (id, payload) =>
+    AxiosInstance.patch(`/admin/customers/invoice-follow-ups/drafts/${id}`, payload),
+  removeInvoiceFollowUpDraft: (id) =>
+    AxiosInstance.delete(`/admin/customers/invoice-follow-ups/drafts/${id}`),
+  finalizeInvoiceFollowUps: (date) =>
+    AxiosInstance.post("/admin/customers/invoice-follow-ups/finalize", null, { params: { date } }),
   updateStoreProfile: (id, payload) =>
     AxiosInstance.patch(`/admin/customers/${id}/store-profile`, payload),
   uploadStorefrontImage: (id, file) => {

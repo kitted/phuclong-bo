@@ -22,6 +22,7 @@ import { createTruckInventoryImages, downloadDataImage } from "utils/truckInvent
 import QuickTruckOperations from "./QuickTruckOperations";
 import InventoryAlertsTab from "./InventoryAlertsTab";
 import NewCustomersTab from "./NewCustomersTab";
+import InvoiceFollowUpTab from "./InvoiceFollowUpTab";
 import { toast } from "react-toastify";
 
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
@@ -87,6 +88,14 @@ const dailySections = [
     icon: "person_add_alt",
     color: "#2e7d32",
     background: "#e8f5e9",
+  },
+  {
+    title: "Gửi hóa đơn & tương tác",
+    shortTitle: "Hóa đơn Zalo",
+    description: "Theo dõi gửi hóa đơn qua Zalo và nhắc cập nhật phản hồi sau 24 giờ",
+    icon: "fact_check",
+    color: "#315f50",
+    background: "#e8f3ef",
   },
 ];
 const dateTime = (value) =>
@@ -1072,6 +1081,7 @@ export default function DailyOperationsV2() {
                 {tab === 3 && <TruckInventoryImageTab />}
                 {tab === 4 && <InventoryAlertsTab />}
                 {tab === 5 && <NewCustomersTab />}
+                {tab === 6 && <InvoiceFollowUpTab />}
               </SoftBox>
             </SoftBox>
           </Grid>
