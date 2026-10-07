@@ -20,6 +20,8 @@ import { buildDailyReportPdfHtml } from "utils/dailyOperationsPrint";
 import { createDailyReportCanvasImage } from "utils/dailyOperationsImage";
 import { createTruckInventoryImages, downloadDataImage } from "utils/truckInventoryImage";
 import QuickTruckOperations from "./QuickTruckOperations";
+import InventoryAlertsTab from "./InventoryAlertsTab";
+import NewCustomersTab from "./NewCustomersTab";
 import { toast } from "react-toastify";
 
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
@@ -69,6 +71,22 @@ const dailySections = [
     icon: "photo_camera",
     color: "#00897b",
     background: "#e0f2f1",
+  },
+  {
+    title: "Cảnh báo tồn kho",
+    shortTitle: "Cảnh báo kho",
+    description: "Kiểm tra, chọn mặt hàng và xuất PDF hoặc ảnh",
+    icon: "notification_important",
+    color: "#c62828",
+    background: "#ffebee",
+  },
+  {
+    title: "Khách hàng mới",
+    shortTitle: "KH mới 45 ngày",
+    description: "Lọc khách có 1–2 hóa đơn trong 45 ngày và xuất báo cáo",
+    icon: "person_add_alt",
+    color: "#2e7d32",
+    background: "#e8f5e9",
   },
 ];
 const dateTime = (value) =>
@@ -1052,6 +1070,8 @@ export default function DailyOperationsV2() {
                 {tab === 1 && <DailyReportTab />}
                 {tab === 2 && <DailyWarrantyTab />}
                 {tab === 3 && <TruckInventoryImageTab />}
+                {tab === 4 && <InventoryAlertsTab />}
+                {tab === 5 && <NewCustomersTab />}
               </SoftBox>
             </SoftBox>
           </Grid>

@@ -72,6 +72,8 @@ export const drawCanvasLines = (context, lines, x, y, lineHeight, alignment = "l
 
 export const A3_IMAGE_WIDTH = 1754;
 export const A3_IMAGE_HEIGHT = 2480;
+export const A4_IMAGE_WIDTH = 1240;
+export const A4_IMAGE_HEIGHT = 1754;
 
 export const fitCanvasToA3 = (sourceCanvas, padding = 54) => {
   const canvas = document.createElement("canvas");
@@ -79,6 +81,34 @@ export const fitCanvasToA3 = (sourceCanvas, padding = 54) => {
   canvas.height = A3_IMAGE_HEIGHT;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Trình duyệt không hỗ trợ tạo ảnh A3");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  const availableWidth = canvas.width - padding * 2;
+  const availableHeight = canvas.height - padding * 2;
+  const scale = Math.min(
+    availableWidth / sourceCanvas.width,
+    availableHeight / sourceCanvas.height
+  );
+  const renderedWidth = Math.round(sourceCanvas.width * scale);
+  const renderedHeight = Math.round(sourceCanvas.height * scale);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(
+    sourceCanvas,
+    Math.round((canvas.width - renderedWidth) / 2),
+    padding,
+    renderedWidth,
+    renderedHeight
+  );
+  return canvas;
+};
+
+export const fitCanvasToA4 = (sourceCanvas, padding = 20) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = A4_IMAGE_WIDTH;
+  canvas.height = A4_IMAGE_HEIGHT;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Trình duyệt không hỗ trợ tạo ảnh A4");
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
   const availableWidth = canvas.width - padding * 2;
@@ -113,13 +143,15 @@ export const downloadDataImage = (url, fileName) => {
 export const createTruckInventoryImages = ({ truck, driverName, driverPhone, rows }) => {
   const width = 1200;
   const margin = 40;
-  const columnGap = 20;
-  const panelWidth = (width - margin * 2 - columnGap) / 2;
-  const rowHeight = 38;
+  const columnGap = 16;
+  const columnCount = rows.length > 70 ? 3 : 2;
+  const panelWidth = (width - margin * 2 - columnGap * (columnCount - 1)) / columnCount;
   const tableTop = 258;
   const tableHeaderHeight = 40;
   const footerHeight = 58;
-  const rowsPerColumn = Math.max(1, Math.ceil(rows.length / 2));
+  const rowsPerColumn = Math.max(1, Math.ceil(rows.length / columnCount));
+  const availableRowsHeight = 1714 - tableTop - tableHeaderHeight - footerHeight;
+  const rowHeight = Math.max(28, Math.min(38, Math.floor(availableRowsHeight / rowsPerColumn)));
   const generatedAt = new Date();
   const totalQuantity = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
   const fileBase = `hang-tren-xe-${safeFilePart(truck.code || truck.name)}-${generatedAt
@@ -186,13 +218,18 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
     context.textAlign = "left";
   });
 
+  const indexWidth = columnCount === 3 ? 40 : 52;
+  const unitWidth = columnCount === 3 ? 55 : 78;
+  const quantityWidth = columnCount === 3 ? 65 : 92;
   const columns = [
-    ["STT", 52, "center"],
-    ["TÊN SẢN PHẨM", panelWidth - 52 - 78 - 92, "left"],
-    ["ĐVT", 78, "center"],
-    ["SL", 92, "right"],
+    ["STT", indexWidth, "center"],
+    ["TÊN SẢN PHẨM", panelWidth - indexWidth - unitWidth - quantityWidth, "left"],
+    ["ĐVT", unitWidth, "center"],
+    ["SL", quantityWidth, "right"],
   ];
-  const panels = [rows.slice(0, rowsPerColumn), rows.slice(rowsPerColumn)];
+  const panels = Array.from({ length: columnCount }, (_, index) =>
+    rows.slice(index * rowsPerColumn, (index + 1) * rowsPerColumn)
+  );
   panels.forEach((panelRows, panelIndex) => {
     const panelX = margin + panelIndex * (panelWidth + columnGap);
     drawRoundedRect(context, panelX, tableTop, panelWidth, tableHeaderHeight, 8, "#173f64");
@@ -229,9 +266,9 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
       let valueX = panelX;
       columns.forEach(([, columnWidth, alignment], columnIndex) => {
         context.fillStyle = columnIndex === 3 ? "#1b5e20" : "#1e293b";
-        context.font = `${
-          columnIndex === 1 || columnIndex === 3 ? "700" : "400"
-        } 14px Arial, sans-serif`;
+        context.font = `${columnIndex === 1 || columnIndex === 3 ? "700" : "400"} ${
+          rowHeight < 33 ? 12 : 14
+        }px Arial, sans-serif`;
         context.textAlign = alignment;
         const x =
           alignment === "center"
@@ -239,7 +276,11 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
             : alignment === "right"
             ? valueX + columnWidth - 10
             : valueX + 10;
-        context.fillText(fitText(context, values[columnIndex], columnWidth - 20), x, y + 25);
+        context.fillText(
+          fitText(context, values[columnIndex], columnWidth - 16),
+          x,
+          y + Math.round(rowHeight / 2) + 5
+        );
         valueX += columnWidth;
       });
     });
@@ -253,5 +294,6 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
   context.font = "700 14px Arial, sans-serif";
   context.fillText(`${rows.length} mặt hàng`, width - margin, height - 23);
 
-  return [{ url: canvas.toDataURL("image/png"), fileName: `${fileBase}.png` }];
+  const a4Canvas = fitCanvasToA4(canvas);
+  return [{ url: a4Canvas.toDataURL("image/png"), fileName: `${fileBase}.png` }];
 };

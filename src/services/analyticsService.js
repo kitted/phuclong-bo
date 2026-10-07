@@ -10,6 +10,7 @@ export const DashboardAnalyticsService = {
   salesTrend: get("/admin/dashboard/sales-trend"),
   debtSummary: get("/admin/dashboard/debt-summary"),
   inventoryAlerts: get("/admin/dashboard/inventory-alerts"),
+  newCustomers: get("/admin/dashboard/new-customers"),
   topProducts: get("/admin/dashboard/top-products"),
   trucks: get("/admin/dashboard/trucks"),
   customers: get("/admin/dashboard/customers"),

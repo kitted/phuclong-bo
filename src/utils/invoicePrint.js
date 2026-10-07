@@ -2,7 +2,7 @@ import { formatBusinessDateTime, vietnamDateKey } from "./businessDate";
 import {
   downloadDataImage,
   drawCanvasLines,
-  fitCanvasToA3,
+  fitCanvasToA4,
   wrapCanvasText,
 } from "./truckInventoryImage";
 
@@ -797,10 +797,10 @@ export async function saveInvoiceImage(invoice) {
     width / 2,
     y + 68
   );
-  const a3Canvas = fitCanvasToA3(canvas);
-  const url = a3Canvas.toDataURL("image/png");
+  const a4Canvas = fitCanvasToA4(canvas);
+  const url = a4Canvas.toDataURL("image/png");
   downloadDataImage(url, invoiceFileName(invoice));
-  return { downloaded: true, width: a3Canvas.width, height: a3Canvas.height };
+  return { downloaded: true, width: a4Canvas.width, height: a4Canvas.height };
 }
 
 export async function printInvoice(invoice, options = {}) {
