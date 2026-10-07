@@ -56,14 +56,16 @@ export const downloadInvoiceFollowUpImage = ({ rows = [], date, summary = {}, bo
   );
   context.textAlign = "left";
 
-  [
+  const summaryCards = [
     ["TỔNG DÒNG", rows.length, "#e3f2fd", "#1565c0"],
     ["ĐÃ GỬI", summary.sent, "#e8f5e9", "#2e7d32"],
     ["CHƯA GỬI", summary.notSent, "#fff8e1", "#ed6c02"],
     ["KHÔNG GỬI", summary.doNotSend, "#f1f5f9", "#475569"],
     ["CẬP NHẬT 24H", summary.needsFollowUp, "#ffebee", "#c62828"],
-  ].forEach(([label, value, background, color], index) => {
-    const cardWidth = (width - margin * 2 - gap * 4) / 5;
+    ["KHÁCH HÀNG KHÓ", summary.difficultCustomer, "#fce8e8", "#b71c1c"],
+  ];
+  summaryCards.forEach(([label, value, background, color], index) => {
+    const cardWidth = (width - margin * 2 - gap * (summaryCards.length - 1)) / summaryCards.length;
     const x = margin + index * (cardWidth + gap);
     drawRoundedRect(context, x, 176, cardWidth, 88, 12, background);
     context.fillStyle = "#64748b";
@@ -89,42 +91,48 @@ export const downloadInvoiceFollowUpImage = ({ rows = [], date, summary = {}, bo
     );
     panelRows.forEach((row, index) => {
       const y = contentTop + index * rowHeight;
-      context.fillStyle = index % 2 ? "#f8fafc" : "#ffffff";
+      context.fillStyle = row.difficultCustomer ? "#fff0f0" : index % 2 ? "#f8fafc" : "#ffffff";
       context.fillRect(x, y, panelWidth, rowHeight);
       context.strokeStyle = "#dbe3ec";
       context.strokeRect(x, y, panelWidth, rowHeight);
       const customer =
         [row.customerCode, row.customerName].filter(Boolean).join(" · ") ||
         "Khách mới / chưa định danh";
-      context.fillStyle = "#172033";
+      context.fillStyle = row.difficultCustomer ? "#b71c1c" : "#172033";
       const compact = rowHeight < 50 || columns >= 5;
       context.font = `800 ${compact ? 14 : 17}px Arial, sans-serif`;
       context.fillText(fitText(context, customer, panelWidth - 24), x + 12, y + 21);
-      context.fillStyle = "#52667a";
-      context.font = `600 ${compact ? 12 : 15}px Arial, sans-serif`;
+      context.fillStyle = row.difficultCustomer
+        ? "#c62828"
+        : row.zaloStatus === "CONNECTED"
+        ? "#1b5e20"
+        : "#c62828";
+      context.font = `800 ${compact ? 12 : 15}px Arial, sans-serif`;
       const interactionChannel =
         { ZALO: "Zalo", PHONE: "Gọi điện", SMS: "SMS" }[row.interactionChannel] || "Zalo";
       const invoiceStatus =
         { SENT: "Đã gửi HĐ", NOT_SENT: "Chưa gửi HĐ", DO_NOT_SEND: "Không gửi HĐ" }[
           row.invoiceStatus
         ] || "Chưa gửi HĐ";
-      const statuses = `${interactionChannel} · ${
-        row.zaloStatus === "CONNECTED" ? "Đã KB" : "Chưa KB"
-      } · ${invoiceStatus} · ${
+      const statuses = `${row.difficultCustomer ? "★ KHÁCH HÀNG KHÓ · " : ""}ZALO: ${
+        row.zaloStatus === "CONNECTED" ? "ĐÃ KẾT BẠN" : "CHƯA KẾT BẠN"
+      } · KÊNH: ${interactionChannel.toUpperCase()} · ${invoiceStatus.toUpperCase()} · ${
         {
           INVOICE: "HĐ bán hàng",
           DEBT_PAYMENT: "Thu công nợ",
           CUSTOMER_RETURN: "Hoàn hàng",
         }[row.documentType] || "Dòng tạm"
-      } · ${row.interaction || "Chưa tương tác"}`;
+      } · TƯƠNG TÁC: ${(row.interaction || "Chưa cập nhật").toUpperCase()}`;
       context.fillText(fitText(context, statuses, panelWidth - 24), x + 12, y + 43);
       if (rowHeight >= 62) {
-        context.fillStyle = row.needsFollowUp ? "#c62828" : "#64748b";
-        context.font = "500 14px Arial, sans-serif";
+        context.fillStyle = row.difficultCustomer || row.needsFollowUp ? "#c62828" : "#64748b";
+        context.font = `${row.difficultCustomer ? "800" : "500"} 14px Arial, sans-serif`;
         context.fillText(
           fitText(
             context,
-            [row.phone, row.note].filter(Boolean).join(" · ") || "—",
+            [row.difficultCustomer ? "KHÁCH HÀNG KHÓ - SALE LÀM VIỆC" : "", row.phone, row.note]
+              .filter(Boolean)
+              .join(" · ") || "—",
             panelWidth - 24
           ),
           x + 12,

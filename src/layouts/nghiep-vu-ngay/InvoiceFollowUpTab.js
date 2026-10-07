@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Autocomplete from "@mui/material/Autocomplete";
+import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
@@ -251,6 +252,7 @@ const emptyDraftForm = {
   interactionChannel: "ZALO",
   interaction: "",
   note: "",
+  difficultCustomer: false,
 };
 
 export default function InvoiceFollowUpTab() {
@@ -381,6 +383,7 @@ export default function InvoiceFollowUpTab() {
       if (filter === "DO_NOT_SEND" && row.invoiceStatus !== "DO_NOT_SEND") return false;
       if (filter === "FOLLOW_UP" && !row.needsFollowUp) return false;
       if (filter === "INTERACTED" && !row.interaction) return false;
+      if (filter === "DIFFICULT" && !row.difficultCustomer) return false;
       if (!keywords.length) return true;
       const haystack = normalizeSearch(
         [row.customerCode, row.customerName, row.phone, row.invoiceCode, row.salespersonName].join(
@@ -407,6 +410,7 @@ export default function InvoiceFollowUpTab() {
       notSent: data.filter((row) => row.invoiceStatus === "NOT_SENT").length,
       doNotSend: data.filter((row) => row.invoiceStatus === "DO_NOT_SEND").length,
       needsFollowUp: data.filter((row) => row.needsFollowUp).length,
+      difficultCustomer: data.filter((row) => row.difficultCustomer).length,
     }),
     [
       data,
@@ -445,6 +449,12 @@ export default function InvoiceFollowUpTab() {
               phone: isNewCustomer
                 ? row.phone || ""
                 : customer.phone || customer.phones?.[0] || row.phone || "",
+              zaloStatus: isNewCustomer
+                ? "NOT_CONNECTED"
+                : customer.zaloConnected
+                ? "CONNECTED"
+                : "NOT_CONNECTED",
+              difficultCustomer: isNewCustomer ? false : Boolean(customer.difficultCustomer),
             }
           : row
       )
@@ -474,6 +484,7 @@ export default function InvoiceFollowUpTab() {
         interactionChannel: payload.interactionChannel || "ZALO",
         interaction: payload.interaction || undefined,
         note: payload.note || undefined,
+        difficultCustomer: Boolean(payload.difficultCustomer),
         salespersonName: payload.salespersonName || undefined,
       };
       const hasSavedDraft = row.draftId && !row.isNew;
@@ -530,6 +541,7 @@ export default function InvoiceFollowUpTab() {
       interactionChannel: row.interactionChannel || "ZALO",
       interaction: row.interaction || "",
       note: row.note || "",
+      difficultCustomer: Boolean(row.difficultCustomer),
     });
     setDraftDialog({ mode: "EDIT", row });
     lookupCustomers("");
@@ -552,6 +564,7 @@ export default function InvoiceFollowUpTab() {
         interactionChannel: draftForm.interactionChannel,
         interaction: draftForm.interaction || undefined,
         note: draftForm.note || undefined,
+        difficultCustomer: Boolean(draftForm.difficultCustomer),
       };
       if (draftDialog?.mode === "EDIT")
         await CustomerService.updateInvoiceFollowUpDraft(draftDialog.row.draftId, payload);
@@ -759,7 +772,7 @@ export default function InvoiceFollowUpTab() {
         display="grid"
         gap={1}
         mb={2}
-        sx={{ gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(5,1fr)" } }}
+        sx={{ gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(6,1fr)" } }}
       >
         {[
           ["Tổng hóa đơn", currentSummary.total, "#eef6ff", "#1565c0"],
@@ -767,6 +780,7 @@ export default function InvoiceFollowUpTab() {
           ["Chưa gửi", currentSummary.notSent, "#fff8e1", "#ed6c02"],
           ["Không gửi", currentSummary.doNotSend, "#f1f5f9", "#475569"],
           ["Quá 24 giờ", currentSummary.needsFollowUp, "#ffebee", "#c62828"],
+          ["Khách hàng khó", currentSummary.difficultCustomer, "#fce8e8", "#b71c1c"],
         ].map(([label, value, background, color]) => (
           <SoftBox key={label} p={1.5} borderRadius={2} sx={{ bgcolor: background }}>
             <SoftTypography variant="caption" color="text">
@@ -798,6 +812,7 @@ export default function InvoiceFollowUpTab() {
           <MenuItem value="DO_NOT_SEND">Không gửi hóa đơn</MenuItem>
           <MenuItem value="FOLLOW_UP">Cần cập nhật 24h</MenuItem>
           <MenuItem value="INTERACTED">Đã có tương tác</MenuItem>
+          <MenuItem value="DIFFICULT">Khách hàng khó</MenuItem>
         </Select>
         {(search || filter !== "ALL") && (
           <SoftButton
@@ -888,15 +903,29 @@ export default function InvoiceFollowUpTab() {
                 <TableRow
                   key={key}
                   sx={{
-                    bgcolor: row.needsFollowUp ? "#fff1f2" : dirty ? "#fffde7" : "#fff",
+                    bgcolor: row.difficultCustomer
+                      ? "#fff1f2"
+                      : row.needsFollowUp
+                      ? "#fff1f2"
+                      : dirty
+                      ? "#fffde7"
+                      : "#fff",
                     "& td": {
                       borderColor: "#cbd5e1",
-                      verticalAlign: "middle",
+                      verticalAlign: "top",
                       boxSizing: "border-box",
                       px: 0.75,
                       py: 0.75,
                       fontSize: 12,
                     },
+                    ...(row.difficultCustomer
+                      ? {
+                          "& td, & td .MuiTypography-root, & td .MuiInputBase-input, & td .MuiSelect-select":
+                            {
+                              color: "#c62828 !important",
+                            },
+                        }
+                      : {}),
                   }}
                 >
                   <TableCell>
@@ -1130,6 +1159,54 @@ export default function InvoiceFollowUpTab() {
                       placeholder="Nhập ghi chú..."
                       sx={{ width: "100%" }}
                     />
+                    <SoftBox
+                      display="flex"
+                      alignItems="center"
+                      gap={0.4}
+                      mt={0.5}
+                      px={0.6}
+                      py={0.25}
+                      minHeight={28}
+                      borderRadius={1.25}
+                      sx={{
+                        cursor: book.isFinalized ? "default" : "pointer",
+                        bgcolor: row.difficultCustomer ? "#ffebee" : "#f8fafc",
+                        border: `1px solid ${row.difficultCustomer ? "#ef9a9a" : "#e2e8f0"}`,
+                      }}
+                      onClick={() => {
+                        if (!book.isFinalized)
+                          edit(key, "difficultCustomer", !row.difficultCustomer, true);
+                      }}
+                    >
+                      <Checkbox
+                        size="small"
+                        checked={Boolean(row.difficultCustomer)}
+                        disabled={book.isFinalized}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) =>
+                          edit(key, "difficultCustomer", event.target.checked, true)
+                        }
+                        icon={<Icon sx={{ color: "#9ca3af" }}>star_border</Icon>}
+                        checkedIcon={<Icon sx={{ color: "#d32f2f" }}>star</Icon>}
+                        inputProps={{
+                          "aria-label": "Đánh dấu khách hàng khó - Sale làm việc",
+                        }}
+                        sx={{ p: 0.25 }}
+                      />
+                      <SoftTypography
+                        variant="caption"
+                        fontWeight={row.difficultCustomer ? "bold" : "regular"}
+                        sx={{
+                          color: row.difficultCustomer ? "#d32f2f" : "#94a3b8",
+                          fontSize: 10.5,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {row.difficultCustomer
+                          ? "Khách hàng khó - Sale làm việc"
+                          : "Đánh dấu khách hàng khó"}
+                      </SoftTypography>
+                    </SoftBox>
                   </TableCell>
                   <TableCell>
                     {row.needsFollowUp ? (
@@ -1511,6 +1588,8 @@ export default function InvoiceFollowUpTab() {
                         customerCode: customer?.code || "",
                         customerName: customer?.name || "",
                         phone: customer?.phone || customer?.phones?.[0] || current.phone,
+                        zaloStatus: customer?.zaloConnected ? "CONNECTED" : "NOT_CONNECTED",
+                        difficultCustomer: Boolean(customer?.difficultCustomer),
                       }))
                     }
                     noOptionsText="Không tìm thấy khách hàng"
@@ -1710,6 +1789,41 @@ export default function InvoiceFollowUpTab() {
                   inputProps={{ "aria-label": "Ghi chú" }}
                   sx={draftMultilineSx}
                 />
+                <SoftBox
+                  display="flex"
+                  alignItems="center"
+                  gap={0.5}
+                  mt={0.75}
+                  onClick={() =>
+                    setDraftForm((current) => ({
+                      ...current,
+                      difficultCustomer: !current.difficultCustomer,
+                    }))
+                  }
+                  sx={{ cursor: "pointer", width: "fit-content" }}
+                >
+                  <Checkbox
+                    checked={Boolean(draftForm.difficultCustomer)}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) =>
+                      setDraftForm((current) => ({
+                        ...current,
+                        difficultCustomer: event.target.checked,
+                      }))
+                    }
+                    icon={<Icon sx={{ color: "#9ca3af" }}>star_border</Icon>}
+                    checkedIcon={<Icon sx={{ color: "#d32f2f" }}>star</Icon>}
+                  />
+                  <SoftTypography
+                    variant="button"
+                    fontWeight={draftForm.difficultCustomer ? "bold" : "regular"}
+                    sx={{ color: draftForm.difficultCustomer ? "#d32f2f" : "#6b7280" }}
+                  >
+                    {draftForm.difficultCustomer
+                      ? "Khách hàng khó - Sale làm việc"
+                      : "Đánh dấu khách hàng khó"}
+                  </SoftTypography>
+                </SoftBox>
               </Grid>
             </Grid>
           </SoftBox>
