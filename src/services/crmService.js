@@ -143,4 +143,8 @@ export const PromotionService = {
   getPerformance: (id) => AxiosInstance.get(`/admin/promotions/${id}/performance`),
   getInvoices: (id, params = {}) =>
     AxiosInstance.get(`/admin/promotions/${id}/invoices`, { params }),
+  getVoucherReport: (params = {}) =>
+    AxiosInstance.get("/admin/promotions/vouchers/report", { params }),
+  exportVoucherReport: (params = {}) =>
+    AxiosInstance.get("/admin/promotions/vouchers/export", { params, responseType: "blob" }),
 };

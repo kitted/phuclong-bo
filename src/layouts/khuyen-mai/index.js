@@ -10,6 +10,8 @@ import FormControl from "@mui/material/FormControl";
 import Tooltip from "@mui/material/Tooltip";
 import TextField from "@mui/material/TextField";
 import Autocomplete from "@mui/material/Autocomplete";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import SoftBox from "components/SoftBox";
@@ -32,6 +34,18 @@ import { mergeUniqueItems } from "utils/infiniteList";
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value) || 0);
+const copyText = async (value) => {
+  const text = String(value || "");
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+  const input = document.createElement("textarea");
+  input.value = text;
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  document.execCommand("copy");
+  document.body.removeChild(input);
+};
 const EMPTY = {
   code: "",
   name: "",
@@ -130,6 +144,109 @@ const parseMoneyText = (text) => {
     );
   return 0;
 };
+
+const localDateTimeValue = (date) => {
+  const value = new Date(date);
+  return new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+const advancedVoucherDefaults = () => {
+  const start = new Date();
+  const end = new Date(start.getTime() + 30 * 86400000);
+  return {
+    code: "",
+    name: "",
+    voucherAudience: "SHARED",
+    customer: null,
+    discountType: "FIXED",
+    discountValue: 50000,
+    maxDiscount: 50000,
+    minOrderValue: 500000,
+    budgetLimit: 5000000,
+    totalUsageLimit: 100,
+    maxUsesPerVoucher: 1,
+    usageLimitPerCustomer: 1,
+    allowStacking: false,
+    scope: "ALL",
+    categoryIds: [],
+    productIds: [],
+    excludedCategoryIds: [],
+    excludedProductIds: [],
+    eligibleCustomerSegments: [],
+    inactiveMonths: 0,
+    conversionType: "NONE",
+    conversionCost: 0,
+    startAt: localDateTimeValue(start),
+    endAt: localDateTimeValue(end),
+    dynamicExpiryDays: 0,
+    allowedWeekdays: [],
+    dailyStartTime: "",
+    dailyEndTime: "",
+    customizeBudget: false,
+    customizeUsage: false,
+    useConversion: false,
+    customizeScope: false,
+    useExclusions: false,
+    useTargeting: false,
+    useWinBack: false,
+    useValidity: false,
+    useDynamicExpiry: false,
+    useWeeklySchedule: false,
+  };
+};
+
+function VoucherFieldTitle({ children, help, required = false }) {
+  return (
+    <SoftBox display="flex" alignItems="center" gap={0.35} mb={0.35}>
+      <SoftTypography variant="caption" fontWeight="medium">
+        {children}
+        {required ? " *" : ""}
+      </SoftTypography>
+      {help && (
+        <Tooltip title={help} arrow placement="top">
+          <Icon
+            titleAccess={help}
+            sx={{ color: "#98a2b3", fontSize: "16px !important", cursor: "help" }}
+          >
+            help_outline
+          </Icon>
+        </Tooltip>
+      )}
+    </SoftBox>
+  );
+}
+
+function VoucherOption({ checked, onChange, label, help }) {
+  return (
+    <SoftBox
+      border="1px solid"
+      borderColor={checked ? "#17a2b8" : "#e4e7ec"}
+      bgcolor={checked ? "#f0fbfd" : "#fff"}
+      borderRadius={2}
+      px={1.25}
+    >
+      <FormControlLabel
+        sx={{ m: 0, minHeight: 44 }}
+        control={
+          <Checkbox checked={checked} onChange={(event) => onChange(event.target.checked)} />
+        }
+        label={
+          <SoftBox display="flex" alignItems="center" gap={0.5}>
+            <SoftTypography variant="button" fontWeight="medium">
+              {label}
+            </SoftTypography>
+            {help && (
+              <Tooltip title={help} arrow placement="top">
+                <Icon sx={{ color: "#98a2b3", fontSize: "16px !important", cursor: "help" }}>
+                  help_outline
+                </Icon>
+              </Tooltip>
+            )}
+          </SoftBox>
+        }
+      />
+    </SoftBox>
+  );
+}
 const subjectOf = (text) =>
   plain(text)
     .replace(/\d+(?:[.,]\d+)?\s*(tr|trieu|k)?/g, " ")
@@ -1257,8 +1374,10 @@ function AssignVoucherModal({ promotion, open, onClose, onAssigned }) {
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [issuedVoucher, setIssuedVoucher] = useState(null);
   useEffect(() => {
     if (!open) return undefined;
+    setIssuedVoucher(null);
     const timer = setTimeout(() => {
       CustomerService.getAll({ search: search || undefined, page: 1, limit: 20 })
         .then((response) => setCustomers(response.data?.data || []))
@@ -1271,10 +1390,12 @@ function AssignVoucherModal({ promotion, open, onClose, onAssigned }) {
     try {
       setSaving(true);
       const response = await PromotionService.assignVoucher(promotion.id, customerId);
-      toast.success(`Đã cấp voucher ${response.data?.data?.code || ""}`);
+      const code = response.data?.data?.code || "";
+      const customer = customers.find((item) => String(item.id || item._id) === String(customerId));
+      setIssuedVoucher({ code, customerName: customer?.name || "Khách hàng" });
+      toast.success(`Đã cấp voucher ${code}`);
       setCustomerId("");
       onAssigned();
-      onClose();
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể cấp voucher");
     } finally {
@@ -1304,33 +1425,83 @@ function AssignVoucherModal({ promotion, open, onClose, onAssigned }) {
           {Math.max(0, Number(promotion?.quantity || 0) - Number(promotion?.activated || 0))}{" "}
           voucher
         </SoftTypography>
-        <SoftBox mt={2}>
-          <SoftInput
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm mã, tên hoặc số điện thoại..."
-            icon={{ component: "search", direction: "left" }}
-          />
-        </SoftBox>
-        <SoftBox mt={2}>
-          <FormControl fullWidth size="small">
-            <Select displayEmpty value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-              <MenuItem value="">Chọn khách hàng</MenuItem>
-              {customers.map((customer) => (
-                <MenuItem key={customer.id} value={customer.id}>
-                  {customer.code} · {customer.name} · {customer.phone}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </SoftBox>
+        {issuedVoucher && (
+          <SoftBox
+            mt={2}
+            p={2}
+            borderRadius={2.5}
+            bgcolor="#e8f5e9"
+            sx={{ border: "2px solid #43a047" }}
+          >
+            <SoftTypography variant="caption" color="success" fontWeight="bold">
+              MÃ VOUCHER ĐÃ CẤP
+            </SoftTypography>
+            <SoftTypography
+              variant="h4"
+              fontWeight="bold"
+              sx={{ letterSpacing: 1.2, wordBreak: "break-all" }}
+            >
+              {issuedVoucher.code}
+            </SoftTypography>
+            <SoftTypography variant="caption" color="text" display="block" mb={1}>
+              {issuedVoucher.customerName}
+            </SoftTypography>
+            <SoftButton
+              fullWidth
+              color="success"
+              variant="gradient"
+              onClick={async () => {
+                await copyText(issuedVoucher.code);
+                toast.success("Đã sao chép mã voucher");
+              }}
+            >
+              <Icon>content_copy</Icon>&nbsp;Sao chép mã
+            </SoftButton>
+          </SoftBox>
+        )}
+        {!issuedVoucher && (
+          <SoftBox mt={2}>
+            <SoftInput
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm mã, tên hoặc số điện thoại..."
+              icon={{ component: "search", direction: "left" }}
+            />
+          </SoftBox>
+        )}
+        {!issuedVoucher && (
+          <SoftBox mt={2}>
+            <FormControl fullWidth size="small">
+              <Select
+                displayEmpty
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+              >
+                <MenuItem value="">Chọn khách hàng</MenuItem>
+                {customers.map((customer) => (
+                  <MenuItem key={customer.id} value={customer.id}>
+                    {customer.code} · {customer.name} · {customer.phone}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </SoftBox>
+        )}
         <SoftBox display="flex" gap={1} mt={3}>
           <SoftButton fullWidth variant="outlined" color="secondary" onClick={onClose}>
-            Hủy
+            {issuedVoucher ? "Đóng" : "Hủy"}
           </SoftButton>
-          <SoftButton fullWidth variant="gradient" color="info" disabled={saving} onClick={assign}>
-            {saving ? "Đang cấp..." : "Cấp voucher"}
-          </SoftButton>
+          {!issuedVoucher && (
+            <SoftButton
+              fullWidth
+              variant="gradient"
+              color="info"
+              disabled={saving}
+              onClick={assign}
+            >
+              {saving ? "Đang cấp..." : "Cấp voucher"}
+            </SoftButton>
+          )}
         </SoftBox>
       </SoftBox>
     </Modal>
@@ -1468,8 +1639,1297 @@ function PromotionPerformance({ promotion, onClose }) {
   );
 }
 
-function QuickCustomerPromotionCodes() {
+function AdvancedVoucherCreator({ products, categories, customers, onCreated }) {
+  const [form, setForm] = useState(advancedVoucherDefaults);
+  const [saving, setSaving] = useState(false);
+  const [step, setStep] = useState(1);
+  const [createdVoucher, setCreatedVoucher] = useState(null);
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const normalizeCode = (value) =>
+    String(value || "")
+      .trim()
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/Đ/g, "D")
+      .replace(/[^A-Z0-9_-]+/g, "");
+
+  const stepOneComplete =
+    normalizeCode(form.code).length >= 3 &&
+    form.name.trim().length >= 3 &&
+    (form.voucherAudience === "SHARED" || Boolean(form.customer));
+  const stepTwoComplete =
+    Number(form.discountValue) > 0 &&
+    Number(form.minOrderValue) > 0 &&
+    (form.discountType !== "PERCENT" || Number(form.maxDiscount) > 0);
+  const goToStep = (nextStep) => {
+    if (nextStep === 2 && !stepOneComplete)
+      return toast.info("Điền đủ mã, tên và đối tượng nhận voucher trước khi tiếp tục");
+    if (nextStep === 3 && !stepTwoComplete)
+      return toast.info("Điền đủ mức giảm và đơn hàng tối thiểu trước khi tiếp tục");
+    setStep(nextStep);
+  };
+
+  const save = async () => {
+    const code = normalizeCode(form.code);
+    if (!code || !form.name.trim()) return toast.error("Vui lòng nhập mã và tên voucher");
+    if (form.voucherAudience === "CUSTOMER" && !form.customer)
+      return toast.error("Vui lòng chọn khách hàng được cấp voucher");
+    if (Number(form.minOrderValue) <= 0)
+      return toast.error("Giá trị đơn hàng tối thiểu là bắt buộc");
+    if (Number(form.discountValue) <= 0) return toast.error("Mức giảm phải lớn hơn 0");
+    if (form.discountType === "PERCENT" && Number(form.maxDiscount) <= 0)
+      return toast.error("Giảm theo phần trăm phải có số tiền giảm tối đa");
+    if (form.customizeBudget && Number(form.budgetLimit) <= 0)
+      return toast.error("Vui lòng nhập ngân sách chiến dịch lớn hơn 0");
+    if (form.customizeUsage && Number(form.usageLimitPerCustomer) < 1)
+      return toast.error("Lượt dùng mỗi khách phải từ 1 trở lên");
+    if (form.useConversion && form.conversionType === "NONE")
+      return toast.error("Vui lòng chọn nguồn điểm hoặc coin cần quy đổi");
+    if (form.useConversion && Number(form.conversionCost) <= 0)
+      return toast.error("Số điểm/coin cần quy đổi phải lớn hơn 0");
+    if (form.customizeScope && form.scope === "CATEGORY" && !form.categoryIds.length)
+      return toast.error("Vui lòng chọn ít nhất một danh mục áp dụng");
+    if (form.customizeScope && form.scope === "PRODUCTS" && !form.productIds.length)
+      return toast.error("Vui lòng chọn ít nhất một sản phẩm áp dụng");
+    if (form.useTargeting && !form.eligibleCustomerSegments.length)
+      return toast.error("Vui lòng chọn ít nhất một nhóm khách hàng");
+    if (form.useWinBack && Number(form.inactiveMonths) <= 0)
+      return toast.error("Số tháng khách chưa mua hàng phải lớn hơn 0");
+    if (form.useValidity && form.useDynamicExpiry && Number(form.dynamicExpiryDays) <= 0)
+      return toast.error("Hạn sử dụng kể từ ngày cấp phải lớn hơn 0");
+    if (
+      form.useValidity &&
+      form.useWeeklySchedule &&
+      Boolean(form.dailyStartTime) !== Boolean(form.dailyEndTime)
+    )
+      return toast.error("Vui lòng nhập đủ giờ bắt đầu và giờ kết thúc");
+    if (
+      form.useValidity &&
+      form.useWeeklySchedule &&
+      form.dailyStartTime &&
+      form.dailyEndTime &&
+      form.dailyEndTime <= form.dailyStartTime
+    )
+      return toast.error("Giờ kết thúc phải sau giờ bắt đầu");
+    if (form.useValidity && new Date(form.endAt) <= new Date(form.startAt))
+      return toast.error("Thời gian kết thúc phải sau thời gian bắt đầu");
+    try {
+      setSaving(true);
+      const unlimitedStart = "2000-01-01T00:00:00.000Z";
+      const unlimitedEnd = "2099-12-31T23:59:59.999Z";
+      const effectiveStart = form.useValidity
+        ? new Date(form.startAt).toISOString()
+        : unlimitedStart;
+      const effectiveEnd = form.useValidity ? new Date(form.endAt).toISOString() : unlimitedEnd;
+      const startsLater = new Date(effectiveStart).getTime() > Date.now();
+      const payload = {
+        code,
+        name: form.name.trim(),
+        type: "VOUCHER",
+        advancedVoucher: true,
+        voucherAudience: form.voucherAudience,
+        initialCustomerId: form.voucherAudience === "CUSTOMER" ? idOf(form.customer) : undefined,
+        sharedCode: form.voucherAudience === "SHARED" ? code : undefined,
+        voucherPrefix: `${code.replace(/[^A-Z0-9]/g, "").slice(0, 7)}-`,
+        quantity: form.voucherAudience === "SHARED" ? 1 : Math.max(1, Number(form.totalUsageLimit)),
+        discountType: form.discountType,
+        discountValue: Number(form.discountValue),
+        maxDiscount:
+          form.discountType === "PERCENT"
+            ? Number(form.maxDiscount)
+            : Number(form.maxDiscount || 0),
+        minOrderValue: Number(form.minOrderValue),
+        budgetLimit: form.customizeBudget ? Number(form.budgetLimit || 0) : 0,
+        totalUsageLimit: form.customizeUsage ? Number(form.totalUsageLimit || 0) : 0,
+        maxUsesPerVoucher: form.customizeUsage ? Number(form.maxUsesPerVoucher || 0) : 0,
+        usageLimitPerCustomer: form.customizeUsage ? Number(form.usageLimitPerCustomer || 1) : 1,
+        allowStacking: Boolean(form.allowStacking),
+        scope: form.customizeScope ? form.scope : "ALL",
+        categoryIds:
+          form.customizeScope && form.scope === "CATEGORY" ? form.categoryIds.map(idOf) : [],
+        productIds:
+          form.customizeScope && form.scope === "PRODUCTS" ? form.productIds.map(idOf) : [],
+        excludedCategoryIds: form.useExclusions ? form.excludedCategoryIds.map(idOf) : [],
+        excludedProductIds: form.useExclusions ? form.excludedProductIds.map(idOf) : [],
+        eligibleCustomerSegments: form.useTargeting ? form.eligibleCustomerSegments : [],
+        inactiveMonths: form.useWinBack ? Number(form.inactiveMonths || 0) : 0,
+        conversionType: form.useConversion ? form.conversionType : "NONE",
+        conversionCost:
+          form.useConversion && form.conversionType !== "NONE"
+            ? Number(form.conversionCost || 0)
+            : 0,
+        dynamicExpiryDays:
+          form.useValidity && form.useDynamicExpiry ? Number(form.dynamicExpiryDays || 0) : 0,
+        allowedWeekdays:
+          form.useValidity && form.useWeeklySchedule ? form.allowedWeekdays.map(Number) : [],
+        dailyStartTime:
+          form.useValidity && form.useWeeklySchedule ? form.dailyStartTime || undefined : undefined,
+        dailyEndTime:
+          form.useValidity && form.useWeeklySchedule ? form.dailyEndTime || undefined : undefined,
+        startAt: effectiveStart,
+        endAt: effectiveEnd,
+        status: startsLater ? "SCHEDULED" : "ACTIVE",
+      };
+      const response = await PromotionService.create(payload);
+      const promotion = response.data?.data;
+      const issuedCode =
+        form.voucherAudience === "SHARED" ? code : promotion?.initialVoucherCode || code;
+      setCreatedVoucher({
+        code: issuedCode,
+        name: form.name.trim(),
+        customerName: form.voucherAudience === "CUSTOMER" ? form.customer?.name : "Mã dùng chung",
+      });
+      toast.success(
+        form.voucherAudience === "SHARED"
+          ? `Đã tạo voucher dùng chung ${code}`
+          : `Đã tạo voucher ${promotion?.initialVoucherCode || ""} cho ${form.customer.name}`
+      );
+      setForm(advancedVoucherDefaults());
+      setStep(1);
+      onCreated?.();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể tạo voucher giảm giá");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const segmentOptions = [
+    ["NEW_CUSTOMER", "Khách hàng mới"],
+    ["ACTIVE", "Khách đang hoạt động"],
+    ["HIGHLY_ACTIVE", "Khách VIP / hoạt động cao"],
+    ["TEMPORARILY_INACTIVE", "Tạm ngưng mua"],
+    ["STOPPED_BUYING", "Đã ngừng mua"],
+    ["CHURNED", "Khách ngủ đông"],
+  ];
+  const weekdayOptions = [
+    [1, "T2"],
+    [2, "T3"],
+    [3, "T4"],
+    [4, "T5"],
+    [5, "T6"],
+    [6, "T7"],
+    [0, "CN"],
+  ];
+
+  return (
+    <SoftBox mt={2}>
+      {createdVoucher && (
+        <SoftBox
+          p={{ xs: 1.5, md: 2 }}
+          mb={2}
+          borderRadius={2.5}
+          bgcolor="#e8f5e9"
+          sx={{ border: "2px solid #43a047" }}
+        >
+          <SoftTypography variant="button" fontWeight="bold" color="success">
+            VOUCHER ĐÃ CẤP THÀNH CÔNG
+          </SoftTypography>
+          <SoftBox
+            display="flex"
+            alignItems="center"
+            justifyContent="space-between"
+            gap={1}
+            flexWrap="wrap"
+            mt={0.75}
+          >
+            <SoftBox>
+              <SoftTypography
+                variant="h4"
+                fontWeight="bold"
+                color="dark"
+                sx={{ letterSpacing: 1.2, wordBreak: "break-all" }}
+              >
+                {createdVoucher.code}
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text">
+                {createdVoucher.name} · {createdVoucher.customerName}
+              </SoftTypography>
+            </SoftBox>
+            <SoftButton
+              color="success"
+              variant="gradient"
+              onClick={async () => {
+                await copyText(createdVoucher.code);
+                toast.success("Đã sao chép mã voucher");
+              }}
+            >
+              <Icon>content_copy</Icon>&nbsp;Sao chép mã
+            </SoftButton>
+          </SoftBox>
+        </SoftBox>
+      )}
+      <SoftBox p={1.5} mb={2} borderRadius={2} bgcolor="#eef6ff">
+        <SoftTypography variant="button" fontWeight="bold" color="info">
+          Voucher giảm giá nâng cao
+        </SoftTypography>
+        <SoftTypography variant="caption" color="text" display="block">
+          Kiểm soát đơn tối thiểu, ngân sách, lượt dùng, đối tượng và phạm vi sản phẩm trước khi
+          phát hành.
+        </SoftTypography>
+        <SoftBox display="flex" gap={0.75} mt={1.25} flexWrap="wrap">
+          {["Thông tin", "Mức giảm", "Giới hạn", "Đối tượng", "Thời gian"].map((label, index) => (
+            <SoftBox
+              key={label}
+              px={1.1}
+              py={0.45}
+              borderRadius={5}
+              bgcolor={step === index + 1 ? "#1677ff" : step > index + 1 ? "#d9f7e8" : "#fff"}
+              color={step === index + 1 ? "#fff" : step > index + 1 ? "#157347" : "#667085"}
+              sx={{ fontSize: 12, fontWeight: 700 }}
+            >
+              {step > index + 1 ? "✓ " : `${index + 1}. `}
+              {label}
+            </SoftBox>
+          ))}
+        </SoftBox>
+      </SoftBox>
+
+      {step >= 1 && (
+        <>
+          <SoftTypography variant="button" fontWeight="bold">
+            1. Mã và đối tượng sử dụng
+          </SoftTypography>
+          <SoftTypography variant="caption" color="text" display="block" mt={0.25}>
+            Điền lần lượt các thông tin bắt buộc. Trường tiếp theo sẽ tự hiện khi dữ liệu trước đó
+            hợp lệ.
+          </SoftTypography>
+          <Grid container spacing={1.25} mt={0.25}>
+            <Grid item xs={12} md={3}>
+              <VoucherFieldTitle
+                required
+                help="Mã khách hoặc nhân viên nhập khi áp dụng voucher. Tối thiểu 3 ký tự, không dấu và không có khoảng trắng."
+              >
+                Mã voucher
+              </VoucherFieldTitle>
+              <SoftInput
+                value={form.code}
+                onChange={(e) => set("code", e.target.value.toUpperCase())}
+                placeholder="MOTUL50"
+              />
+            </Grid>
+            {normalizeCode(form.code).length >= 3 && (
+              <Grid item xs={12} md={5}>
+                <VoucherFieldTitle
+                  required
+                  help="Tên nội bộ giúp nhân viên nhận biết mục đích của chương trình."
+                >
+                  Tên chiến dịch
+                </VoucherFieldTitle>
+                <SoftInput
+                  value={form.name}
+                  onChange={(e) => set("name", e.target.value)}
+                  placeholder="Giảm giá khách hàng thân thiết"
+                />
+              </Grid>
+            )}
+            {form.name.trim().length >= 3 && (
+              <Grid item xs={12} md={4}>
+                <VoucherFieldTitle
+                  required
+                  help="Mã dùng chung có thể áp dụng cho nhiều khách. Mã riêng chỉ cấp cho khách hàng được chọn."
+                >
+                  Cách phát hành
+                </VoucherFieldTitle>
+                <Select
+                  fullWidth
+                  size="small"
+                  value={form.voucherAudience}
+                  onChange={(e) => set("voucherAudience", e.target.value)}
+                >
+                  <MenuItem value="SHARED">Một mã dùng chung</MenuItem>
+                  <MenuItem value="CUSTOMER">Mã riêng cho khách hàng</MenuItem>
+                </Select>
+              </Grid>
+            )}
+            {form.name.trim().length >= 3 && form.voucherAudience === "CUSTOMER" && (
+              <Grid item xs={12}>
+                <VoucherFieldTitle
+                  required
+                  help="Tìm bằng mã, tên hoặc số điện thoại để tránh cấp nhầm voucher."
+                >
+                  Khách hàng nhận voucher
+                </VoucherFieldTitle>
+                <Autocomplete
+                  options={customers}
+                  value={form.customer}
+                  onChange={(_, value) => set("customer", value)}
+                  getOptionLabel={(item) =>
+                    [item.code, item.name, item.phone].filter(Boolean).join(" · ")
+                  }
+                  isOptionEqualToValue={(option, value) => idOf(option) === idOf(value)}
+                  renderInput={(params) => (
+                    <TextField {...params} placeholder="Tìm mã, tên hoặc số điện thoại" />
+                  )}
+                />
+                {form.customer && (
+                  <SoftTypography variant="caption" color="text">
+                    Điểm HĐ: {Number(form.customer.invoiceCoinBalance || 0).toLocaleString("vi-VN")}{" "}
+                    · Coin PlusEx:{" "}
+                    {Number(form.customer.plusExCoinBalance || 0).toLocaleString("vi-VN")}
+                  </SoftTypography>
+                )}
+              </Grid>
+            )}
+          </Grid>
+
+          {step === 1 && (
+            <SoftBox mt={2} display="flex" justifyContent="flex-end">
+              <SoftButton color="info" disabled={!stepOneComplete} onClick={() => goToStep(2)}>
+                Tiếp tục: Mức giảm&nbsp;<Icon>arrow_forward</Icon>
+              </SoftButton>
+            </SoftBox>
+          )}
+        </>
+      )}
+
+      {step >= 2 && (
+        <>
+          <SoftBox mt={2}>
+            <SoftTypography variant="button" fontWeight="bold">
+              2. Mức giảm và bảo vệ lợi nhuận
+            </SoftTypography>
+          </SoftBox>
+          <Grid container spacing={1.25} mt={0.25}>
+            <Grid item xs={12} sm={6} md={3}>
+              <VoucherFieldTitle
+                required
+                help="Chọn giảm một số tiền cố định hoặc giảm theo phần trăm giá trị hàng đủ điều kiện."
+              >
+                Loại giảm
+              </VoucherFieldTitle>
+              <Select
+                fullWidth
+                size="small"
+                value={form.discountType}
+                onChange={(e) => set("discountType", e.target.value)}
+              >
+                <MenuItem value="FIXED">Số tiền cụ thể</MenuItem>
+                <MenuItem value="PERCENT">Phần trăm hóa đơn</MenuItem>
+              </Select>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <VoucherFieldTitle
+                required
+                help="Mức tiền hoặc tỷ lệ phần trăm được trừ khỏi hóa đơn."
+              >
+                {form.discountType === "PERCENT" ? "% giảm" : "Số tiền giảm"}
+              </VoucherFieldTitle>
+              <SoftInput
+                type="number"
+                value={form.discountValue}
+                onChange={(e) => set("discountValue", e.target.value)}
+              />
+            </Grid>
+            {Number(form.discountValue) > 0 && (
+              <Grid item xs={12} sm={6} md={3}>
+                <VoucherFieldTitle
+                  required
+                  help="Hóa đơn phải đạt giá trị này mới được dùng voucher, giúp bảo vệ biên lợi nhuận."
+                >
+                  Đơn hàng tối thiểu
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="number"
+                  value={form.minOrderValue}
+                  onChange={(e) => set("minOrderValue", e.target.value)}
+                />
+              </Grid>
+            )}
+            {form.discountType === "PERCENT" && Number(form.minOrderValue) > 0 && (
+              <Grid item xs={12} sm={6} md={3}>
+                <VoucherFieldTitle
+                  required
+                  help="Số tiền giảm cao nhất trên một hóa đơn, kể cả khi tỷ lệ phần trăm tính ra cao hơn."
+                >
+                  Giảm tối đa
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="number"
+                  value={form.maxDiscount}
+                  onChange={(e) => set("maxDiscount", e.target.value)}
+                />
+              </Grid>
+            )}
+            {stepTwoComplete && (
+              <Grid item xs={12} md={6}>
+                <VoucherOption
+                  checked={form.customizeBudget}
+                  onChange={(value) => set("customizeBudget", value)}
+                  label="Cần giới hạn ngân sách chiến dịch"
+                  help="Tự ngừng voucher khi lần giảm tiếp theo làm vượt tổng ngân sách đã đặt."
+                />
+              </Grid>
+            )}
+            {stepTwoComplete && (
+              <Grid item xs={12} md={6}>
+                <VoucherOption
+                  checked={form.allowStacking}
+                  onChange={(value) => set("allowStacking", value)}
+                  label="Cho phép cộng dồn với ưu đãi khác"
+                  help="Bật nếu voucher có thể dùng chung với chương trình hoặc quà tặng khác trên cùng hóa đơn."
+                />
+              </Grid>
+            )}
+            {stepTwoComplete && form.customizeBudget && (
+              <Grid item xs={12} md={6}>
+                <VoucherFieldTitle
+                  required
+                  help="Tổng số tiền tối đa doanh nghiệp chấp nhận giảm cho toàn chiến dịch."
+                >
+                  Ngân sách chiến dịch
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="number"
+                  value={form.budgetLimit}
+                  onChange={(e) => set("budgetLimit", e.target.value)}
+                />
+              </Grid>
+            )}
+          </Grid>
+
+          {step === 2 && (
+            <SoftBox mt={2} display="flex" justifyContent="space-between">
+              <SoftButton variant="outlined" color="secondary" onClick={() => setStep(1)}>
+                Quay lại
+              </SoftButton>
+              <SoftButton color="info" disabled={!stepTwoComplete} onClick={() => goToStep(3)}>
+                Tiếp tục: Giới hạn&nbsp;<Icon>arrow_forward</Icon>
+              </SoftButton>
+            </SoftBox>
+          )}
+        </>
+      )}
+
+      {step >= 3 && (
+        <>
+          <SoftBox mt={2}>
+            <SoftTypography variant="button" fontWeight="bold">
+              3. Lượt dùng và quy đổi điểm
+            </SoftTypography>
+          </SoftBox>
+          <Grid container spacing={1.25} mt={0.25}>
+            <Grid item xs={12} md={6}>
+              <VoucherOption
+                checked={form.customizeUsage}
+                onChange={(value) => set("customizeUsage", value)}
+                label="Cần tùy chỉnh giới hạn lượt dùng"
+                help="Nếu không bật, voucher mặc định dùng một lần cho mỗi khách; tổng chiến dịch và mỗi mã không giới hạn."
+              />
+            </Grid>
+            {form.voucherAudience === "CUSTOMER" && (
+              <Grid item xs={12} md={6}>
+                <VoucherOption
+                  checked={form.useConversion}
+                  onChange={(value) => {
+                    set("useConversion", value);
+                    if (!value) set("conversionType", "NONE");
+                  }}
+                  label="Cần quy đổi điểm hoặc coin"
+                  help="Điểm/coin bị trừ ngay khi phát hành voucher riêng cho khách, không phải khi dùng hóa đơn."
+                />
+              </Grid>
+            )}
+            {form.customizeUsage && (
+              <Grid item xs={12} sm={6} md={4}>
+                <VoucherFieldTitle help="Tổng lượt sử dụng của toàn chiến dịch; nhập 0 nếu không giới hạn.">
+                  Tổng lượt dùng
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="number"
+                  value={form.totalUsageLimit}
+                  onChange={(e) => set("totalUsageLimit", e.target.value)}
+                />
+              </Grid>
+            )}
+            {form.customizeUsage && (
+              <Grid item xs={12} sm={6} md={4}>
+                <VoucherFieldTitle help="Số lần tối đa một khách hàng được dùng voucher này.">
+                  Lượt dùng mỗi khách
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="number"
+                  value={form.usageLimitPerCustomer}
+                  onChange={(e) => set("usageLimitPerCustomer", e.target.value)}
+                />
+              </Grid>
+            )}
+            {form.customizeUsage && (
+              <Grid item xs={12} sm={6} md={4}>
+                <VoucherFieldTitle help="Giới hạn riêng trên từng mã; nhập 0 để một mã có thể dùng nhiều lần.">
+                  Lượt dùng mỗi mã
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="number"
+                  value={form.maxUsesPerVoucher}
+                  onChange={(e) => set("maxUsesPerVoucher", e.target.value)}
+                />
+              </Grid>
+            )}
+            {form.voucherAudience === "CUSTOMER" && form.useConversion && (
+              <Grid item xs={12} sm={6} md={4}>
+                <VoucherFieldTitle
+                  required
+                  help="Chọn loại số dư của khách sẽ bị trừ khi phát hành voucher."
+                >
+                  Nguồn quy đổi
+                </VoucherFieldTitle>
+                <Select
+                  fullWidth
+                  size="small"
+                  value={form.conversionType}
+                  onChange={(e) => set("conversionType", e.target.value)}
+                  disabled={form.voucherAudience === "SHARED"}
+                >
+                  <MenuItem value="NONE">Không quy đổi</MenuItem>
+                  <MenuItem value="INVOICE_COIN">Điểm hóa đơn</MenuItem>
+                  <MenuItem value="PLUSEX">Coin PlusEx</MenuItem>
+                </Select>
+              </Grid>
+            )}
+            {form.voucherAudience === "CUSTOMER" &&
+              form.useConversion &&
+              form.conversionType !== "NONE" && (
+                <Grid item xs={12} md={4}>
+                  <VoucherFieldTitle
+                    required
+                    help="Số điểm hoặc coin sẽ trừ khỏi số dư của khách ngay khi tạo voucher."
+                  >
+                    Số điểm/coin cần đổi
+                  </VoucherFieldTitle>
+                  <SoftInput
+                    type="number"
+                    value={form.conversionCost}
+                    onChange={(e) => set("conversionCost", e.target.value)}
+                  />
+                </Grid>
+              )}
+          </Grid>
+
+          {step === 3 && (
+            <SoftBox mt={2} display="flex" justifyContent="space-between">
+              <SoftButton variant="outlined" color="secondary" onClick={() => setStep(2)}>
+                Quay lại
+              </SoftButton>
+              <SoftButton color="info" onClick={() => setStep(4)}>
+                Tiếp tục: Đối tượng&nbsp;<Icon>arrow_forward</Icon>
+              </SoftButton>
+            </SoftBox>
+          )}
+        </>
+      )}
+
+      {step >= 4 && (
+        <>
+          <SoftBox mt={2}>
+            <SoftTypography variant="button" fontWeight="bold">
+              4. Phạm vi và khách mục tiêu
+            </SoftTypography>
+          </SoftBox>
+          <Grid container spacing={1.25} mt={0.25}>
+            <Grid item xs={12} sm={6} md={3}>
+              <VoucherOption
+                checked={form.customizeScope}
+                onChange={(value) => set("customizeScope", value)}
+                label="Chỉ áp dụng một số hàng"
+                help="Bật để giới hạn voucher theo danh mục hoặc sản phẩm. Không bật nghĩa là áp dụng toàn bộ hàng hóa."
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <VoucherOption
+                checked={form.useExclusions}
+                onChange={(value) => set("useExclusions", value)}
+                label="Cần loại trừ hàng hóa"
+                help="Loại bỏ các danh mục hoặc sản phẩm không được tính giảm giá."
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <VoucherOption
+                checked={form.useTargeting}
+                onChange={(value) => set("useTargeting", value)}
+                label="Chỉ áp dụng nhóm khách"
+                help="Bật để giới hạn voucher theo trạng thái hoặc hạng hoạt động của khách hàng."
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <VoucherOption
+                checked={form.useWinBack}
+                onChange={(value) => set("useWinBack", value)}
+                label="Dùng để gọi khách cũ"
+                help="Chỉ cho khách đã không phát sinh hóa đơn trong số tháng được chọn."
+              />
+            </Grid>
+            {form.customizeScope && (
+              <Grid item xs={12} md={3}>
+                <VoucherFieldTitle
+                  required
+                  help="Chọn danh mục hoặc từng sản phẩm được tính vào giá trị giảm."
+                >
+                  Phạm vi áp dụng
+                </VoucherFieldTitle>
+                <Select
+                  fullWidth
+                  size="small"
+                  value={form.scope}
+                  onChange={(e) => set("scope", e.target.value)}
+                >
+                  <MenuItem value="ALL">Tất cả sản phẩm</MenuItem>
+                  <MenuItem value="CATEGORY">Theo danh mục</MenuItem>
+                  <MenuItem value="PRODUCTS">Theo sản phẩm</MenuItem>
+                </Select>
+              </Grid>
+            )}
+            {form.customizeScope && form.scope === "CATEGORY" && (
+              <Grid item xs={12} md={9}>
+                <VoucherFieldTitle
+                  required
+                  help="Chỉ sản phẩm thuộc các danh mục này được tính giảm giá."
+                >
+                  Danh mục áp dụng
+                </VoucherFieldTitle>
+                <Autocomplete
+                  multiple
+                  options={categories}
+                  value={form.categoryIds}
+                  onChange={(_, value) => set("categoryIds", value)}
+                  getOptionLabel={(item) => item.name || ""}
+                  isOptionEqualToValue={(a, b) => idOf(a) === idOf(b)}
+                  renderInput={(params) => <TextField {...params} placeholder="Chọn danh mục" />}
+                />
+              </Grid>
+            )}
+            {form.customizeScope && form.scope === "PRODUCTS" && (
+              <Grid item xs={12} md={9}>
+                <VoucherFieldTitle
+                  required
+                  help="Chỉ các sản phẩm được chọn mới được tính giảm giá."
+                >
+                  Sản phẩm áp dụng
+                </VoucherFieldTitle>
+                <Autocomplete
+                  multiple
+                  options={products}
+                  value={form.productIds}
+                  onChange={(_, value) => set("productIds", value)}
+                  getOptionLabel={(item) => [item.code, item.name].filter(Boolean).join(" · ")}
+                  isOptionEqualToValue={(a, b) => idOf(a) === idOf(b)}
+                  renderInput={(params) => <TextField {...params} placeholder="Chọn sản phẩm" />}
+                />
+              </Grid>
+            )}
+            {form.useExclusions && (
+              <Grid item xs={12} md={6}>
+                <VoucherFieldTitle help="Sản phẩm thuộc các danh mục này luôn bị loại trừ, kể cả khi nằm trong phạm vi áp dụng.">
+                  Loại trừ danh mục
+                </VoucherFieldTitle>
+                <Autocomplete
+                  multiple
+                  options={categories}
+                  value={form.excludedCategoryIds}
+                  onChange={(_, value) => set("excludedCategoryIds", value)}
+                  getOptionLabel={(item) => item.name || ""}
+                  isOptionEqualToValue={(a, b) => idOf(a) === idOf(b)}
+                  renderInput={(params) => <TextField {...params} placeholder="Không bắt buộc" />}
+                />
+              </Grid>
+            )}
+            {form.useExclusions && (
+              <Grid item xs={12} md={6}>
+                <VoucherFieldTitle help="Các sản phẩm này luôn không được tính giảm giá.">
+                  Loại trừ sản phẩm
+                </VoucherFieldTitle>
+                <Autocomplete
+                  multiple
+                  options={products}
+                  value={form.excludedProductIds}
+                  onChange={(_, value) => set("excludedProductIds", value)}
+                  getOptionLabel={(item) => [item.code, item.name].filter(Boolean).join(" · ")}
+                  isOptionEqualToValue={(a, b) => idOf(a) === idOf(b)}
+                  renderInput={(params) => <TextField {...params} placeholder="Không bắt buộc" />}
+                />
+              </Grid>
+            )}
+            {form.useTargeting && (
+              <Grid item xs={12} md={8}>
+                <VoucherFieldTitle
+                  required
+                  help="Chỉ khách có trạng thái thuộc danh sách được chọn mới dùng được voucher."
+                >
+                  Phân hạng khách được dùng
+                </VoucherFieldTitle>
+                <Select
+                  multiple
+                  fullWidth
+                  size="small"
+                  value={form.eligibleCustomerSegments}
+                  onChange={(e) => set("eligibleCustomerSegments", e.target.value)}
+                  renderValue={(values) =>
+                    values
+                      .map((value) => segmentOptions.find(([key]) => key === value)?.[1])
+                      .join(", ")
+                  }
+                >
+                  {segmentOptions.map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Grid>
+            )}
+            {form.useWinBack && (
+              <Grid item xs={12} md={4}>
+                <VoucherFieldTitle
+                  required
+                  help="Ví dụ nhập 5: khách phải không phát sinh đơn hàng trong ít nhất 5 tháng."
+                >
+                  Chưa mua hàng trong số tháng
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="number"
+                  value={form.inactiveMonths}
+                  onChange={(e) => set("inactiveMonths", e.target.value)}
+                />
+              </Grid>
+            )}
+          </Grid>
+
+          {step === 4 && (
+            <SoftBox mt={2} display="flex" justifyContent="space-between">
+              <SoftButton variant="outlined" color="secondary" onClick={() => setStep(3)}>
+                Quay lại
+              </SoftButton>
+              <SoftButton color="info" onClick={() => setStep(5)}>
+                Tiếp tục: Thời gian&nbsp;<Icon>arrow_forward</Icon>
+              </SoftButton>
+            </SoftBox>
+          )}
+        </>
+      )}
+
+      {step === 5 && (
+        <>
+          <SoftBox mt={2}>
+            <SoftTypography variant="button" fontWeight="bold">
+              5. Thời gian hiệu lực
+            </SoftTypography>
+          </SoftBox>
+          <Grid container spacing={1.25} mt={0.25}>
+            <Grid item xs={12}>
+              <VoucherOption
+                checked={form.useValidity}
+                onChange={(value) => set("useValidity", value)}
+                label="Cần giới hạn thời gian hiệu lực"
+                help="Không bật: voucher không giới hạn thời gian. Bật: chọn ngày bắt đầu, kết thúc và có thể giới hạn thêm theo ngày hoặc giờ."
+              />
+            </Grid>
+            {form.useValidity && (
+              <Grid item xs={12} md={6}>
+                <VoucherFieldTitle
+                  required
+                  help="Thời điểm sớm nhất voucher bắt đầu được chấp nhận."
+                >
+                  Bắt đầu
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="datetime-local"
+                  value={form.startAt}
+                  onChange={(e) => set("startAt", e.target.value)}
+                />
+              </Grid>
+            )}
+            {form.useValidity && (
+              <Grid item xs={12} md={6}>
+                <VoucherFieldTitle
+                  required
+                  help="Sau thời điểm này, toàn bộ voucher của chiến dịch không còn sử dụng được."
+                >
+                  Kết thúc
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="datetime-local"
+                  value={form.endAt}
+                  onChange={(e) => set("endAt", e.target.value)}
+                />
+              </Grid>
+            )}
+            {form.useValidity && (
+              <Grid item xs={12} md={6}>
+                <VoucherOption
+                  checked={form.useDynamicExpiry}
+                  onChange={(value) => set("useDynamicExpiry", value)}
+                  label="Cần hạn dùng tính từ ngày cấp"
+                  help="Ví dụ 7 ngày: mỗi voucher hết hạn sau 7 ngày kể từ lúc phát hành, nhưng không vượt ngày kết thúc chiến dịch."
+                />
+              </Grid>
+            )}
+            {form.useValidity && (
+              <Grid item xs={12} md={6}>
+                <VoucherOption
+                  checked={form.useWeeklySchedule}
+                  onChange={(value) => set("useWeeklySchedule", value)}
+                  label="Cần giới hạn theo thứ hoặc giờ"
+                  help="Dùng cho mã khung giờ vàng, ví dụ chỉ từ 12:00 đến 14:00 vào thứ Sáu."
+                />
+              </Grid>
+            )}
+            {form.useValidity && form.useDynamicExpiry && (
+              <Grid item xs={12} md={4}>
+                <VoucherFieldTitle
+                  required
+                  help="Số ngày voucher còn hiệu lực tính từ lúc được cấp."
+                >
+                  Hạn sau khi cấp (ngày)
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="number"
+                  value={form.dynamicExpiryDays}
+                  onChange={(e) => set("dynamicExpiryDays", e.target.value)}
+                />
+              </Grid>
+            )}
+            {form.useValidity && form.useWeeklySchedule && (
+              <Grid item xs={12} md={4}>
+                <VoucherFieldTitle help="Để trống nếu không cần giới hạn giờ bắt đầu trong ngày.">
+                  Từ giờ
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="time"
+                  value={form.dailyStartTime}
+                  onChange={(e) => set("dailyStartTime", e.target.value)}
+                />
+              </Grid>
+            )}
+            {form.useValidity && form.useWeeklySchedule && (
+              <Grid item xs={12} md={4}>
+                <VoucherFieldTitle help="Để trống nếu không cần giới hạn giờ kết thúc trong ngày.">
+                  Đến giờ
+                </VoucherFieldTitle>
+                <SoftInput
+                  type="time"
+                  value={form.dailyEndTime}
+                  onChange={(e) => set("dailyEndTime", e.target.value)}
+                />
+              </Grid>
+            )}
+            {form.useValidity && form.useWeeklySchedule && (
+              <Grid item xs={12}>
+                <VoucherFieldTitle help="Không chọn nghĩa là áp dụng mọi ngày trong khoảng hiệu lực.">
+                  Ngày được áp dụng
+                </VoucherFieldTitle>
+                <Select
+                  multiple
+                  fullWidth
+                  size="small"
+                  value={form.allowedWeekdays}
+                  onChange={(e) => set("allowedWeekdays", e.target.value)}
+                  renderValue={(values) =>
+                    values
+                      .map((value) => weekdayOptions.find(([key]) => key === value)?.[1])
+                      .join(", ")
+                  }
+                >
+                  {weekdayOptions.map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Grid>
+            )}
+          </Grid>
+
+          <SoftBox mt={2} display="flex" justifyContent="space-between">
+            <SoftButton variant="outlined" color="secondary" onClick={() => setStep(4)}>
+              Quay lại
+            </SoftButton>
+            <SoftButton color="success" variant="gradient" disabled={saving} onClick={save}>
+              <Icon>confirmation_number</Icon>&nbsp;
+              {saving ? "Đang tạo..." : "Tạo voucher giảm giá"}
+            </SoftButton>
+          </SoftBox>
+        </>
+      )}
+    </SoftBox>
+  );
+}
+
+function VoucherManagement({ refreshKey = 0 }) {
+  const localDate = useCallback((date) => {
+    const value = new Date(date);
+    return [
+      value.getFullYear(),
+      String(value.getMonth() + 1).padStart(2, "0"),
+      String(value.getDate()).padStart(2, "0"),
+    ].join("-");
+  }, []);
+  const monthStart = useCallback(() => {
+    const now = new Date();
+    return localDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  }, [localDate]);
+  const [period, setPeriod] = useState("MONTH");
+  const [from, setFrom] = useState(monthStart);
+  const [to, setTo] = useState(() => localDate(new Date()));
+  const [search, setSearch] = useState("");
+  const [submittedSearch, setSubmittedSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const [rows, setRows] = useState([]);
+  const [summary, setSummary] = useState({});
+  const [meta, setMeta] = useState({ totalPages: 1, total: 0 });
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const periodParams = useCallback(() => {
+    const today = localDate(new Date());
+    if (period === "ALL") return {};
+    if (period === "TODAY") return { from: today, to: today };
+    if (period === "MONTH") return { from: monthStart(), to: today };
+    return { from: from || undefined, to: to || undefined };
+  }, [period, from, to, localDate, monthStart]);
+  const params = useCallback(
+    () => ({
+      ...periodParams(),
+      search: submittedSearch || undefined,
+      status: status || undefined,
+      page,
+      limit: 20,
+    }),
+    [page, periodParams, status, submittedSearch]
+  );
+  const load = useCallback(() => {
+    setLoading(true);
+    PromotionService.getVoucherReport(params())
+      .then((response) => {
+        setRows(response.data?.data || []);
+        setSummary(response.data?.summary || {});
+        setMeta(response.data?.meta || { totalPages: 1, total: 0 });
+      })
+      .catch((error) =>
+        toast.error(error.response?.data?.message || "Không thể tải danh sách voucher")
+      )
+      .finally(() => setLoading(false));
+  }, [params]);
+  useEffect(load, [load, refreshKey]);
+  useEffect(() => setPage(1), [period, from, to, status, submittedSearch]);
+
+  const changePeriod = (value) => {
+    setPeriod(value);
+    const today = localDate(new Date());
+    if (value === "TODAY") {
+      setFrom(today);
+      setTo(today);
+    } else if (value === "MONTH") {
+      setFrom(monthStart());
+      setTo(today);
+    }
+  };
+  const exportExcel = async () => {
+    try {
+      setExporting(true);
+      const response = await PromotionService.exportVoucherReport({
+        ...periodParams(),
+        search: submittedSearch || undefined,
+        status: status || undefined,
+      });
+      downloadBlob(response.data, `voucher-${from || "tat-ca"}-${to || "tat-ca"}.xlsx`);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể xuất báo cáo voucher");
+    } finally {
+      setExporting(false);
+    }
+  };
+  const copyVoucher = async (code) => {
+    try {
+      await copyText(code);
+      toast.success(`Đã sao chép voucher ${code}`);
+    } catch {
+      toast.error("Không thể sao chép voucher");
+    }
+  };
+
+  return (
+    <Card sx={{ mt: 2 }}>
+      <SoftBox p={{ xs: 1.5, md: 3 }}>
+        <SoftBox
+          display="flex"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          gap={1}
+          flexWrap="wrap"
+        >
+          <SoftBox>
+            <SoftTypography variant="h5" fontWeight="bold">
+              Quản lý mã voucher
+            </SoftTypography>
+            <SoftTypography variant="caption" color="text">
+              Theo dõi mã đã cấp, hóa đơn sử dụng, khách hàng và tổng tiền đã giảm.
+            </SoftTypography>
+          </SoftBox>
+          <SoftButton color="success" variant="gradient" disabled={exporting} onClick={exportExcel}>
+            <Icon>download</Icon>&nbsp;{exporting ? "Đang xuất..." : "Xuất Excel"}
+          </SoftButton>
+        </SoftBox>
+
+        <Grid container spacing={1.25} mt={0.5}>
+          <Grid item xs={12} md={4}>
+            <SoftInput
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && setSubmittedSearch(search.trim())}
+              placeholder="Tìm mã voucher, chương trình, khách hàng..."
+              icon={{ component: "search", direction: "left" }}
+            />
+          </Grid>
+          <Grid item xs={6} md={2}>
+            <Select
+              fullWidth
+              size="small"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+              displayEmpty
+            >
+              <MenuItem value="">Mọi trạng thái</MenuItem>
+              <MenuItem value="ACTIVE">Còn hiệu lực</MenuItem>
+              <MenuItem value="USED">Đã sử dụng</MenuItem>
+              <MenuItem value="EXPIRED">Hết hạn</MenuItem>
+              <MenuItem value="REVOKED">Đã thu hồi</MenuItem>
+            </Select>
+          </Grid>
+          <Grid item xs={6} md={2}>
+            <Select
+              fullWidth
+              size="small"
+              value={period}
+              onChange={(event) => changePeriod(event.target.value)}
+            >
+              <MenuItem value="TODAY">Hôm nay</MenuItem>
+              <MenuItem value="MONTH">Tháng này</MenuItem>
+              <MenuItem value="CUSTOM">Khoảng thời gian</MenuItem>
+              <MenuItem value="ALL">Tất cả</MenuItem>
+            </Select>
+          </Grid>
+          {period === "CUSTOM" && (
+            <>
+              <Grid item xs={6} md={2}>
+                <SoftInput
+                  type="date"
+                  value={from}
+                  onChange={(event) => setFrom(event.target.value)}
+                />
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <SoftInput type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+              </Grid>
+            </>
+          )}
+          <Grid item xs={12} md={period === "CUSTOM" ? 12 : 4}>
+            <SoftButton
+              fullWidth
+              color="info"
+              variant="outlined"
+              onClick={() => {
+                setPage(1);
+                setSubmittedSearch(search.trim());
+              }}
+            >
+              <Icon>search</Icon>&nbsp;Lọc dữ liệu
+            </SoftButton>
+          </Grid>
+        </Grid>
+
+        <Grid container spacing={1.25} mt={1}>
+          {[
+            ["Mã trong kỳ", summary.issuedCount || 0, "confirmation_number", "#1565c0"],
+            ["Mã đã dùng", summary.usedCodeCount || 0, "task_alt", "#2e7d32"],
+            ["Lượt sử dụng", summary.usageCount || 0, "receipt_long", "#7b1fa2"],
+            ["Khách sử dụng", summary.uniqueCustomers || 0, "groups", "#ef6c00"],
+            ["Tổng tiền giảm", money(summary.discountAmount), "savings", "#c62828"],
+          ].map(([label, value, icon, color]) => (
+            <Grid item xs={6} md key={label}>
+              <SoftBox p={1.25} bgcolor="#f8fafc" borderRadius={2} height="100%">
+                <Icon sx={{ color, fontSize: "20px !important" }}>{icon}</Icon>
+                <SoftTypography variant="caption" color="text" display="block">
+                  {label}
+                </SoftTypography>
+                <SoftTypography variant="h6" fontWeight="bold" sx={{ color }}>
+                  {value}
+                </SoftTypography>
+              </SoftBox>
+            </Grid>
+          ))}
+        </Grid>
+
+        <SoftBox mt={2} sx={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", minWidth: 980, borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#f1f5f9" }}>
+                {[
+                  "Mã voucher",
+                  "Chương trình",
+                  "Khách được cấp",
+                  "Trạng thái",
+                  "Ngày cấp / Hạn dùng",
+                  "Hóa đơn đã sử dụng",
+                  "Tổng giảm",
+                ].map((heading) => (
+                  <th
+                    key={heading}
+                    style={{ padding: 10, textAlign: "left", fontSize: 12, color: "#475467" }}
+                  >
+                    {heading}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((voucher) => (
+                <tr
+                  key={voucher.id || voucher._id}
+                  style={{ borderBottom: "1px solid #e5e7eb", verticalAlign: "top" }}
+                >
+                  <td style={{ padding: 10 }}>
+                    <SoftBox display="flex" alignItems="flex-start" gap={0.75} flexWrap="wrap">
+                      <SoftTypography
+                        variant="button"
+                        fontWeight="bold"
+                        color="info"
+                        sx={{ wordBreak: "break-all" }}
+                      >
+                        {voucher.code}
+                      </SoftTypography>
+                      <SoftButton
+                        size="small"
+                        color="info"
+                        variant="outlined"
+                        onClick={() => copyVoucher(voucher.code)}
+                        sx={{ minWidth: 78, px: 1 }}
+                      >
+                        <Icon>content_copy</Icon>&nbsp;Copy
+                      </SoftButton>
+                    </SoftBox>
+                  </td>
+                  <td style={{ padding: 10, fontSize: 13 }}>
+                    {[voucher.promotionId?.code, voucher.promotionId?.name]
+                      .filter(Boolean)
+                      .join(" · ") || "—"}
+                  </td>
+                  <td style={{ padding: 10, fontSize: 13 }}>
+                    {[voucher.customerId?.code, voucher.customerId?.name, voucher.customerId?.phone]
+                      .filter(Boolean)
+                      .join(" · ") || "Mã dùng chung"}
+                  </td>
+                  <td style={{ padding: 10 }}>
+                    <SoftTypography
+                      variant="caption"
+                      fontWeight="bold"
+                      color={
+                        voucher.invoiceCount
+                          ? "success"
+                          : voucher.status === "ACTIVE"
+                          ? "info"
+                          : "text"
+                      }
+                    >
+                      {voucher.invoiceCount
+                        ? `Đã dùng ${voucher.invoiceCount} lần`
+                        : voucher.status === "ACTIVE"
+                        ? "Chưa sử dụng"
+                        : voucher.status}
+                    </SoftTypography>
+                  </td>
+                  <td style={{ padding: 10, fontSize: 12 }}>
+                    {voucher.activatedAt
+                      ? new Date(voucher.activatedAt).toLocaleString("vi-VN")
+                      : "—"}
+                    <br />
+                    Hạn:{" "}
+                    {voucher.expiresAt ? new Date(voucher.expiresAt).toLocaleString("vi-VN") : "—"}
+                  </td>
+                  <td style={{ padding: 10, minWidth: 250 }}>
+                    {!voucher.usages?.length ? (
+                      <SoftTypography variant="caption" color="text">
+                        Chưa có hóa đơn
+                      </SoftTypography>
+                    ) : (
+                      voucher.usages.map((invoice) => (
+                        <SoftBox
+                          key={invoice._id || invoice.id}
+                          mb={0.5}
+                          p={0.75}
+                          borderRadius={1.5}
+                          bgcolor="#f8fafc"
+                        >
+                          <SoftTypography variant="caption" fontWeight="bold">
+                            {invoice.code} · {new Date(invoice.date).toLocaleDateString("vi-VN")}
+                          </SoftTypography>
+                          <SoftTypography variant="caption" color="text" display="block">
+                            {[invoice.customerCode, invoice.customerName, invoice.customerPhone]
+                              .filter(Boolean)
+                              .join(" · ") || "Khách lẻ"}{" "}
+                            · Giảm {money(invoice.discountAmount)}
+                          </SoftTypography>
+                        </SoftBox>
+                      ))
+                    )}
+                  </td>
+                  <td style={{ padding: 10, fontSize: 13, fontWeight: 700, color: "#c62828" }}>
+                    {money(voucher.totalDiscount)}
+                  </td>
+                </tr>
+              ))}
+              {!loading && !rows.length && (
+                <tr>
+                  <td colSpan={7} style={{ padding: 35, textAlign: "center", color: "#98a2b3" }}>
+                    Không có voucher phù hợp bộ lọc
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </SoftBox>
+        {loading && (
+          <SoftTypography variant="button" color="text" display="block" textAlign="center" py={3}>
+            Đang tải dữ liệu...
+          </SoftTypography>
+        )}
+        <SoftBox display="flex" justifyContent="space-between" alignItems="center" mt={2}>
+          <SoftTypography variant="caption" color="text">
+            {Number(meta.total || 0).toLocaleString("vi-VN")} mã voucher
+          </SoftTypography>
+          <SoftBox display="flex" gap={1} alignItems="center">
+            <SoftButton
+              size="small"
+              variant="outlined"
+              color="secondary"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((value) => value - 1)}
+            >
+              Trước
+            </SoftButton>
+            <SoftTypography variant="caption">
+              Trang {page}/{Math.max(1, Number(meta.totalPages || 1))}
+            </SoftTypography>
+            <SoftButton
+              size="small"
+              variant="outlined"
+              color="secondary"
+              disabled={page >= Number(meta.totalPages || 1) || loading}
+              onClick={() => setPage((value) => value + 1)}
+            >
+              Sau
+            </SoftButton>
+          </SoftBox>
+        </SoftBox>
+      </SoftBox>
+    </Card>
+  );
+}
+
+function QuickCustomerPromotionCodes({ onVoucherCreated }) {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [trucks, setTrucks] = useState([]);
@@ -1482,6 +2942,8 @@ function QuickCustomerPromotionCodes() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [codeEdited, setCodeEdited] = useState(false);
+  const [quickMode, setQuickMode] = useState("GIFT_CODE");
+  const [voucherManagerKey, setVoucherManagerKey] = useState(0);
   const [form, setForm] = useState({
     prefix: "KM",
     product: null,
@@ -1531,12 +2993,14 @@ function QuickCustomerPromotionCodes() {
   useEffect(() => {
     Promise.all([
       loadAllOptions((params) => ProductService.getAll(params)),
+      loadAllOptions((params) => CategoryService.getAll(params)),
       loadAllOptions((params) => CustomerService.getAll(params)),
       loadAllOptions((params) => EmployeeService.getAll(params)),
       loadAllOptions((params) => TruckService.getAll(params)),
     ])
-      .then(([productRows, customerRows, employeeRows, truckRows]) => {
+      .then(([productRows, categoryRows, customerRows, employeeRows, truckRows]) => {
         setProducts(productRows);
+        setCategories(categoryRows);
         setCustomers(customerRows);
         setEmployees(employeeRows);
         setTrucks(truckRows);
@@ -1681,7 +3145,7 @@ function QuickCustomerPromotionCodes() {
 
   const copy = async (code) => {
     try {
-      await navigator.clipboard.writeText(code);
+      await copyText(code);
       toast.success("Đã sao chép mã khuyến mãi");
     } catch {
       toast.error("Không thể sao chép tự động");
@@ -1778,7 +3242,29 @@ function QuickCustomerPromotionCodes() {
             </SoftButton>
           </SoftBox>
 
-          <Grid container spacing={1.25} mt={0.5}>
+          <SoftBox display="flex" gap={1} mt={2} mb={1.5} flexWrap="wrap">
+            <SoftButton
+              color={quickMode === "GIFT_CODE" ? "info" : "dark"}
+              variant={quickMode === "GIFT_CODE" ? "gradient" : "outlined"}
+              onClick={() => setQuickMode("GIFT_CODE")}
+            >
+              <Icon>redeem</Icon>&nbsp;Mã tặng hàng nhanh
+            </SoftButton>
+            <SoftButton
+              color={quickMode === "DISCOUNT_VOUCHER" ? "success" : "dark"}
+              variant={quickMode === "DISCOUNT_VOUCHER" ? "gradient" : "outlined"}
+              onClick={() => setQuickMode("DISCOUNT_VOUCHER")}
+            >
+              <Icon>confirmation_number</Icon>&nbsp;Voucher giảm giá
+            </SoftButton>
+          </SoftBox>
+
+          <Grid
+            container
+            spacing={1.25}
+            mt={0.5}
+            sx={{ display: quickMode === "GIFT_CODE" ? "flex" : "none" }}
+          >
             <Grid item xs={12} sm={4} md={2}>
               <SoftTypography variant="caption">Tiền tố</SoftTypography>
               <SoftInput
@@ -1985,10 +3471,23 @@ function QuickCustomerPromotionCodes() {
               </SoftTypography>
             </Grid>
           </Grid>
+          {quickMode === "DISCOUNT_VOUCHER" && (
+            <AdvancedVoucherCreator
+              products={products}
+              categories={categories}
+              customers={customers}
+              onCreated={() => {
+                setVoucherManagerKey((value) => value + 1);
+                onVoucherCreated?.();
+              }}
+            />
+          )}
         </SoftBox>
       </Card>
 
-      <Card sx={{ mt: 2 }}>
+      {quickMode === "DISCOUNT_VOUCHER" && <VoucherManagement refreshKey={voucherManagerKey} />}
+
+      <Card sx={{ mt: 2, display: quickMode === "GIFT_CODE" ? "block" : "none" }}>
         <SoftBox p={{ xs: 1.5, md: 3 }}>
           <SoftBox
             display="flex"
@@ -2211,11 +3710,19 @@ export default function KhuyenMai() {
       toast.error(error.response?.data?.message || "Không thể đổi trạng thái chương trình");
     }
   };
+  const copyProgramVoucher = async (code) => {
+    try {
+      await copyText(code);
+      toast.success(`Đã sao chép voucher ${code}`);
+    } catch {
+      toast.error("Không thể sao chép voucher");
+    }
+  };
   return (
     <DashboardLayout>
       <DashboardNavbar />
       <SoftBox py={3}>
-        <QuickCustomerPromotionCodes />
+        <QuickCustomerPromotionCodes onVoucherCreated={refresh} />
         <SoftBox className="admin-summary-grid" display="flex" gap={2} mb={3} flexWrap="wrap">
           {[
             ["Tổng chương trình", summary.totalPrograms || 0, "local_offer", "#1565C0"],
@@ -2354,6 +3861,31 @@ export default function KhuyenMai() {
                               ? "Mua X tặng Y"
                               : "Gói tặng quà"}
                           </SoftTypography>
+                          {item.type === "VOUCHER" && item.sharedCode && (
+                            <SoftBox
+                              display="flex"
+                              alignItems="center"
+                              gap={0.75}
+                              mt={0.75}
+                              p={0.6}
+                              borderRadius={1.5}
+                              bgcolor="#eef6ff"
+                              width="fit-content"
+                            >
+                              <SoftTypography variant="caption" fontWeight="bold" color="info">
+                                {item.sharedCode}
+                              </SoftTypography>
+                              <SoftButton
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                onClick={() => copyProgramVoucher(item.sharedCode)}
+                                sx={{ minWidth: 72, px: 0.8 }}
+                              >
+                                <Icon>content_copy</Icon>&nbsp;Copy
+                              </SoftButton>
+                            </SoftBox>
+                          )}
                         </td>
                         <td style={{ padding: 10, fontSize: 13, fontWeight: 600 }}>
                           {isGiftPromotion(item.type)
