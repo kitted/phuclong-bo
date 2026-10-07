@@ -7,6 +7,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
+import IconButton from "@mui/material/IconButton";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import Table from "@mui/material/Table";
@@ -16,6 +17,7 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
 import { toast } from "react-toastify";
 import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
@@ -38,6 +40,25 @@ const listOf = (response) => {
   return Array.isArray(value) ? value : value?.items || value?.docs || [];
 };
 const rowKey = (row) => row?.draftId || row?.invoiceId || row?.id || "";
+const documentKey = (row) => {
+  const id = row?.documentId || row?.invoiceId;
+  const type = row?.documentType || (row?.invoiceId ? "INVOICE" : "");
+  return id ? `${type || "DOCUMENT"}:${String(id)}` : "";
+};
+const documentCodeKey = (row) => {
+  const code = String(row?.documentCode || row?.invoiceCode || "")
+    .trim()
+    .toUpperCase();
+  return code ? `CODE:${code}` : "";
+};
+const customerKey = (row) => {
+  if (row?.customerId) return `ID:${String(row.customerId)}`;
+  if (row?.customerCode) return `CODE:${String(row.customerCode).trim().toUpperCase()}`;
+  const phone = String(row?.phone || "").replace(/\D/g, "");
+  if (phone) return `PHONE:${phone}`;
+  const name = normalizeSearch(row?.customerName);
+  return name ? `NAME:${name}` : "";
+};
 const normalizePhone = (value) => String(value || "").replace(/\D/g, "");
 const normalizeSearch = (value) =>
   String(value || "")
@@ -66,46 +87,77 @@ const selectSx = {
   bgcolor: "#fff",
   "& .MuiSelect-select": { py: 0.75, px: 1 },
 };
-const interactionSelectSx = {
+const selectTones = {
+  CONNECTED: { color: "#1b5e20", background: "#e8f5e9", border: "#81c784" },
+  NOT_CONNECTED: { color: "#b45309", background: "#fff8e1", border: "#f6c453" },
+  SENT: { color: "#1b5e20", background: "#e8f5e9", border: "#81c784" },
+  NOT_SENT: { color: "#b45309", background: "#fff8e1", border: "#f6c453" },
+  DO_NOT_SEND: { color: "#475569", background: "#f1f5f9", border: "#94a3b8" },
+  ZALO: { color: "#1565c0", background: "#e3f2fd", border: "#64b5f6" },
+  PHONE: { color: "#6a1b9a", background: "#f3e5f5", border: "#ba68c8" },
+  SMS: { color: "#00695c", background: "#e0f2f1", border: "#4db6ac" },
+  NONE: { color: "#64748b", background: "#f8fafc", border: "#cbd5e1" },
+  INTERACTED: { color: "#1b5e20", background: "#e8f5e9", border: "#81c784" },
+  CANCELLED: { color: "#b91c1c", background: "#ffebee", border: "#ef9a9a" },
+  WAITING: { color: "#b45309", background: "#fff8e1", border: "#f6c453" },
+  CONTACT_AGAIN: { color: "#6a1b9a", background: "#f3e5f5", border: "#ba68c8" },
+};
+const interactionTone = (value) =>
+  ({
+    "Có tương tác": selectTones.INTERACTED,
+    "Khách hủy kết bạn": selectTones.CANCELLED,
+    "Đã xem, chưa phản hồi": selectTones.WAITING,
+    "Cần liên hệ lại": selectTones.CONTACT_AGAIN,
+  }[value] || selectTones.NONE);
+const statusSelectSx = (tone = selectTones.NONE) => ({
+  ...selectSx,
   width: "100%",
   minWidth: 0,
-  height: "46px !important",
-  minHeight: "46px !important",
-  padding: "0 !important",
-  bgcolor: "#f8fbff",
-  cursor: "pointer",
-  border: "1px solid #9fb9d4",
-  borderRadius: "10px !important",
-  transition: "border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease",
-  "&:hover": {
-    bgcolor: "#eef6ff",
-    borderColor: "#1976d2",
+  height: 32,
+  color: `${tone.color} !important`,
+  backgroundColor: `${tone.background} !important`,
+  fontWeight: 700,
+  transition: "background-color 150ms ease, border-color 150ms ease",
+  "& .MuiOutlinedInput-notchedOutline": { borderColor: tone.border },
+  "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: tone.color },
+  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+    borderColor: tone.color,
+    borderWidth: 2,
   },
-  "&.Mui-focused": {
-    bgcolor: "#fff",
-    borderColor: "#1976d2",
-    boxShadow: "0 0 0 3px rgba(25,118,210,.16)",
-  },
+  "& .MuiSelect-icon": { color: tone.color },
   "& .MuiSelect-select": {
-    display: "flex !important",
-    alignItems: "center !important",
-    width: "100% !important",
-    height: "46px !important",
-    minHeight: "46px !important",
-    padding: "0 38px 0 12px !important",
-    fontSize: "13px !important",
-    fontWeight: "600 !important",
-    lineHeight: "20px !important",
-    cursor: "pointer !important",
+    py: "4px !important",
+    px: "7px !important",
+    color: `${tone.color} !important`,
+    backgroundColor: `${tone.background} !important`,
   },
-  "& .MuiSelect-icon": {
-    display: "block !important",
-    right: 10,
-    color: "#1976d2",
-    pointerEvents: "none",
-  },
-  "&.Mui-disabled": { cursor: "not-allowed", bgcolor: "#f1f5f9" },
-};
+});
+const statusValue = (label, tone = selectTones.NONE) => (
+  <SoftBox
+    component="span"
+    display="flex"
+    alignItems="center"
+    gap={0.65}
+    minWidth={0}
+    sx={{ color: `${tone.color} !important`, fontWeight: "700 !important" }}
+  >
+    <SoftBox
+      component="span"
+      width={8}
+      height={8}
+      borderRadius="50%"
+      sx={{ bgcolor: tone.color, flexShrink: 0 }}
+    />
+    <SoftBox component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+      {label}
+    </SoftBox>
+  </SoftBox>
+);
+const statusMenuSx = (tone = selectTones.NONE) => ({
+  color: tone.color,
+  "&.Mui-selected": { bgcolor: `${tone.background} !important` },
+  "&.Mui-selected:hover": { bgcolor: `${tone.background} !important` },
+});
 const draftFieldSx = {
   "& .MuiInputBase-root": {
     display: "flex !important",
@@ -182,6 +234,11 @@ const interactionChannelLabels = {
   PHONE: "Gọi điện",
   SMS: "SMS",
 };
+const invoiceStatusLabels = {
+  SENT: "Đã gửi",
+  NOT_SENT: "Chưa gửi",
+  DO_NOT_SEND: "Không gửi",
+};
 const emptyDraftForm = {
   customerMode: "EXISTING",
   customerId: "",
@@ -211,6 +268,8 @@ export default function InvoiceFollowUpTab() {
   const [draftDialog, setDraftDialog] = useState(null);
   const [draftForm, setDraftForm] = useState(emptyDraftForm);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconciliation, setReconciliation] = useState(null);
   const customerLookupTimer = useRef(null);
 
   const load = useCallback(async () => {
@@ -249,10 +308,77 @@ export default function InvoiceFollowUpTab() {
     }, 250);
   };
 
+  const reconcileInvoices = async () => {
+    try {
+      setReconciling(true);
+      const response = await CustomerService.getInvoiceFollowUps({ date });
+      const payload = response?.data || {};
+      const freshRows = Array.isArray(payload.data) ? payload.data : [];
+      const sourceRows = freshRows.filter((row) => documentKey(row));
+      const currentDocumentKeys = new Set(data.map(documentKey).filter(Boolean));
+      const currentDocumentCodeKeys = new Set(data.map(documentCodeKey).filter(Boolean));
+      const freshDocumentKeys = new Set(sourceRows.map(documentKey).filter(Boolean));
+      const freshDocumentCodeKeys = new Set(sourceRows.map(documentCodeKey).filter(Boolean));
+      const freshCustomerKeys = new Set(sourceRows.map(customerKey).filter(Boolean));
+      const missingRows = sourceRows.filter((row) => {
+        const key = documentKey(row);
+        const codeKey = documentCodeKey(row);
+        return !currentDocumentKeys.has(key) && (!codeKey || !currentDocumentCodeKeys.has(codeKey));
+      });
+      const withoutInvoiceMap = new Map();
+      data.forEach((row) => {
+        const key = documentKey(row);
+        const codeKey = documentCodeKey(row);
+        const ownerKey = customerKey(row);
+        const hasDocument =
+          (key && freshDocumentKeys.has(key)) ||
+          (codeKey && freshDocumentCodeKeys.has(codeKey)) ||
+          (ownerKey && freshCustomerKeys.has(ownerKey));
+        if (!hasDocument && ownerKey && !withoutInvoiceMap.has(ownerKey))
+          withoutInvoiceMap.set(ownerKey, row);
+      });
+      setReconciliation({
+        currentCount: data.length,
+        missingRows,
+        withoutInvoiceRows: [...withoutInvoiceMap.values()],
+        summary: payload.summary || {},
+        book: payload.book || book,
+      });
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể đối chiếu hóa đơn trong ngày");
+    } finally {
+      setReconciling(false);
+    }
+  };
+
+  const applyReconciliation = () => {
+    if (!reconciliation) return;
+    setData((current) => {
+      const documentKeys = new Set(current.map(documentKey).filter(Boolean));
+      const codeKeys = new Set(current.map(documentCodeKey).filter(Boolean));
+      const additions = reconciliation.missingRows.filter((row) => {
+        const key = documentKey(row);
+        const codeKey = documentCodeKey(row);
+        return !documentKeys.has(key) && (!codeKey || !codeKeys.has(codeKey));
+      });
+      return [...current, ...additions];
+    });
+    setSummary(reconciliation.summary);
+    setBook(reconciliation.book);
+    const added = reconciliation.missingRows.length;
+    toast.success(
+      added
+        ? `Đã bổ sung ${added} chứng từ còn thiếu, các dòng hiện có được giữ nguyên`
+        : "Đã đối chiếu, không phát hiện chứng từ bị thiếu"
+    );
+    setReconciliation(null);
+  };
+
   const visibleRows = useMemo(() => {
     const keywords = normalizeSearch(search).split(" ").filter(Boolean);
     return data.filter((row) => {
-      if (filter === "NOT_SENT" && row.invoiceStatus === "SENT") return false;
+      if (filter === "NOT_SENT" && row.invoiceStatus !== "NOT_SENT") return false;
+      if (filter === "DO_NOT_SEND" && row.invoiceStatus !== "DO_NOT_SEND") return false;
       if (filter === "FOLLOW_UP" && !row.needsFollowUp) return false;
       if (filter === "INTERACTED" && !row.interaction) return false;
       if (!keywords.length) return true;
@@ -278,7 +404,8 @@ export default function InvoiceFollowUpTab() {
       trackedInvoiceCount: summary.trackedInvoiceCount || 0,
       manualCount: summary.manualCount || 0,
       sent: data.filter((row) => row.invoiceStatus === "SENT").length,
-      notSent: data.filter((row) => row.invoiceStatus !== "SENT").length,
+      notSent: data.filter((row) => row.invoiceStatus === "NOT_SENT").length,
+      doNotSend: data.filter((row) => row.invoiceStatus === "DO_NOT_SEND").length,
       needsFollowUp: data.filter((row) => row.needsFollowUp).length,
     }),
     [
@@ -564,6 +691,14 @@ export default function InvoiceFollowUpTab() {
           <SoftButton color="info" variant="outlined" onClick={load} disabled={loading}>
             <Icon>refresh</Icon>&nbsp;Làm mới
           </SoftButton>
+          <SoftButton
+            color="warning"
+            variant="gradient"
+            onClick={reconcileInvoices}
+            disabled={loading || reconciling || book.isFinalized}
+          >
+            <Icon>sync</Icon>&nbsp;{reconciling ? "Đang kiểm tra..." : "Cập nhật / Đối chiếu"}
+          </SoftButton>
           <SoftButton color="success" variant="outlined" onClick={exportExcel}>
             <Icon>table_view</Icon>&nbsp;Xuất Excel
           </SoftButton>
@@ -579,15 +714,7 @@ export default function InvoiceFollowUpTab() {
               })
             }
           >
-            <Icon>image</Icon>&nbsp;Xuất ảnh A4
-          </SoftButton>
-          <SoftButton
-            color="warning"
-            variant="outlined"
-            onClick={addTemporaryRow}
-            disabled={book.isFinalized}
-          >
-            <Icon>add</Icon>&nbsp;Thêm dòng tạm
+            <Icon>image</Icon>&nbsp;Xuất ảnh A4 ngang
           </SoftButton>
           {dirtyIds.length > 0 && (
             <SoftButton color="success" variant="gradient" onClick={saveAll}>
@@ -632,12 +759,13 @@ export default function InvoiceFollowUpTab() {
         display="grid"
         gap={1}
         mb={2}
-        sx={{ gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4,1fr)" } }}
+        sx={{ gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(5,1fr)" } }}
       >
         {[
           ["Tổng hóa đơn", currentSummary.total, "#eef6ff", "#1565c0"],
           ["Đã gửi", currentSummary.sent, "#e8f5e9", "#2e7d32"],
           ["Chưa gửi", currentSummary.notSent, "#fff8e1", "#ed6c02"],
+          ["Không gửi", currentSummary.doNotSend, "#f1f5f9", "#475569"],
           ["Quá 24 giờ", currentSummary.needsFollowUp, "#ffebee", "#c62828"],
         ].map(([label, value, background, color]) => (
           <SoftBox key={label} p={1.5} borderRadius={2} sx={{ bgcolor: background }}>
@@ -667,6 +795,7 @@ export default function InvoiceFollowUpTab() {
         >
           <MenuItem value="ALL">Tất cả tình trạng</MenuItem>
           <MenuItem value="NOT_SENT">Chưa gửi hóa đơn</MenuItem>
+          <MenuItem value="DO_NOT_SEND">Không gửi hóa đơn</MenuItem>
           <MenuItem value="FOLLOW_UP">Cần cập nhật 24h</MenuItem>
           <MenuItem value="INTERACTED">Đã có tương tác</MenuItem>
         </Select>
@@ -688,14 +817,21 @@ export default function InvoiceFollowUpTab() {
         Hiển thị {visibleRows.length}/{data.length} hóa đơn
       </SoftTypography>
 
-      <TableContainer sx={{ border: "1px solid #cbd5e1", borderRadius: 2, maxHeight: "68vh" }}>
+      <TableContainer
+        sx={{ border: "1px solid #cbd5e1", borderRadius: 2, maxHeight: "68vh", width: "100%" }}
+      >
         <Table
           stickyHeader
           size="small"
-          sx={{ width: 1795, minWidth: 1795, tableLayout: "fixed", borderCollapse: "separate" }}
+          sx={{
+            width: { xs: 1180, lg: "100%" },
+            minWidth: { xs: 1180, lg: "100%" },
+            tableLayout: "fixed",
+            borderCollapse: "separate",
+          }}
         >
           <colgroup>
-            {[110, 230, 140, 140, 150, 210, 145, 230, 160, 280].map((width, index) => (
+            {["10%", "17%", "14%", "17%", "10%", "15%", "8%", "9%"].map((width, index) => (
               <col key={`${width}-${index}`} style={{ width }} />
             ))}
           </colgroup>
@@ -710,9 +846,7 @@ export default function InvoiceFollowUpTab() {
               {[
                 "MÃ KH",
                 "TÊN KHÁCH HÀNG",
-                "KB ZALO",
-                "HÓA ĐƠN",
-                "LOẠI TT",
+                "GỬI ZALO / HĐ",
                 "TƯƠNG TÁC",
                 "SỐ ĐIỆN THOẠI",
                 "NOTE",
@@ -726,8 +860,9 @@ export default function InvoiceFollowUpTab() {
                     color: "#fff !important",
                     fontWeight: 800,
                     whiteSpace: "nowrap",
-                    py: 1,
-                    px: 1,
+                    fontSize: 12,
+                    py: 0.85,
+                    px: 0.75,
                     boxSizing: "border-box",
                   }}
                 >
@@ -758,7 +893,9 @@ export default function InvoiceFollowUpTab() {
                       borderColor: "#cbd5e1",
                       verticalAlign: "middle",
                       boxSizing: "border-box",
-                      px: 1,
+                      px: 0.75,
+                      py: 0.75,
+                      fontSize: 12,
                     },
                   }}
                 >
@@ -830,13 +967,6 @@ export default function InvoiceFollowUpTab() {
                             />
                           )}
                         />
-                        <TextField
-                          size="small"
-                          value={row.customerName || ""}
-                          placeholder="Tên tự điền khi chọn khách"
-                          InputProps={{ readOnly: true }}
-                          sx={{ width: "100%" }}
-                        />
                         <Chip
                           size="small"
                           color="warning"
@@ -858,80 +988,127 @@ export default function InvoiceFollowUpTab() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Select
-                      value={row.zaloStatus}
-                      onChange={(event) => edit(key, "zaloStatus", event.target.value, true)}
-                      disabled={book.isFinalized}
-                      sx={{ ...selectSx, width: "100%", minWidth: 0 }}
-                    >
-                      <MenuItem value="NOT_CONNECTED">Chưa kết bạn</MenuItem>
-                      <MenuItem value="CONNECTED">Đã kết bạn</MenuItem>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={row.invoiceStatus}
-                      onChange={(event) => edit(key, "invoiceStatus", event.target.value, true)}
-                      disabled={book.isFinalized}
-                      sx={{ ...selectSx, width: "100%", minWidth: 0 }}
-                    >
-                      <MenuItem value="NOT_SENT">Chưa gửi</MenuItem>
-                      <MenuItem value="SENT">Đã gửi</MenuItem>
-                    </Select>
+                    <SoftBox display="grid" gap={0.5}>
+                      <Select
+                        value={row.zaloStatus}
+                        onChange={(event) => edit(key, "zaloStatus", event.target.value, true)}
+                        disabled={book.isFinalized}
+                        inputProps={{ "aria-label": "Trạng thái kết bạn Zalo" }}
+                        sx={statusSelectSx(selectTones[row.zaloStatus])}
+                        renderValue={(value) =>
+                          statusValue(
+                            value === "CONNECTED" ? "Zalo: Đã KB" : "Zalo: Chưa KB",
+                            selectTones[value]
+                          )
+                        }
+                      >
+                        <MenuItem
+                          value="NOT_CONNECTED"
+                          sx={statusMenuSx(selectTones.NOT_CONNECTED)}
+                        >
+                          {statusValue("Zalo: Chưa KB", selectTones.NOT_CONNECTED)}
+                        </MenuItem>
+                        <MenuItem value="CONNECTED" sx={statusMenuSx(selectTones.CONNECTED)}>
+                          {statusValue("Zalo: Đã KB", selectTones.CONNECTED)}
+                        </MenuItem>
+                      </Select>
+                      <Select
+                        value={row.invoiceStatus}
+                        onChange={(event) => edit(key, "invoiceStatus", event.target.value, true)}
+                        disabled={book.isFinalized}
+                        inputProps={{ "aria-label": "Trạng thái gửi hóa đơn" }}
+                        sx={statusSelectSx(selectTones[row.invoiceStatus])}
+                        renderValue={(value) =>
+                          statusValue(
+                            `HĐ: ${invoiceStatusLabels[value] || "Chưa gửi"}`,
+                            selectTones[value]
+                          )
+                        }
+                      >
+                        {[
+                          ["NOT_SENT", "HĐ: Chưa gửi"],
+                          ["SENT", "HĐ: Đã gửi"],
+                          ["DO_NOT_SEND", "HĐ: Không gửi"],
+                        ].map(([value, label]) => (
+                          <MenuItem key={value} value={value} sx={statusMenuSx(selectTones[value])}>
+                            {statusValue(label, selectTones[value])}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </SoftBox>
                   </TableCell>
                   <TableCell sx={{ p: "6px !important", cursor: "pointer" }}>
-                    <Select
-                      value={row.interactionChannel || "ZALO"}
-                      onChange={(event) =>
-                        edit(key, "interactionChannel", event.target.value, true)
-                      }
-                      disabled={book.isFinalized}
-                      inputProps={{
-                        "aria-label": `Loại tương tác của ${row.customerName || "khách hàng"}`,
-                      }}
-                      MenuProps={{
-                        PaperProps: {
-                          sx: {
-                            mt: 0.5,
-                            "& .MuiMenuItem-root": { minHeight: 46, fontSize: 14 },
-                          },
-                        },
-                      }}
-                      sx={interactionSelectSx}
-                    >
-                      <MenuItem value="ZALO">Zalo</MenuItem>
-                      <MenuItem value="PHONE">Gọi điện</MenuItem>
-                      <MenuItem value="SMS">SMS</MenuItem>
-                    </Select>
-                  </TableCell>
-                  <TableCell sx={{ p: "6px !important", cursor: "pointer" }}>
-                    <Select
-                      value={row.interaction || ""}
-                      onChange={(event) => edit(key, "interaction", event.target.value, true)}
-                      disabled={book.isFinalized}
-                      displayEmpty
-                      inputProps={{ "aria-label": `Tương tác của ${row.customerName || "khách hàng"}` }}
-                      MenuProps={{
-                        PaperProps: {
-                          sx: {
-                            mt: 0.5,
-                            "& .MuiMenuItem-root": {
-                              minHeight: 46,
-                              fontSize: 14,
-                              lineHeight: 1.35,
-                              whiteSpace: "normal",
+                    <SoftBox display="grid" gap={0.5}>
+                      <Select
+                        value={row.interactionChannel || "ZALO"}
+                        onChange={(event) =>
+                          edit(key, "interactionChannel", event.target.value, true)
+                        }
+                        disabled={book.isFinalized}
+                        inputProps={{
+                          "aria-label": `Loại tương tác của ${row.customerName || "khách hàng"}`,
+                        }}
+                        sx={statusSelectSx(selectTones[row.interactionChannel || "ZALO"])}
+                        renderValue={(value) =>
+                          statusValue(
+                            `Kênh: ${interactionChannelLabels[value] || "Zalo"}`,
+                            selectTones[value]
+                          )
+                        }
+                      >
+                        {[
+                          ["ZALO", "Kênh: Zalo"],
+                          ["PHONE", "Kênh: Gọi điện"],
+                          ["SMS", "Kênh: SMS"],
+                        ].map(([value, label]) => (
+                          <MenuItem key={value} value={value} sx={statusMenuSx(selectTones[value])}>
+                            {statusValue(label, selectTones[value])}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      <Select
+                        value={row.interaction || ""}
+                        onChange={(event) => edit(key, "interaction", event.target.value, true)}
+                        disabled={book.isFinalized}
+                        displayEmpty
+                        inputProps={{
+                          "aria-label": `Tương tác của ${row.customerName || "khách hàng"}`,
+                        }}
+                        MenuProps={{
+                          PaperProps: {
+                            sx: {
+                              mt: 0.5,
+                              "& .MuiMenuItem-root": {
+                                minHeight: 40,
+                                fontSize: 13,
+                                lineHeight: 1.3,
+                                whiteSpace: "normal",
+                              },
                             },
                           },
-                        },
-                      }}
-                      sx={interactionSelectSx}
-                    >
-                      <MenuItem value="">Chưa cập nhật</MenuItem>
-                      <MenuItem value="Có tương tác">Có tương tác</MenuItem>
-                      <MenuItem value="Khách hủy kết bạn">Khách hủy kết bạn</MenuItem>
-                      <MenuItem value="Đã xem, chưa phản hồi">Đã xem, chưa phản hồi</MenuItem>
-                      <MenuItem value="Cần liên hệ lại">Cần liên hệ lại</MenuItem>
-                    </Select>
+                        }}
+                        sx={statusSelectSx(interactionTone(row.interaction))}
+                        renderValue={(value) =>
+                          statusValue(value || "Chưa cập nhật", interactionTone(value))
+                        }
+                      >
+                        {[
+                          "",
+                          "Có tương tác",
+                          "Khách hủy kết bạn",
+                          "Đã xem, chưa phản hồi",
+                          "Cần liên hệ lại",
+                        ].map((value) => (
+                          <MenuItem
+                            key={value || "NONE"}
+                            value={value}
+                            sx={statusMenuSx(interactionTone(value))}
+                          >
+                            {statusValue(value || "Chưa cập nhật", interactionTone(value))}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </SoftBox>
                   </TableCell>
                   <TableCell>
                     <TextField
@@ -946,7 +1123,7 @@ export default function InvoiceFollowUpTab() {
                     <TextField
                       size="small"
                       multiline
-                      maxRows={3}
+                      maxRows={2}
                       value={row.note || ""}
                       onChange={(event) => edit(key, "note", event.target.value)}
                       disabled={book.isFinalized}
@@ -956,76 +1133,85 @@ export default function InvoiceFollowUpTab() {
                   </TableCell>
                   <TableCell>
                     {row.needsFollowUp ? (
-                      <Chip size="small" color="error" label="Quá 24 giờ" />
+                      <SoftTypography variant="caption" fontWeight="bold" color="error">
+                        Quá 24 giờ
+                      </SoftTypography>
                     ) : (
-                      <Chip
-                        size="small"
-                        color={row.invoiceStatus === "SENT" ? "success" : "default"}
-                        label={timeText(row.lastUpdatedAt)}
-                      />
+                      <SoftTypography
+                        variant="caption"
+                        fontWeight="bold"
+                        sx={{ color: row.invoiceStatus === "SENT" ? "#2e7d32" : "#64748b" }}
+                      >
+                        {timeText(row.lastUpdatedAt)}
+                      </SoftTypography>
                     )}
                     <SoftTypography variant="caption" display="block" color="text" mt={0.5}>
                       {row.historyCount || 0} lần lưu
                     </SoftTypography>
                   </TableCell>
                   <TableCell>
-                    <SoftBox display="flex" gap={0.5} flexWrap="wrap">
-                      <SoftButton
-                        size="small"
-                        color="success"
-                        variant="outlined"
-                        onClick={() => openZalo(row)}
-                      >
-                        <Icon>chat</Icon>&nbsp;Zalo
-                      </SoftButton>
+                    <SoftBox display="flex" gap={0.25} flexWrap="wrap" justifyContent="center">
+                      <Tooltip title="Mở Zalo">
+                        <IconButton size="small" color="success" onClick={() => openZalo(row)}>
+                          <Icon>chat</Icon>
+                        </IconButton>
+                      </Tooltip>
                       {!row.isTemporary && (
-                        <SoftButton
-                          size="small"
-                          color="info"
-                          variant="outlined"
-                          onClick={() => downloadInvoice(row)}
-                        >
-                          <Icon>download</Icon>&nbsp;Tải HĐ
-                        </SoftButton>
+                        <Tooltip title="Tải hóa đơn">
+                          <IconButton
+                            size="small"
+                            color="info"
+                            onClick={() => downloadInvoice(row)}
+                          >
+                            <Icon>download</Icon>
+                          </IconButton>
+                        </Tooltip>
                       )}
-                      <SoftButton
-                        size="small"
-                        color={dirty ? "warning" : "dark"}
-                        onClick={() => save(row)}
-                        disabled={saving || book.isFinalized}
-                      >
-                        {saving ? "Đang lưu" : "Lưu"}
-                      </SoftButton>
+                      <Tooltip title={saving ? "Đang lưu" : "Lưu dòng"}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color={dirty ? "warning" : "default"}
+                            onClick={() => save(row)}
+                            disabled={saving || book.isFinalized}
+                          >
+                            <Icon>{saving ? "hourglass_top" : "save"}</Icon>
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                       {row.isTemporary ? (
                         <>
-                          <SoftButton
-                            size="small"
-                            color="warning"
-                            variant="outlined"
-                            onClick={() => editTemporaryRow(row)}
-                            disabled={book.isFinalized}
-                          >
-                            <Icon>edit</Icon>&nbsp;Sửa
-                          </SoftButton>
-                          <SoftButton
-                            size="small"
-                            color="error"
-                            variant="text"
-                            onClick={() => removeTemporaryRow(row)}
-                            disabled={book.isFinalized}
-                          >
-                            <Icon>delete</Icon>&nbsp;Xóa
-                          </SoftButton>
+                          <Tooltip title="Sửa dòng tạm">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="warning"
+                                onClick={() => editTemporaryRow(row)}
+                                disabled={book.isFinalized}
+                              >
+                                <Icon>edit</Icon>
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Xóa dòng tạm">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => removeTemporaryRow(row)}
+                                disabled={book.isFinalized}
+                              >
+                                <Icon>delete</Icon>
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         </>
                       ) : (
-                        <SoftButton
-                          size="small"
-                          color="dark"
-                          variant="text"
-                          onClick={() => openHistory(row)}
-                        >
-                          <Icon>history</Icon>&nbsp;Lịch sử
-                        </SoftButton>
+                        <Tooltip title="Xem lịch sử">
+                          <IconButton size="small" onClick={() => openHistory(row)}>
+                            <Icon>history</Icon>
+                          </IconButton>
+                        </Tooltip>
                       )}
                     </SoftBox>
                   </TableCell>
@@ -1034,7 +1220,7 @@ export default function InvoiceFollowUpTab() {
             })}
             {!visibleRows.length && !loading && (
               <TableRow>
-                <TableCell colSpan={10} align="center" sx={{ py: 5, color: "#64748b" }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 5, color: "#64748b" }}>
                   Không có hóa đơn phù hợp trong ngày đã chọn.
                 </TableCell>
               </TableRow>
@@ -1042,6 +1228,164 @@ export default function InvoiceFollowUpTab() {
           </TableBody>
         </Table>
       </TableContainer>
+      <SoftBox mt={1.5} display="flex" justifyContent="flex-start">
+        <SoftButton
+          color="warning"
+          variant="outlined"
+          onClick={addTemporaryRow}
+          disabled={book.isFinalized}
+        >
+          <Icon>add</Icon>&nbsp;Thêm dòng tạm
+        </SoftButton>
+      </SoftBox>
+      <Dialog
+        open={Boolean(reconciliation)}
+        onClose={() => setReconciliation(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>
+          <SoftTypography variant="h5" fontWeight="bold">
+            Kết quả cập nhật và đối chiếu
+          </SoftTypography>
+          <SoftTypography variant="caption" color="text" display="block" mt={0.5}>
+            Kiểm tra sai sót giữa sổ đang hiển thị và chứng từ ngày {date}. Chưa có dữ liệu nào bị
+            thay đổi.
+          </SoftTypography>
+        </DialogTitle>
+        <DialogContent dividers>
+          <SoftBox
+            display="grid"
+            gap={1}
+            mb={2}
+            sx={{ gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" } }}
+          >
+            {[
+              ["Đang có trong sổ", reconciliation?.currentCount || 0, "#eef6ff", "#1565c0"],
+              [
+                "Chứng từ còn thiếu",
+                reconciliation?.missingRows?.length || 0,
+                "#fff8e1",
+                "#ed6c02",
+              ],
+              [
+                "KH chưa có chứng từ",
+                reconciliation?.withoutInvoiceRows?.length || 0,
+                "#ffebee",
+                "#c62828",
+              ],
+            ].map(([label, value, background, color]) => (
+              <SoftBox key={label} p={1.5} borderRadius={2} sx={{ bgcolor: background }}>
+                <SoftTypography variant="caption" color="text">
+                  {label}
+                </SoftTypography>
+                <SoftTypography variant="h5" fontWeight="bold" sx={{ color }}>
+                  {value}
+                </SoftTypography>
+              </SoftBox>
+            ))}
+          </SoftBox>
+
+          {reconciliation?.missingRows?.length > 0 ? (
+            <SoftBox mb={2}>
+              <SoftBox p={1.25} mb={1} borderRadius={2} bgcolor="#fff8e1">
+                <SoftTypography variant="button" fontWeight="bold" sx={{ color: "#b45309" }}>
+                  Phát hiện chứng từ chưa có trong danh sách
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text" display="block">
+                  Xác nhận bên dưới để thêm các dòng này. Mọi dòng và nội dung đang có vẫn được giữ
+                  nguyên.
+                </SoftTypography>
+              </SoftBox>
+              <SoftBox sx={{ maxHeight: 220, overflowY: "auto" }}>
+                {reconciliation.missingRows.map((row) => (
+                  <SoftBox
+                    key={documentKey(row) || documentCodeKey(row)}
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    gap={1}
+                    p={1}
+                    mb={0.75}
+                    borderRadius={1.5}
+                    sx={{ border: "1px solid #fde68a" }}
+                  >
+                    <SoftBox minWidth={0}>
+                      <SoftTypography variant="button" fontWeight="bold" display="block">
+                        {[row.customerCode, row.customerName].filter(Boolean).join(" · ") ||
+                          "Khách chưa định danh"}
+                      </SoftTypography>
+                      <SoftTypography variant="caption" color="text">
+                        {documentLabels[row.documentType] || "Chứng từ"}
+                      </SoftTypography>
+                    </SoftBox>
+                    <SoftTypography
+                      variant="button"
+                      fontWeight="bold"
+                      sx={{ whiteSpace: "nowrap" }}
+                    >
+                      {row.documentCode || row.invoiceCode || "Chưa có mã"}
+                    </SoftTypography>
+                  </SoftBox>
+                ))}
+              </SoftBox>
+            </SoftBox>
+          ) : (
+            <SoftBox p={1.25} mb={2} borderRadius={2} bgcolor="#e8f5e9">
+              <SoftTypography variant="button" fontWeight="bold" sx={{ color: "#2e7d32" }}>
+                Không phát hiện chứng từ mới bị thiếu trong danh sách.
+              </SoftTypography>
+            </SoftBox>
+          )}
+
+          {reconciliation?.withoutInvoiceRows?.length > 0 && (
+            <SoftBox>
+              <SoftBox p={1.25} mb={1} borderRadius={2} bgcolor="#ffebee">
+                <SoftTypography variant="button" fontWeight="bold" sx={{ color: "#c62828" }}>
+                  Cần xác nhận: khách hàng chưa có chứng từ tương ứng
+                </SoftTypography>
+                <SoftTypography variant="caption" color="text" display="block">
+                  Đây chỉ là cảnh báo kiểm tra. Các khách hàng này vẫn được giữ nguyên trong sổ và
+                  không tự tạo hóa đơn.
+                </SoftTypography>
+              </SoftBox>
+              <SoftBox sx={{ maxHeight: 220, overflowY: "auto" }}>
+                {reconciliation.withoutInvoiceRows.map((row) => (
+                  <SoftBox
+                    key={customerKey(row)}
+                    display="flex"
+                    justifyContent="space-between"
+                    gap={1}
+                    p={1}
+                    mb={0.75}
+                    borderRadius={1.5}
+                    sx={{ border: "1px solid #ffcdd2" }}
+                  >
+                    <SoftTypography variant="button" fontWeight="bold">
+                      {[row.customerCode, row.customerName].filter(Boolean).join(" · ") ||
+                        "Khách chưa định danh"}
+                    </SoftTypography>
+                    <SoftTypography variant="caption" color="error" sx={{ whiteSpace: "nowrap" }}>
+                      Chưa có chứng từ
+                    </SoftTypography>
+                  </SoftBox>
+                ))}
+              </SoftBox>
+            </SoftBox>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
+          <SoftButton color="dark" variant="text" onClick={() => setReconciliation(null)}>
+            Đóng, không thay đổi
+          </SoftButton>
+          <SoftButton color="success" variant="gradient" onClick={applyReconciliation}>
+            <Icon>task_alt</Icon>&nbsp;
+            {reconciliation?.missingRows?.length
+              ? `Xác nhận & thêm ${reconciliation.missingRows.length} dòng thiếu`
+              : "Xác nhận đã kiểm tra"}
+          </SoftButton>
+        </DialogActions>
+      </Dialog>
       <Dialog
         open={Boolean(draftDialog)}
         onClose={() => !savingDraft && setDraftDialog(null)}
@@ -1302,6 +1646,7 @@ export default function InvoiceFollowUpTab() {
                 >
                   <MenuItem value="NOT_SENT">Chưa gửi</MenuItem>
                   <MenuItem value="SENT">Đã gửi</MenuItem>
+                  <MenuItem value="DO_NOT_SEND">Không gửi</MenuItem>
                 </TextField>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
@@ -1421,7 +1766,7 @@ export default function InvoiceFollowUpTab() {
                 <SoftTypography variant="caption" display="block" color="text" mt={0.5}>
                   Kênh: {interactionChannelLabels[item.channel] || item.channel || "Zalo"} · Zalo:{" "}
                   {item.zaloStatus === "CONNECTED" ? "Đã kết bạn" : "Chưa kết bạn"} · Hóa đơn:{" "}
-                  {item.invoiceStatus === "SENT" ? "Đã gửi" : "Chưa gửi"}
+                  {invoiceStatusLabels[item.invoiceStatus] || "Chưa gửi"}
                 </SoftTypography>
                 {item.note && (
                   <SoftTypography variant="body2" mt={0.75}>

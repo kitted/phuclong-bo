@@ -1,4 +1,4 @@
-import { downloadDataImage, drawRoundedRect, fitCanvasToA4, fitText } from "./truckInventoryImage";
+import { downloadDataImage, drawRoundedRect, fitText } from "./truckInventoryImage";
 
 const number = (value) => Number(value || 0).toLocaleString("vi-VN");
 const dateLabel = (value) => {
@@ -7,20 +7,20 @@ const dateLabel = (value) => {
 };
 
 export const downloadInvoiceFollowUpImage = ({ rows = [], date, summary = {}, book = {} }) => {
-  const width = 1200;
-  const margin = 38;
-  const gap = 14;
-  const columns = rows.length > 42 ? 3 : 2;
+  // A4 ngang ở 150 DPI: giữ kích thước cố định để ảnh tải về luôn cùng tỷ lệ.
+  const width = 1754;
+  const height = 1240;
+  const margin = 44;
+  const gap = 16;
+  const columns = rows.length <= 24 ? 2 : rows.length <= 42 ? 3 : rows.length <= 64 ? 4 : 5;
   const panelWidth = (width - margin * 2 - gap * (columns - 1)) / columns;
-  const contentTop = 330;
-  const baseFooterTop = 1660;
+  const contentTop = 318;
+  const footerTop = 1178;
   const rowsPerColumn = Math.max(1, Math.ceil(rows.length / columns));
   const rowHeight = Math.max(
-    42,
-    Math.min(66, Math.floor((baseFooterTop - contentTop) / rowsPerColumn))
+    38,
+    Math.min(64, Math.floor((footerTop - contentTop) / rowsPerColumn))
   );
-  const height = Math.max(1714, contentTop + rowsPerColumn * rowHeight + 84);
-  const footerTop = height - 54;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -30,47 +30,48 @@ export const downloadInvoiceFollowUpImage = ({ rows = [], date, summary = {}, bo
   context.fillStyle = "#f4f7fb";
   context.fillRect(0, 0, width, height);
   context.fillStyle = "#0f4c81";
-  context.fillRect(0, 0, width, 178);
+  context.fillRect(0, 0, width, 156);
   context.fillStyle = "#ffffff";
-  context.font = "900 40px Arial, sans-serif";
-  context.fillText("PL", margin, 58);
+  context.font = "900 46px Arial, sans-serif";
+  context.fillText("PL", margin, 62);
   context.fillStyle = "#ff7043";
-  context.font = "900 23px Arial, sans-serif";
-  context.fillText("+", margin + 53, 46);
+  context.font = "900 27px Arial, sans-serif";
+  context.fillText("+", margin + 60, 48);
   context.fillStyle = "#ffffff";
-  context.font = "800 31px Arial, sans-serif";
-  context.fillText("SỔ THEO DÕI GỬI HÓA ĐƠN & TƯƠNG TÁC", 132, 58);
-  context.font = "400 17px Arial, sans-serif";
+  context.font = "800 38px Arial, sans-serif";
+  context.fillText("SỔ THEO DÕI GỬI HÓA ĐƠN & TƯƠNG TÁC", 148, 62);
+  context.font = "500 20px Arial, sans-serif";
   context.fillText(
     `Ngày ${dateLabel(date)} · ${book.isFinalized ? "ĐÃ CHỐT SỔ" : "BẢN NHÁP"}`,
-    132,
-    98
+    148,
+    102
   );
-  context.fillText("Đối chiếu hóa đơn và tình trạng tương tác khách hàng trong ngày", 132, 132);
+  context.fillText("Đối chiếu hóa đơn và tình trạng tương tác khách hàng trong ngày", 148, 136);
   context.textAlign = "right";
-  context.font = "600 15px Arial, sans-serif";
+  context.font = "600 18px Arial, sans-serif";
   context.fillText(
     new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour12: false }),
     width - margin,
-    154
+    132
   );
   context.textAlign = "left";
 
   [
-    ["CHỨNG TỪ HỆ THỐNG", summary.sourceDocumentCount, "#e3f2fd", "#1565c0"],
-    ["DÒNG THEO DÕI", rows.length, "#e8f5e9", "#2e7d32"],
-    ["ĐÃ GỬI", summary.sent, "#f3e5f5", "#7b1fa2"],
-    ["CẦN CẬP NHẬT 24H", summary.needsFollowUp, "#ffebee", "#c62828"],
+    ["TỔNG DÒNG", rows.length, "#e3f2fd", "#1565c0"],
+    ["ĐÃ GỬI", summary.sent, "#e8f5e9", "#2e7d32"],
+    ["CHƯA GỬI", summary.notSent, "#fff8e1", "#ed6c02"],
+    ["KHÔNG GỬI", summary.doNotSend, "#f1f5f9", "#475569"],
+    ["CẬP NHẬT 24H", summary.needsFollowUp, "#ffebee", "#c62828"],
   ].forEach(([label, value, background, color], index) => {
-    const cardWidth = (width - margin * 2 - gap * 3) / 4;
+    const cardWidth = (width - margin * 2 - gap * 4) / 5;
     const x = margin + index * (cardWidth + gap);
-    drawRoundedRect(context, x, 202, cardWidth, 82, 10, background);
+    drawRoundedRect(context, x, 176, cardWidth, 88, 12, background);
     context.fillStyle = "#64748b";
-    context.font = "700 12px Arial, sans-serif";
-    context.fillText(label, x + 13, 229);
+    context.font = "800 15px Arial, sans-serif";
+    context.fillText(label, x + 15, 207);
     context.fillStyle = color;
-    context.font = "900 27px Arial, sans-serif";
-    context.fillText(number(value), x + 13, 267);
+    context.font = "900 34px Arial, sans-serif";
+    context.fillText(number(value), x + 15, 250);
   });
 
   const panels = Array.from({ length: columns }, (_, index) =>
@@ -78,10 +79,14 @@ export const downloadInvoiceFollowUpImage = ({ rows = [], date, summary = {}, bo
   );
   panels.forEach((panelRows, panelIndex) => {
     const x = margin + panelIndex * (panelWidth + gap);
-    drawRoundedRect(context, x, 300, panelWidth, 30, 6, "#315f50");
+    drawRoundedRect(context, x, 280, panelWidth, 38, 7, "#315f50");
     context.fillStyle = "#ffffff";
-    context.font = "700 12px Arial, sans-serif";
-    context.fillText("KHÁCH HÀNG · KÊNH · HÓA ĐƠN · TƯƠNG TÁC", x + 10, 320);
+    context.font = "800 14px Arial, sans-serif";
+    context.fillText(
+      fitText(context, "KHÁCH HÀNG · KÊNH · HÓA ĐƠN · TƯƠNG TÁC", panelWidth - 24),
+      x + 12,
+      305
+    );
     panelRows.forEach((row, index) => {
       const y = contentTop + index * rowHeight;
       context.fillStyle = index % 2 ? "#f8fafc" : "#ffffff";
@@ -92,52 +97,55 @@ export const downloadInvoiceFollowUpImage = ({ rows = [], date, summary = {}, bo
         [row.customerCode, row.customerName].filter(Boolean).join(" · ") ||
         "Khách mới / chưa định danh";
       context.fillStyle = "#172033";
-      context.font = `700 ${rowHeight < 52 ? 12 : 14}px Arial, sans-serif`;
-      context.fillText(fitText(context, customer, panelWidth - 20), x + 10, y + 19);
+      const compact = rowHeight < 50 || columns >= 5;
+      context.font = `800 ${compact ? 14 : 17}px Arial, sans-serif`;
+      context.fillText(fitText(context, customer, panelWidth - 24), x + 12, y + 21);
       context.fillStyle = "#52667a";
-      context.font = `${rowHeight < 52 ? 11 : 12}px Arial, sans-serif`;
+      context.font = `600 ${compact ? 12 : 15}px Arial, sans-serif`;
       const interactionChannel =
         { ZALO: "Zalo", PHONE: "Gọi điện", SMS: "SMS" }[row.interactionChannel] || "Zalo";
+      const invoiceStatus =
+        { SENT: "Đã gửi HĐ", NOT_SENT: "Chưa gửi HĐ", DO_NOT_SEND: "Không gửi HĐ" }[
+          row.invoiceStatus
+        ] || "Chưa gửi HĐ";
       const statuses = `${interactionChannel} · ${
         row.zaloStatus === "CONNECTED" ? "Đã KB" : "Chưa KB"
-      } · ${
-        row.invoiceStatus === "SENT" ? "Đã gửi HĐ" : "Chưa gửi HĐ"
-      } · ${
+      } · ${invoiceStatus} · ${
         {
           INVOICE: "HĐ bán hàng",
           DEBT_PAYMENT: "Thu công nợ",
           CUSTOMER_RETURN: "Hoàn hàng",
         }[row.documentType] || "Dòng tạm"
       } · ${row.interaction || "Chưa tương tác"}`;
-      context.fillText(fitText(context, statuses, panelWidth - 20), x + 10, y + 38);
-      if (rowHeight >= 58) {
+      context.fillText(fitText(context, statuses, panelWidth - 24), x + 12, y + 43);
+      if (rowHeight >= 62) {
         context.fillStyle = row.needsFollowUp ? "#c62828" : "#64748b";
+        context.font = "500 14px Arial, sans-serif";
         context.fillText(
           fitText(
             context,
             [row.phone, row.note].filter(Boolean).join(" · ") || "—",
-            panelWidth - 20
+            panelWidth - 24
           ),
-          x + 10,
-          y + 56
+          x + 12,
+          y + 61
         );
       }
     });
   });
 
   context.fillStyle = "#64748b";
-  context.font = "400 13px Arial, sans-serif";
+  context.font = "500 15px Arial, sans-serif";
   context.fillText(
     "Ảnh báo cáo được tạo trực tiếp từ dữ liệu sổ theo dõi.",
     margin,
-    footerTop + 28
+    footerTop + 30
   );
   context.textAlign = "right";
-  context.font = "700 13px Arial, sans-serif";
-  context.fillText(`${rows.length} dòng`, width - margin, footerTop + 28);
+  context.font = "800 15px Arial, sans-serif";
+  context.fillText(`${rows.length} dòng · A4 NGANG`, width - margin, footerTop + 30);
 
-  const a4Canvas = fitCanvasToA4(canvas);
   const fileName = `${String(date || "").replaceAll("-", "")}_THEODOI_HOADON_TUONGTAC.png`;
-  downloadDataImage(a4Canvas.toDataURL("image/png"), fileName);
-  return { downloaded: true, fileName, width: a4Canvas.width, height: a4Canvas.height };
+  downloadDataImage(canvas.toDataURL("image/png"), fileName);
+  return { downloaded: true, fileName, width: canvas.width, height: canvas.height };
 };

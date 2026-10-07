@@ -40,8 +40,29 @@ const warrantyStatus = {
   RECEIVED: { label: "Chờ bắt đầu", color: "#1565c0", background: "#e3f2fd" },
   PROCESSING: { label: "Đang bảo hành", color: "#ef6c00", background: "#fff3e0" },
 };
+const dailyGroups = [
+  {
+    id: "GOODS",
+    title: "Xe & hàng hóa",
+    description: "Điều chuyển, tồn xe và cảnh báo kho",
+    icon: "local_shipping",
+  },
+  {
+    id: "SALES",
+    title: "Bán hàng & khách hàng",
+    description: "Báo cáo, khách mới và gửi chứng từ",
+    icon: "point_of_sale",
+  },
+  {
+    id: "AFTER_SALES",
+    title: "Hậu mãi",
+    description: "Tiếp nhận và xử lý bảo hành",
+    icon: "handyman",
+  },
+];
 const dailySections = [
   {
+    group: "GOODS",
     title: "Điều chuyển hàng",
     shortTitle: "Điều chuyển",
     description: "Ứng lên xe, hoàn kho hoặc chuyển giữa các xe",
@@ -50,6 +71,7 @@ const dailySections = [
     background: "#e3f2fd",
   },
   {
+    group: "SALES",
     title: "Báo cáo cuối ngày",
     shortTitle: "Báo cáo ngày",
     description: "Tổng hợp doanh thu, chi phí và hàng đã bán theo từng sale",
@@ -58,6 +80,7 @@ const dailySections = [
     background: "#f3e5f5",
   },
   {
+    group: "AFTER_SALES",
     title: "Hàng bảo hành",
     shortTitle: "Bảo hành",
     description: "Tiếp nhận và theo dõi các phiếu đang xử lý",
@@ -66,6 +89,7 @@ const dailySections = [
     background: "#fff3e0",
   },
   {
+    group: "GOODS",
     title: "Ảnh hàng trên xe",
     shortTitle: "Ảnh hàng xe",
     description: "Chụp tồn hiện tại thành một ảnh để gửi nhanh",
@@ -74,6 +98,7 @@ const dailySections = [
     background: "#e0f2f1",
   },
   {
+    group: "GOODS",
     title: "Cảnh báo tồn kho",
     shortTitle: "Cảnh báo kho",
     description: "Kiểm tra, chọn mặt hàng và xuất PDF hoặc ảnh",
@@ -82,6 +107,7 @@ const dailySections = [
     background: "#ffebee",
   },
   {
+    group: "SALES",
     title: "Khách hàng mới",
     shortTitle: "KH mới 45 ngày",
     description: "Lọc khách có 1–2 hóa đơn trong 45 ngày và xuất báo cáo",
@@ -90,6 +116,7 @@ const dailySections = [
     background: "#e8f5e9",
   },
   {
+    group: "SALES",
     title: "Gửi hóa đơn & tương tác",
     shortTitle: "Hóa đơn Zalo",
     description: "Theo dõi gửi hóa đơn qua Zalo và nhắc cập nhật phản hồi sau 24 giờ",
@@ -893,6 +920,16 @@ function TruckInventoryImageTab() {
 export default function DailyOperationsV2() {
   const [tab, setTab] = useState(0);
   const activeSection = dailySections[tab];
+  const activeGroup = dailyGroups.find((group) => group.id === activeSection.group);
+  const visibleSections = dailySections
+    .map((section, index) => ({ ...section, index }))
+    .filter((section) => section.group === activeSection.group);
+
+  const selectGroup = (groupId) => {
+    const firstSection = dailySections.findIndex((section) => section.group === groupId);
+    if (firstSection >= 0) setTab(firstSection);
+  };
+
   return (
     <DashboardLayout>
       <DashboardNavbar />
@@ -930,162 +967,222 @@ export default function DailyOperationsV2() {
           </SoftBox>
         </SoftBox>
 
-        <Grid container spacing={2} alignItems="flex-start">
-          <Grid item xs={12} lg={3}>
-            <SoftBox
-              p={{ xs: 1.25, md: 1.5 }}
-              borderRadius={3}
-              bgcolor="#fff"
-              sx={{
-                border: "1px solid #e2e8f0",
-                position: { lg: "sticky" },
-                top: { lg: 96, xl: 24 },
-                boxShadow: "0 8px 24px rgba(15, 45, 75, 0.06)",
-              }}
-            >
-              <SoftTypography variant="button" fontWeight="bold" display="block" mb={1.25}>
-                Chọn nghiệp vụ
+        <SoftBox
+          mb={2}
+          p={{ xs: 1.25, md: 1.5 }}
+          borderRadius={3}
+          bgcolor="#fff"
+          sx={{
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 8px 24px rgba(15, 45, 75, 0.06)",
+          }}
+        >
+          <SoftBox
+            display="flex"
+            alignItems={{ xs: "flex-start", md: "center" }}
+            justifyContent="space-between"
+            gap={1}
+            mb={1.25}
+          >
+            <SoftBox>
+              <SoftTypography variant="button" fontWeight="bold" display="block">
+                Chọn nhóm nghiệp vụ
               </SoftTypography>
-              <SoftBox
-                display="grid"
-                gap={1}
-                sx={{ gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", lg: "1fr" } }}
-              >
-                {dailySections.map((section, index) => {
-                  const selected = tab === index;
-                  return (
-                    <SoftBox
-                      key={section.title}
-                      component="button"
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => setTab(index)}
-                      p={{ xs: 1.25, md: 1.5 }}
-                      minHeight={{ xs: 112, lg: 96 }}
-                      borderRadius={2.5}
-                      textAlign="left"
-                      display="flex"
-                      flexDirection={{ xs: "column", lg: "row" }}
-                      alignItems={{ xs: "flex-start", lg: "center" }}
-                      gap={1.1}
-                      sx={{
-                        border: selected ? `2px solid ${section.color}` : "1px solid #dfe5ec",
-                        bgcolor: selected ? section.background : "#fff",
-                        color: section.color,
-                        position: "relative",
-                        cursor: "pointer",
-                        transition: "transform 150ms ease, box-shadow 150ms ease",
-                        boxShadow: selected ? `0 6px 18px ${section.color}22` : "none",
-                        "&:hover": { transform: "translateY(-1px)", boxShadow: 2 },
-                        "&:focus-visible": {
-                          outline: `3px solid ${section.color}44`,
-                          outlineOffset: 2,
-                        },
-                      }}
-                    >
-                      <SoftBox
-                        width={40}
-                        height={40}
-                        borderRadius={2}
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        sx={{ bgcolor: selected ? "#fff" : section.background, flexShrink: 0 }}
-                      >
-                        <Icon sx={{ color: section.color }}>{section.icon}</Icon>
-                      </SoftBox>
-                      <SoftBox minWidth={0} flex={1}>
-                        <SoftTypography
-                          variant="button"
-                          fontWeight="bold"
-                          display="block"
-                          sx={{ color: "#263238", lineHeight: 1.25 }}
-                        >
-                          <SoftBox component="span" display={{ xs: "none", sm: "inline" }}>
-                            {section.title}
-                          </SoftBox>
-                          <SoftBox component="span" display={{ xs: "inline", sm: "none" }}>
-                            {section.shortTitle}
-                          </SoftBox>
-                        </SoftTypography>
-                        <SoftTypography
-                          variant="caption"
-                          color="text"
-                          display={{ xs: "none", lg: "block" }}
-                          sx={{ lineHeight: 1.35 }}
-                        >
-                          {section.description}
-                        </SoftTypography>
-                      </SoftBox>
-                      {selected && (
-                        <Icon
-                          sx={{
-                            color: section.color,
-                            position: { xs: "absolute", lg: "static" },
-                            top: { xs: 10 },
-                            right: { xs: 10 },
-                          }}
-                        >
-                          check_circle
-                        </Icon>
-                      )}
-                    </SoftBox>
-                  );
-                })}
-              </SoftBox>
+              <SoftTypography variant="caption" color="text">
+                Chỉ hiển thị các chức năng liên quan để khu vực thao tác rộng và dễ tập trung hơn.
+              </SoftTypography>
             </SoftBox>
-          </Grid>
-
-          <Grid item xs={12} lg={9}>
-            <SoftBox
-              bgcolor="#fff"
-              borderRadius={3}
-              overflow="hidden"
-              sx={{ border: "1px solid #e2e8f0", boxShadow: "0 8px 24px rgba(15,45,75,0.06)" }}
+            <SoftTypography
+              variant="caption"
+              fontWeight="bold"
+              sx={{ color: "#0f4c81", whiteSpace: "nowrap" }}
             >
-              <SoftBox
-                px={{ xs: 1.5, md: 2.5 }}
-                py={1.5}
-                display="flex"
-                alignItems="center"
-                gap={1.25}
-                sx={{
-                  bgcolor: activeSection.background,
-                  borderBottom: `1px solid ${activeSection.color}22`,
-                }}
-              >
+              {activeGroup?.title}
+            </SoftTypography>
+          </SoftBox>
+
+          <SoftBox
+            display="grid"
+            gap={1}
+            sx={{
+              gridTemplateColumns: {
+                xs: "repeat(3, minmax(190px, 1fr))",
+                sm: "repeat(3, minmax(0, 1fr))",
+              },
+              overflowX: { xs: "auto", sm: "visible" },
+              pb: { xs: 0.5, sm: 0 },
+            }}
+          >
+            {dailyGroups.map((group) => {
+              const selected = activeSection.group === group.id;
+              return (
                 <SoftBox
-                  width={42}
-                  height={42}
+                  key={group.id}
+                  component="button"
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => selectGroup(group.id)}
+                  px={1.5}
+                  py={1.15}
                   borderRadius={2}
                   display="flex"
                   alignItems="center"
-                  justifyContent="center"
-                  sx={{ bgcolor: "#fff", color: activeSection.color, flexShrink: 0 }}
+                  gap={1}
+                  textAlign="left"
+                  sx={{
+                    cursor: "pointer",
+                    border: selected ? "2px solid #1976d2" : "1px solid #dfe5ec",
+                    bgcolor: selected ? "#eef6ff" : "#fff",
+                    color: selected ? "#1565c0" : "#607d8b",
+                    boxShadow: selected ? "0 4px 14px rgba(25,118,210,0.12)" : "none",
+                    "&:hover": { bgcolor: selected ? "#eef6ff" : "#f8fafc" },
+                    "&:focus-visible": { outline: "3px solid #90caf9", outlineOffset: 2 },
+                  }}
                 >
-                  <Icon>{activeSection.icon}</Icon>
+                  <Icon>{group.icon}</Icon>
+                  <SoftBox minWidth={0}>
+                    <SoftTypography variant="button" fontWeight="bold" display="block">
+                      {group.title}
+                    </SoftTypography>
+                    <SoftTypography
+                      variant="caption"
+                      color="text"
+                      display={{ xs: "none", md: "block" }}
+                    >
+                      {group.description}
+                    </SoftTypography>
+                  </SoftBox>
                 </SoftBox>
-                <SoftBox minWidth={0}>
-                  <SoftTypography variant="h6" fontWeight="bold">
-                    {activeSection.title}
-                  </SoftTypography>
-                  <SoftTypography variant="caption" color="text">
-                    {activeSection.description}
-                  </SoftTypography>
-                </SoftBox>
-              </SoftBox>
-              <SoftBox p={{ xs: 1.5, md: 2.5 }}>
-                {tab === 0 && <QuickTruckOperations />}
-                {tab === 1 && <DailyReportTab />}
-                {tab === 2 && <DailyWarrantyTab />}
-                {tab === 3 && <TruckInventoryImageTab />}
-                {tab === 4 && <InventoryAlertsTab />}
-                {tab === 5 && <NewCustomersTab />}
-                {tab === 6 && <InvoiceFollowUpTab />}
-              </SoftBox>
+              );
+            })}
+          </SoftBox>
+
+          <SoftBox mt={1.5} pt={1.5} sx={{ borderTop: "1px solid #edf1f5" }}>
+            <SoftTypography variant="caption" fontWeight="bold" color="text" display="block" mb={1}>
+              Chức năng trong nhóm
+            </SoftTypography>
+            <SoftBox
+              display="grid"
+              gap={1}
+              sx={{
+                gridTemplateColumns: {
+                  xs: `repeat(${visibleSections.length}, minmax(165px, 1fr))`,
+                  md: `repeat(${visibleSections.length}, minmax(0, 1fr))`,
+                },
+                overflowX: { xs: "auto", md: "visible" },
+                pb: { xs: 0.5, md: 0 },
+              }}
+            >
+              {visibleSections.map((section) => {
+                const selected = tab === section.index;
+                return (
+                  <SoftBox
+                    key={section.title}
+                    component="button"
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setTab(section.index)}
+                    px={{ xs: 1.25, md: 1.5 }}
+                    py={1.1}
+                    minHeight={64}
+                    borderRadius={2}
+                    display="flex"
+                    alignItems="center"
+                    gap={1}
+                    textAlign="left"
+                    sx={{
+                      cursor: "pointer",
+                      border: selected ? `2px solid ${section.color}` : "1px solid #dfe5ec",
+                      bgcolor: selected ? section.background : "#fff",
+                      boxShadow: selected ? `0 4px 14px ${section.color}1f` : "none",
+                      "&:hover": { bgcolor: section.background },
+                      "&:focus-visible": {
+                        outline: `3px solid ${section.color}44`,
+                        outlineOffset: 2,
+                      },
+                    }}
+                  >
+                    <SoftBox
+                      width={36}
+                      height={36}
+                      borderRadius={1.5}
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      sx={{ bgcolor: section.background, color: section.color, flexShrink: 0 }}
+                    >
+                      <Icon>{section.icon}</Icon>
+                    </SoftBox>
+                    <SoftBox minWidth={0} flex={1}>
+                      <SoftTypography
+                        variant="button"
+                        fontWeight="bold"
+                        display="block"
+                        sx={{ lineHeight: 1.25 }}
+                      >
+                        <SoftBox component="span" display={{ xs: "none", sm: "inline" }}>
+                          {section.title}
+                        </SoftBox>
+                        <SoftBox component="span" display={{ xs: "inline", sm: "none" }}>
+                          {section.shortTitle}
+                        </SoftBox>
+                      </SoftTypography>
+                    </SoftBox>
+                    {selected && <Icon sx={{ color: section.color }}>check_circle</Icon>}
+                  </SoftBox>
+                );
+              })}
             </SoftBox>
-          </Grid>
-        </Grid>
+          </SoftBox>
+        </SoftBox>
+
+        <SoftBox
+          bgcolor="#fff"
+          borderRadius={3}
+          overflow="hidden"
+          sx={{ border: "1px solid #e2e8f0", boxShadow: "0 8px 24px rgba(15,45,75,0.06)" }}
+        >
+          <SoftBox
+            px={{ xs: 1.5, md: 2.5 }}
+            py={1.5}
+            display="flex"
+            alignItems="center"
+            gap={1.25}
+            sx={{
+              bgcolor: activeSection.background,
+              borderBottom: `1px solid ${activeSection.color}22`,
+            }}
+          >
+            <SoftBox
+              width={42}
+              height={42}
+              borderRadius={2}
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              sx={{ bgcolor: "#fff", color: activeSection.color, flexShrink: 0 }}
+            >
+              <Icon>{activeSection.icon}</Icon>
+            </SoftBox>
+            <SoftBox minWidth={0}>
+              <SoftTypography variant="h6" fontWeight="bold">
+                {activeSection.title}
+              </SoftTypography>
+              <SoftTypography variant="caption" color="text">
+                {activeSection.description}
+              </SoftTypography>
+            </SoftBox>
+          </SoftBox>
+          <SoftBox p={{ xs: 1.5, md: 2.5 }}>
+            {tab === 0 && <QuickTruckOperations />}
+            {tab === 1 && <DailyReportTab />}
+            {tab === 2 && <DailyWarrantyTab />}
+            {tab === 3 && <TruckInventoryImageTab />}
+            {tab === 4 && <InventoryAlertsTab />}
+            {tab === 5 && <NewCustomersTab />}
+            {tab === 6 && <InvoiceFollowUpTab />}
+          </SoftBox>
+        </SoftBox>
       </SoftBox>
     </DashboardLayout>
   );
