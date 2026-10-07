@@ -1,6 +1,7 @@
 import AxiosInstance from "./api";
 
 export const CUSTOMER_SEGMENTS = [
+  { value: "LEGACY", label: "Khách cũ" },
   { value: "TEMPORARILY_INACTIVE", label: "Tạm ngừng hoạt động" },
   { value: "ACTIVE", label: "Đang hoạt động" },
   { value: "HIGHLY_ACTIVE", label: "Hoạt động tốt" },
@@ -24,6 +25,8 @@ export const PRODUCT_TYPES = ["Trà", "Cà phê", "Nước đóng chai", "Bánh 
 export const CustomerService = {
   getAll: (params = {}) => AxiosInstance.get("/admin/customers", { params }),
   getSummary: () => AxiosInstance.get("/admin/customers/summary"),
+  classifyLegacy: (apply = false) =>
+    AxiosInstance.post("/admin/customers/classify-legacy", { apply }),
   getById: (id) => AxiosInstance.get(`/admin/customers/${id}`),
   create: (payload) => AxiosInstance.post("/admin/customers", payload),
   update: (id, payload) => AxiosInstance.patch(`/admin/customers/${id}`, payload),

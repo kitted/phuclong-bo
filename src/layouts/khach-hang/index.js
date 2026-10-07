@@ -1961,6 +1961,7 @@ export default function KhachHang() {
   const [importing, setImporting] = useState(false);
   const [interactionImporting, setInteractionImporting] = useState(false);
   const [interactionExporting, setInteractionExporting] = useState(false);
+  const [classifyingLegacy, setClassifyingLegacy] = useState(false);
   const [dataToolsOpen, setDataToolsOpen] = useState(false);
   const [deletedCustomersOpen, setDeletedCustomersOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -2029,6 +2030,50 @@ export default function KhachHang() {
       downloadBlob(response.data, `customers-${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể xuất danh sách khách hàng");
+    }
+  };
+  const classifyLegacyCustomers = async () => {
+    try {
+      setClassifyingLegacy(true);
+      const previewResponse = await CustomerService.classifyLegacy(false);
+      const preview = previewResponse.data?.data || {};
+      if (!Number(preview.updateCount || 0)) {
+        setSource("LEGACY");
+        setSegment("LEGACY");
+        toast.info(
+          `Đã quét ${Number(preview.scanned || 0).toLocaleString(
+            "vi-VN"
+          )} khách hàng. Không có khách nào cần cập nhật.`
+        );
+        return;
+      }
+      const examples = (preview.sample || [])
+        .slice(0, 5)
+        .map((item) => `${item.code || "Chưa có mã"} · ${item.name} (${item.orderCount} đơn)`)
+        .join("\n");
+      const confirmed = window.confirm(
+        `Đã quét ${Number(preview.scanned || 0).toLocaleString("vi-VN")} khách hàng.\n` +
+          `Có ${Number(preview.updateCount || 0).toLocaleString(
+            "vi-VN"
+          )} khách sẽ được chuyển Nguồn và Phân loại sang Khách cũ.\n\n` +
+          `${examples}${Number(preview.updateCount || 0) > 5 ? "\n..." : ""}\n\nXác nhận cập nhật?`
+      );
+      if (!confirmed) return;
+      const response = await CustomerService.classifyLegacy(true);
+      const result = response.data?.data || {};
+      setSource("LEGACY");
+      setSegment("LEGACY");
+      setPage(1);
+      refresh();
+      toast.success(
+        `Đã phân loại ${Number(result.updated || 0).toLocaleString(
+          "vi-VN"
+        )} khách hàng thành Khách cũ`
+      );
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Không thể quét và phân loại khách cũ");
+    } finally {
+      setClassifyingLegacy(false);
     }
   };
   const handleImport = async (event) => {
@@ -2281,6 +2326,16 @@ export default function KhachHang() {
                     onChange={handleInteractionImport}
                     style={{ display: "none" }}
                   />
+                  <SoftButton
+                    color="warning"
+                    variant="outlined"
+                    startIcon={<Icon>manage_search</Icon>}
+                    disabled={classifyingLegacy}
+                    onClick={classifyLegacyCustomers}
+                    sx={{ minWidth: 0 }}
+                  >
+                    {classifyingLegacy ? "Đang quét..." : "Quét khách cũ (≥3 đơn)"}
+                  </SoftButton>
                   {touchViewport ? (
                     <SoftBox width="100%">
                       <SoftBox

@@ -1796,6 +1796,7 @@ function AdvancedVoucherCreator({ products, categories, customers, onCreated }) 
   };
 
   const segmentOptions = [
+    ["LEGACY", "Khách cũ"],
     ["NEW_CUSTOMER", "Khách hàng mới"],
     ["ACTIVE", "Khách đang hoạt động"],
     ["HIGHLY_ACTIVE", "Khách VIP / hoạt động cao"],
