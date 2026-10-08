@@ -11,6 +11,10 @@ export const DashboardAnalyticsService = {
   debtSummary: get("/admin/dashboard/debt-summary"),
   inventoryAlerts: get("/admin/dashboard/inventory-alerts"),
   newCustomers: get("/admin/dashboard/new-customers"),
+  exportNewCustomerCare: (payload = {}) =>
+    AxiosInstance.post("/admin/dashboard/new-customers/interactions/export", payload, {
+      responseType: "blob",
+    }),
   topProducts: get("/admin/dashboard/top-products"),
   trucks: get("/admin/dashboard/trucks"),
   customers: get("/admin/dashboard/customers"),

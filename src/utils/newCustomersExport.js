@@ -15,6 +15,12 @@ const escapeHtml = (value) =>
 const number = (value) => Number(value || 0).toLocaleString("vi-VN");
 const date = (value) =>
   value ? new Date(value).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—";
+const qualificationLabel = (reason) =>
+  ({
+    CREATED: "Mới thêm vào hệ thống",
+    CODE_ASSIGNED: "Mới được cấp mã",
+    CODE_CHANGED: "Được gán/đổi từ mã cũ",
+  }[reason] || "Khách mới");
 const fileDate = (value) =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Ho_Chi_Minh",
@@ -37,7 +43,11 @@ export const buildNewCustomersDocument = ({ rows = [], days = 45, generatedAt })
           row.customerCode || "—"
         )}</strong></td><td><strong>${escapeHtml(
           row.customerName || "Khách hàng"
-        )}</strong><br><span>${escapeHtml(row.address || "")}</span></td><td>${escapeHtml(
+        )}</strong><br><span>${escapeHtml(
+          row.address || ""
+        )}</span><br><span class="qualified">${escapeHtml(
+          qualificationLabel(row.qualificationReason)
+        )} · Từ ngày ${date(row.customerQualifiedAt)}</span></td><td>${escapeHtml(
           row.phone || "—"
         )}</td><td class="center">${number(row.invoiceCount)}</td><td class="number">${number(
           row.totalRevenue
@@ -50,8 +60,8 @@ export const buildNewCustomersDocument = ({ rows = [], days = 45, generatedAt })
     @page{size:A3 landscape;margin:12mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#eef2f7;color:#111827;font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .page{width:396mm;min-height:273mm;margin:8mm auto;padding:10mm;background:#fff;box-shadow:0 2mm 8mm #0002}.header{display:flex;justify-content:space-between;border-bottom:1.2mm solid #0f4c81;padding-bottom:5mm}.brand{font-size:15pt;font-weight:900;color:#0d47a1}.brand span{color:#f4511e}h1{font-size:23pt;margin:3mm 0 1mm}.muted{color:#64748b;font-size:9pt}.created{text-align:right;font-size:9pt;line-height:1.5}
     .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm;margin:5mm 0}.metric{padding:4mm;border:1px solid #d9e2ec;background:#f8fbff}.metric b{display:block;font-size:18pt;color:#0d47a1;margin-top:1mm}
-    table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt}th{background:#173f64;color:#fff;padding:2.7mm 1.5mm;border:1px solid #173f64}td{padding:2.5mm 1.5mm;border:1px solid #d7dee8;vertical-align:middle;overflow-wrap:anywhere}tbody tr:nth-child(even){background:#f8fafc}.center{text-align:center}.number{text-align:right;font-weight:700}td span{font-size:7.5pt;color:#64748b}.footer{display:flex;justify-content:space-between;margin-top:5mm;font-size:8pt;color:#64748b}@media print{html,body{background:#fff}.page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}}
-  </style></head><body><main class="page"><header class="header"><div><div class="brand">PL<span>+</span> PHÚC LONG</div><h1>KHÁCH HÀNG MỚI TRONG ${days} NGÀY</h1><div class="muted">Khách hàng có đúng 1 hoặc 2 hóa đơn phát sinh trong khoảng báo cáo.</div></div><div class="created"><strong>Thời điểm xuất</strong><br>${escapeHtml(
+    table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt}th{background:#173f64;color:#fff;padding:2.7mm 1.5mm;border:1px solid #173f64}td{padding:2.5mm 1.5mm;border:1px solid #d7dee8;vertical-align:middle;overflow-wrap:anywhere}tbody tr:nth-child(even){background:#f8fafc}.center{text-align:center}.number{text-align:right;font-weight:700}td span{font-size:7.5pt;color:#64748b}td .qualified{color:#0d47a1;font-weight:700}.footer{display:flex;justify-content:space-between;margin-top:5mm;font-size:8pt;color:#64748b}@media print{html,body{background:#fff}.page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}}
+  </style></head><body><main class="page"><header class="header"><div><div class="brand">PL<span>+</span> PHÚC LONG</div><h1>KHÁCH HÀNG MỚI TRONG ${days} NGÀY</h1><div class="muted">Khách được tạo hoặc cấp/đổi mã trong kỳ và phát sinh từ 1 đến 2 đơn sau đó.</div></div><div class="created"><strong>Thời điểm xuất</strong><br>${escapeHtml(
     createdAt.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour12: false })
   )}</div></header><section class="metrics"><div class="metric">Khách hàng<b>${number(
     rows.length
@@ -76,7 +86,13 @@ export const createNewCustomersCanvasImage = ({ rows = [], days = 45, generatedA
   const layouts = rows.map((row) => {
     const customerLines = wrapCanvasText(
       measure,
-      [row.customerName, row.address].filter(Boolean).join(" · "),
+      [
+        row.customerName,
+        row.address,
+        `${qualificationLabel(row.qualificationReason)} · Từ ngày ${date(row.customerQualifiedAt)}`,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       columns[2] - 20
     );
     return { row, customerLines, height: Math.max(54, 18 + customerLines.length * 25) };
@@ -99,7 +115,7 @@ export const createNewCustomersCanvasImage = ({ rows = [], days = 45, generatedA
   context.font = "800 31px Arial, sans-serif";
   context.fillText(`KHÁCH HÀNG MỚI TRONG ${days} NGÀY`, margin, 112);
   context.font = "400 17px Arial, sans-serif";
-  context.fillText("Tiêu chí: có đúng 1 hoặc 2 hóa đơn trong kỳ", margin, 148);
+  context.fillText("Tiêu chí: tạo/cấp/đổi mã trong kỳ và có 1–2 đơn phát sinh sau đó", margin, 148);
   context.textAlign = "right";
   context.fillText(
     createdAt.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour12: false }),

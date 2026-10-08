@@ -110,7 +110,7 @@ const dailySections = [
     group: "SALES",
     title: "Khách hàng mới",
     shortTitle: "KH mới 45 ngày",
-    description: "Lọc khách có 1–2 hóa đơn trong 45 ngày và xuất báo cáo",
+    description: "Khách mới tạo/cấp/đổi mã có phát sinh 1–2 đơn để tiếp tục chăm sóc",
     icon: "person_add_alt",
     color: "#2e7d32",
     background: "#e8f5e9",
