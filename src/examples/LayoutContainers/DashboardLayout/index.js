@@ -12,6 +12,7 @@ import SoftBox from "components/SoftBox";
 // Soft UI Dashboard PRO React context
 import { useSoftUIController, setLayout } from "context";
 import { useSelector } from "react-redux";
+import GlobalLoadingRegion from "components/GlobalLoadingRegion";
 
 function DashboardLayout({ children, compactMobile = false }) {
   const [controller, dispatch] = useSoftUIController();
@@ -58,7 +59,10 @@ function DashboardLayout({ children, compactMobile = false }) {
         },
       })}
     >
-      {children}
+      <SoftBox position="relative" minHeight="inherit">
+        <GlobalLoadingRegion />
+        {children}
+      </SoftBox>
     </SoftBox>
   );
 }

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { beginGlobalLoading, endGlobalLoading } from "./globalLoading";
 
 const AxiosInstance = axios.create({
   baseURL: `${process.env.REACT_APP_API_URL}`,
@@ -6,6 +7,7 @@ const AxiosInstance = axios.create({
 
 AxiosInstance.interceptors.request.use(
   (config) => {
+    beginGlobalLoading(config);
     const token = localStorage.getItem("access_token");
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
@@ -13,18 +15,22 @@ AxiosInstance.interceptors.request.use(
     return config;
   },
   (error) => {
+    endGlobalLoading(error.config);
     return Promise.reject(error);
   }
 );
 
 AxiosInstance.interceptors.response.use(
   (response) => {
+    endGlobalLoading(response.config);
     return response;
   },
   async (error) => {
     const originalConfig = error.config;
+    endGlobalLoading(originalConfig);
     const access_token = localStorage.getItem("access_token");
-    const isUnauthorized = error.response?.status === 401 || error.response?.data?.statusCode === 401;
+    const isUnauthorized =
+      error.response?.status === 401 || error.response?.data?.statusCode === 401;
     const isRefreshRequest = String(originalConfig?.url || "").includes("/auth/refresh-token");
     const clearSession = () => {
       localStorage.removeItem("access_token");

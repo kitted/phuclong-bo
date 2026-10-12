@@ -350,7 +350,6 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
         return "Số lượng hoàn phải là số nguyên dương";
       if (Number(item.returnUnitPrice || 0) < 0) return "Giá nhận hoàn không hợp lệ";
     }
-    if (totalReturnAmount <= 0) return "Tổng giá trị hoàn phải lớn hơn 0";
     if (Number(debtReductionAmount || 0) > currentDebt)
       return "Số tiền trừ công nợ vượt công nợ hiện tại";
     if (totalSettlement !== totalReturnAmount)
@@ -435,16 +434,16 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
   };
 
   const automaticSettlementTitle =
-    totalReturnAmount <= 0
-      ? "Chờ nhập giá trị hàng hoàn"
+    totalReturnAmount === 0
+      ? "Nhận hàng với giá 0đ"
       : currentDebt <= 0
       ? "Hoàn tiền mặt cho khách"
       : currentDebt >= totalReturnAmount
       ? "Trừ toàn bộ vào công nợ"
       : "Trừ hết công nợ và hoàn phần dư";
   const automaticSettlementDescription =
-    totalReturnAmount <= 0
-      ? "Hệ thống sẽ tự tính sau khi chọn hàng và nhập giá hoàn"
+    totalReturnAmount === 0
+      ? "Hàng vẫn nhập về xe, không trừ công nợ và không hoàn tiền"
       : Number(debtReductionAmount || 0) > 0 && Number(cashRefundAmount || 0) > 0
       ? `Trừ nợ ${money(debtReductionAmount)} · Hoàn tiền ${money(cashRefundAmount)}`
       : Number(debtReductionAmount || 0) > 0
@@ -823,11 +822,11 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <SoftTypography variant="caption" color="text">
-                            Giá nhận hoàn *
+                            Giá nhận hoàn (cho phép 0đ) *
                           </SoftTypography>
                           <SoftInput
                             inputMode="numeric"
-                            value={item.returnUnitPrice || ""}
+                            value={item.returnUnitPrice ?? 0}
                             onChange={(event) =>
                               updateItem(index, {
                                 returnUnitPrice: numericValue(event.target.value),
@@ -835,6 +834,17 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                             }
                             placeholder="0"
                           />
+                          {Number(item.returnUnitPrice) === 0 && (
+                            <SoftTypography
+                              variant="caption"
+                              color="warning"
+                              fontWeight="bold"
+                              display="block"
+                              mt={0.4}
+                            >
+                              Nhận hàng 0đ · không trừ nợ, không hoàn tiền
+                            </SoftTypography>
+                          )}
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <SoftTypography variant="caption" color="text">
