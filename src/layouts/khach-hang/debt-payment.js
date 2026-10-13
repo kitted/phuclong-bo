@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
+import Autocomplete from "@mui/material/Autocomplete";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Grid from "@mui/material/Grid";
 import Modal from "@mui/material/Modal";
+import TextField from "@mui/material/TextField";
+import { useSelector } from "react-redux";
 import SoftBox from "components/SoftBox";
 import SoftButton from "components/SoftButton";
 import SoftInput from "components/SoftInput";
 import SoftTypography from "components/SoftTypography";
 import { DebtPaymentService } from "services/crmService";
+import EmployeeService from "services/employeeService";
 import { toast } from "react-toastify";
 import { debtPaymentToInvoice, printInvoice } from "utils/invoicePrint";
 import { formatBusinessDateTime } from "utils/businessDate";
@@ -18,6 +22,8 @@ const idOf = (value) => value?.id || value?._id;
 const dateTime = (value) => formatBusinessDateTime(value);
 
 export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = false }) {
+  const role = useSelector((state) => state.auth?.user?.role);
+  const isAdmin = String(role || "").toLowerCase() === "admin";
   const [form, setForm] = useState({
     cash: "",
     bank: "",
@@ -29,12 +35,38 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
   const [saving, setSaving] = useState(false);
   const [createdPayment, setCreatedPayment] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [salesperson, setSalesperson] = useState(null);
+  const [salespeople, setSalespeople] = useState([]);
+  const [salespersonSearch, setSalespersonSearch] = useState("");
+  const [salespeopleLoading, setSalespeopleLoading] = useState(false);
   useEffect(() => {
     if (open) {
       setForm({ cash: "", bank: "", referenceCode: "", note: "", fifo: true, invoiceIds: [] });
       setCreatedPayment(null);
+      setSalesperson(null);
+      setSalespersonSearch("");
     }
-  }, [open]);
+  }, [open, isAdmin]);
+  useEffect(() => {
+    if (!open || !isAdmin) return undefined;
+    const timer = setTimeout(() => {
+      setSalespeopleLoading(true);
+      EmployeeService.getAll({
+        role: "staff",
+        status: "ACTIVE",
+        search: salespersonSearch || undefined,
+        page: 1,
+        limit: 20,
+      })
+        .then((response) => {
+          const value = response?.data?.data ?? response?.data;
+          setSalespeople(Array.isArray(value) ? value : value?.items || value?.docs || []);
+        })
+        .catch(() => setSalespeople([]))
+        .finally(() => setSalespeopleLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [open, isAdmin, salespersonSearch]);
   const invoices = (customer?.invoices || []).filter(
     (invoice) =>
       invoice.status !== "PAID" &&
@@ -49,6 +81,8 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
         : [...current.invoiceIds, id],
     }));
   const submit = async () => {
+    if (isAdmin && !salesperson)
+      return toast.error("Vui lòng chọn sale để ghi nhận vào báo cáo cuối ngày");
     if (total <= 0) return toast.error("Vui lòng nhập số tiền thu công nợ");
     if (total > Number(customer?.debt || 0))
       return toast.error("Số tiền thu vượt công nợ hiện tại");
@@ -66,6 +100,7 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
         });
       const response = await DebtPaymentService.create(idOf(customer), {
         date: new Date().toISOString(),
+        salespersonId: isAdmin ? idOf(salesperson) : undefined,
         payments,
         invoiceIds: form.fifo ? [] : form.invoiceIds,
         note: form.note.trim() || undefined,
@@ -191,6 +226,30 @@ export function DebtPaymentModal({ open, customer, onClose, onCreated, mobile = 
           {customer?.code} · {customer?.name} · Công nợ {money(customer?.debt)}
         </SoftTypography>
         <Grid container spacing={2} mt={1}>
+          {isAdmin && (
+            <Grid item xs={12}>
+              <SoftTypography variant="caption">Sale ghi nhận báo cáo *</SoftTypography>
+              <Autocomplete
+                value={salesperson}
+                options={salespeople}
+                loading={salespeopleLoading}
+                filterOptions={(options) => options}
+                isOptionEqualToValue={(option, value) => idOf(option) === idOf(value)}
+                getOptionLabel={(option) =>
+                  [option?.employeeCode, option?.fullName || option?.username]
+                    .filter(Boolean)
+                    .join(" · ")
+                }
+                onInputChange={(_, value, reason) => {
+                  if (reason !== "reset") setSalespersonSearch(value);
+                }}
+                onChange={(_, value) => setSalesperson(value)}
+                renderInput={(params) => (
+                  <TextField {...params} size="small" placeholder="Tìm mã hoặc tên sale..." />
+                )}
+              />
+            </Grid>
+          )}
           <Grid item xs={12} md={6}>
             <SoftTypography variant="caption">Tiền mặt</SoftTypography>
             <SoftInput
