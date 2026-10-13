@@ -1154,6 +1154,8 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
     if (isDebtPaymentOnly) {
       if (!customer || customerMode !== "EXISTING")
         return "Thanh toán công nợ bắt buộc chọn khách hàng đã có hồ sơ";
+      if (isAdmin && !salesperson)
+        return "Vui lòng chọn sale để ghi nhận khoản thu vào báo cáo cuối ngày";
       if (currentDebt <= 0) return "Khách hàng hiện không có công nợ";
       if (paidAmount > currentDebt) return "Số tiền thanh toán không được vượt công nợ hiện tại";
       return "";
@@ -1218,6 +1220,7 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
         setSubmitting(true);
         const response = await DebtPaymentService.create(getId(customer), {
           date: toBusinessDateTime(form.date),
+          salespersonId: isAdmin ? getId(salesperson) : undefined,
           payments: debtPayments,
           invoiceIds: [],
           note: form.note.trim() || undefined,
@@ -2238,7 +2241,10 @@ export function CreateInvoiceModal({ open, onClose, onCreated, initialNewCustome
                   </Grid>
                 )}
                 {isAdmin && (
-                  <Field label="Nhân viên xuất hóa đơn *" md={4}>
+                  <Field
+                    label={isDebtPaymentOnly ? "Sale ghi nhận báo cáo *" : "Nhân viên xuất hóa đơn *"}
+                    md={4}
+                  >
                     <SearchSelect
                       value={salesperson}
                       onChange={setSalesperson}
