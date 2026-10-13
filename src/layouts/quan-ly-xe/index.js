@@ -1973,12 +1973,12 @@ function TruckInventoryModal({ truck, onClose, onChanged }) {
           });
         const customerReturnEvents = customerReturns.flatMap((customerReturn) => {
           const events = [];
-          if (isInSelectedRange(customerReturn.createdAt || customerReturn.date)) {
+          if (isInSelectedRange(customerReturn.date || customerReturn.createdAt)) {
             events.push({
               ...customerReturn,
               id: `customer-return-${getId(customerReturn) || customerReturn.code}`,
               eventType: "CUSTOMER_RETURN",
-              createdAt: customerReturn.createdAt || customerReturn.date,
+              createdAt: customerReturn.date || customerReturn.createdAt,
               items: mapReturnItems(customerReturn, "CUSTOMER_RETURN_TO_TRUCK"),
             });
           }

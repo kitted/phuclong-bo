@@ -34,6 +34,18 @@ const numericValue = (value) => Number(String(value ?? "").replace(/[^0-9]/g, ""
 const makeIdempotencyKey = () =>
   window.crypto?.randomUUID?.() ||
   `return-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+const localDateTimeValue = (value = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+};
+const dateTimeText = (value) =>
+  value
+    ? new Date(value).toLocaleString("vi-VN", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        hour12: false,
+      })
+    : "—";
 const errorMessage = (error, fallback) => {
   const value = error?.response?.data?.message;
   if (Array.isArray(value)) return value.join(", ");
@@ -200,6 +212,7 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
   const [truckSearch, setTruckSearch] = useState("");
   const [trucks, setTrucks] = useState([]);
   const [trucksLoading, setTrucksLoading] = useState(false);
+  const [returnDate, setReturnDate] = useState(localDateTimeValue);
   const [items, setItems] = useState([newLine()]);
   const [settlementMode, setSettlementMode] = useState("AUTO");
   const [debtReductionAmount, setDebtReductionAmount] = useState(0);
@@ -225,6 +238,7 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
     initializedRef.current = true;
     setCustomer(null);
     setTruck(null);
+    setReturnDate(localDateTimeValue());
     setItems([newLine()]);
     setSettlementMode("AUTO");
     setDebtReductionAmount(0);
@@ -341,6 +355,8 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
   const validationMessage = () => {
     if (!customer) return "Vui lòng chọn khách hàng trả hàng";
     if (!truck) return "Vui lòng chọn xe nhận lại hàng";
+    if (!returnDate || Number.isNaN(new Date(returnDate).getTime()))
+      return "Vui lòng chọn thời gian hoàn hàng hợp lệ";
     if (!items.length) return "Vui lòng thêm ít nhất một sản phẩm hoàn";
     for (const item of items) {
       if (item.type === "CATALOG" && !item.product) return "Vui lòng chọn đầy đủ sản phẩm";
@@ -363,6 +379,7 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
   const buildPayload = () => ({
     customerId: getId(customer),
     destinationTruckId: getId(truck),
+    date: new Date(returnDate).toISOString(),
     items: items.map((item) => ({
       productId: item.type === "CATALOG" ? getId(item.product) : undefined,
       manualProduct:
@@ -649,6 +666,20 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                     renderInput={(params) => (
                       <TextField {...params} placeholder="Chọn xe nhận lại hàng..." />
                     )}
+                  />
+                </SoftBox>
+
+                <SoftBox mb={2.5}>
+                  <SoftTypography variant="h6" fontWeight="bold" mb={1}>
+                    Thời gian hoàn hàng
+                  </SoftTypography>
+                  <TextField
+                    type="datetime-local"
+                    fullWidth
+                    value={returnDate}
+                    onChange={(event) => setReturnDate(event.target.value)}
+                    inputProps={{ step: 60 }}
+                    helperText="Có thể chỉnh lại ngày và giờ thực tế nhận hàng từ khách"
                   />
                 </SoftBox>
 
@@ -1103,6 +1134,7 @@ export default function CustomerReturnModal({ open, onClose, onCreated, onSwitch
                     "Xe nhận hàng",
                     [truck?.name || truck?.code, truck?.licensePlate].filter(Boolean).join(" · "),
                   ],
+                  ["Thời gian hoàn", dateTimeText(returnDate)],
                   ["Lý do", reason],
                 ].map(([label, value]) => (
                   <SoftBox
