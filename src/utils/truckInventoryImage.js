@@ -74,6 +74,8 @@ export const A3_IMAGE_WIDTH = 1754;
 export const A3_IMAGE_HEIGHT = 2480;
 export const A4_IMAGE_WIDTH = 1240;
 export const A4_IMAGE_HEIGHT = 1754;
+export const A4_LANDSCAPE_IMAGE_WIDTH = 1754;
+export const A4_LANDSCAPE_IMAGE_HEIGHT = 1240;
 
 export const fitCanvasToA3 = (sourceCanvas, padding = 54) => {
   const canvas = document.createElement("canvas");
@@ -141,23 +143,31 @@ export const downloadDataImage = (url, fileName) => {
 };
 
 export const createTruckInventoryImages = ({ truck, driverName, driverPhone, rows }) => {
-  const width = 1200;
-  const margin = 40;
-  const columnGap = 16;
-  const columnCount = rows.length > 70 ? 3 : 2;
+  // Dựng trực tiếp trên A4 ngang để nội dung không bị thu nhỏ lần hai.
+  const width = A4_LANDSCAPE_IMAGE_WIDTH;
+  const height = A4_LANDSCAPE_IMAGE_HEIGHT;
+  const margin = 44;
+  const columnGap = 18;
+  const tableTop = 326;
+  const tableHeaderHeight = 48;
+  const tableBottom = 1176;
+  const availableRowsHeight = tableBottom - tableTop - tableHeaderHeight;
+  const readableRowsPerColumn = Math.max(1, Math.floor(availableRowsHeight / 40));
+  const columnCount = Math.min(
+    5,
+    Math.max(1, Math.ceil(Math.max(rows.length, 1) / readableRowsPerColumn))
+  );
   const panelWidth = (width - margin * 2 - columnGap * (columnCount - 1)) / columnCount;
-  const tableTop = 258;
-  const tableHeaderHeight = 40;
-  const footerHeight = 58;
   const rowsPerColumn = Math.max(1, Math.ceil(rows.length / columnCount));
-  const availableRowsHeight = 1714 - tableTop - tableHeaderHeight - footerHeight;
-  const rowHeight = Math.max(28, Math.min(38, Math.floor(availableRowsHeight / rowsPerColumn)));
+  const rowHeight = Math.max(
+    26,
+    Math.min(94, Math.floor(availableRowsHeight / Math.max(rowsPerColumn, 8)))
+  );
   const generatedAt = new Date();
   const totalQuantity = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
   const fileBase = `hang-tren-xe-${safeFilePart(truck.code || truck.name)}-${generatedAt
     .toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" })
     .replaceAll("-", "")}`;
-  const height = tableTop + tableHeaderHeight + rowsPerColumn * rowHeight + footerHeight;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -167,18 +177,18 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
   context.fillStyle = "#f4f7fb";
   context.fillRect(0, 0, width, height);
   context.fillStyle = "#0f4c81";
-  context.fillRect(0, 0, width, 172);
+  context.fillRect(0, 0, width, 178);
   context.fillStyle = "#ffffff";
-  context.font = "700 42px Arial, sans-serif";
+  context.font = "800 48px Arial, sans-serif";
   context.fillText(
-    fitText(context, String(truck.name || "Xe bán hàng").toUpperCase(), 760),
+    fitText(context, String(truck.name || "Xe bán hàng").toUpperCase(), 1080),
     margin,
     60
   );
-  context.font = "700 23px Arial, sans-serif";
+  context.font = "800 25px Arial, sans-serif";
   context.fillStyle = "#dbeafe";
   context.fillText("DANH SÁCH HÀNG HÓA HIỆN CÓ", margin, 99);
-  context.font = "400 17px Arial, sans-serif";
+  context.font = "500 20px Arial, sans-serif";
   context.fillStyle = "#ffffff";
   context.fillText(
     fitText(
@@ -186,13 +196,13 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
       `${truck.code || "—"} · ${truck.licensePlate || "Chưa có biển số"} · Tài xế: ${
         driverName || "Chưa phân công"
       } · ${driverPhone || "—"}`,
-      780
+      1120
     ),
     margin,
     140
   );
   context.textAlign = "right";
-  context.font = "700 18px Arial, sans-serif";
+  context.font = "700 20px Arial, sans-serif";
   context.fillStyle = "#ffffff";
   context.fillText(
     `NGÀY TẠO: ${generatedAt.toLocaleString("vi-VN", { hour12: false })}`,
@@ -205,22 +215,22 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
     ["LOẠI HÀNG", rows.length.toLocaleString("vi-VN"), "#e3f2fd", "#1565c0"],
     ["TỔNG SỐ LƯỢNG", totalQuantity.toLocaleString("vi-VN"), "#e8f5e9", "#2e7d32"],
   ].forEach(([label, value, background, color], index) => {
-    const summaryWidth = 260;
+    const summaryWidth = 330;
     const x = margin + index * (summaryWidth + 16);
-    drawRoundedRect(context, x, 188, summaryWidth, 54, 12, background);
+    drawRoundedRect(context, x, 202, summaryWidth, 82, 14, background);
     context.fillStyle = "#64748b";
-    context.font = "700 13px Arial, sans-serif";
-    context.fillText(label, x + 14, 210);
+    context.font = "800 16px Arial, sans-serif";
+    context.fillText(label, x + 18, 231);
     context.fillStyle = color;
-    context.font = "700 21px Arial, sans-serif";
+    context.font = "900 31px Arial, sans-serif";
     context.textAlign = "right";
-    context.fillText(value, x + summaryWidth - 14, 224);
+    context.fillText(value, x + summaryWidth - 18, 269);
     context.textAlign = "left";
   });
 
-  const indexWidth = columnCount === 3 ? 40 : 52;
-  const unitWidth = columnCount === 3 ? 55 : 78;
-  const quantityWidth = columnCount === 3 ? 65 : 92;
+  const indexWidth = columnCount >= 4 ? 38 : columnCount === 3 ? 44 : 58;
+  const unitWidth = columnCount >= 4 ? 48 : columnCount === 3 ? 62 : 88;
+  const quantityWidth = columnCount >= 4 ? 58 : columnCount === 3 ? 76 : 104;
   const columns = [
     ["STT", indexWidth, "center"],
     ["TÊN SẢN PHẨM", panelWidth - indexWidth - unitWidth - quantityWidth, "left"],
@@ -232,11 +242,11 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
   );
   panels.forEach((panelRows, panelIndex) => {
     const panelX = margin + panelIndex * (panelWidth + columnGap);
-    drawRoundedRect(context, panelX, tableTop, panelWidth, tableHeaderHeight, 8, "#173f64");
+    drawRoundedRect(context, panelX, tableTop, panelWidth, tableHeaderHeight, 9, "#173f64");
     let headerX = panelX;
     columns.forEach(([label, columnWidth, alignment]) => {
       context.fillStyle = "#ffffff";
-      context.font = "700 13px Arial, sans-serif";
+      context.font = `800 ${columnCount >= 4 ? 13 : 16}px Arial, sans-serif`;
       context.textAlign = alignment;
       const x =
         alignment === "center"
@@ -244,7 +254,7 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
           : alignment === "right"
           ? headerX + columnWidth - 10
           : headerX + 10;
-      context.fillText(label, x, tableTop + 26);
+      context.fillText(label, x, tableTop + 31);
       headerX += columnWidth;
     });
 
@@ -266,8 +276,10 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
       let valueX = panelX;
       columns.forEach(([, columnWidth, alignment], columnIndex) => {
         context.fillStyle = columnIndex === 3 ? "#1b5e20" : "#1e293b";
-        context.font = `${columnIndex === 1 || columnIndex === 3 ? "700" : "400"} ${
-          rowHeight < 33 ? 12 : 14
+        const maxFontSize = columnCount >= 4 ? 17 : columnCount === 3 ? 20 : 24;
+        const fontSize = Math.max(13, Math.min(maxFontSize, Math.round(rowHeight * 0.34)));
+        context.font = `${columnIndex === 1 || columnIndex === 3 ? "700" : "500"} ${
+          fontSize
         }px Arial, sans-serif`;
         context.textAlign = alignment;
         const x =
@@ -279,7 +291,7 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
         context.fillText(
           fitText(context, values[columnIndex], columnWidth - 16),
           x,
-          y + Math.round(rowHeight / 2) + 5
+          y + Math.round(rowHeight / 2) + Math.round(fontSize * 0.35)
         );
         valueX += columnWidth;
       });
@@ -288,12 +300,11 @@ export const createTruckInventoryImages = ({ truck, driverName, driverPhone, row
 
   context.textAlign = "left";
   context.fillStyle = "#64748b";
-  context.font = "400 14px Arial, sans-serif";
-  context.fillText("Dữ liệu tồn xe tại thời điểm tạo ảnh.", margin, height - 23);
+  context.font = "500 17px Arial, sans-serif";
+  context.fillText("Dữ liệu tồn xe tại thời điểm tạo ảnh.", margin, height - 24);
   context.textAlign = "right";
-  context.font = "700 14px Arial, sans-serif";
-  context.fillText(`${rows.length} mặt hàng`, width - margin, height - 23);
+  context.font = "800 17px Arial, sans-serif";
+  context.fillText(`${rows.length} mặt hàng · A4 NGANG`, width - margin, height - 24);
 
-  const a4Canvas = fitCanvasToA4(canvas);
-  return [{ url: a4Canvas.toDataURL("image/png"), fileName: `${fileBase}.png` }];
+  return [{ url: canvas.toDataURL("image/png"), fileName: `${fileBase}.png` }];
 };

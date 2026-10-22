@@ -840,7 +840,7 @@ function TruckInventoryImageTab() {
           Chụp ảnh hàng hóa hiện tại trên xe
         </SoftTypography>
         <SoftTypography variant="caption" color="text">
-          Chọn xe, kiểm tra tồn hiện tại, xem trước rồi tải một ảnh PNG chia hai cột.
+          Chọn xe, kiểm tra tồn hiện tại, xem trước rồi tải một ảnh PNG A4 ngang tự co giãn.
         </SoftTypography>
       </SoftBox>
       <Autocomplete

@@ -12,15 +12,33 @@ export const downloadInvoiceFollowUpImage = ({ rows = [], date, summary = {}, bo
   const height = 1240;
   const margin = 44;
   const gap = 16;
-  const columns = rows.length <= 24 ? 2 : rows.length <= 42 ? 3 : rows.length <= 64 ? 4 : 5;
+  // Ít dữ liệu giữ một cột để tận dụng chiều ngang và tăng mạnh cỡ chữ.
+  const columns =
+    rows.length <= 10
+      ? 1
+      : rows.length <= 24
+      ? 2
+      : rows.length <= 42
+      ? 3
+      : rows.length <= 64
+      ? 4
+      : 5;
   const panelWidth = (width - margin * 2 - gap * (columns - 1)) / columns;
   const contentTop = 318;
   const footerTop = 1178;
+  const panelHeaderHeight = 46;
+  const availableTableHeight = footerTop - contentTop;
   const rowsPerColumn = Math.max(1, Math.ceil(rows.length / columns));
   const rowHeight = Math.max(
-    38,
-    Math.min(64, Math.floor((footerTop - contentTop) / rowsPerColumn))
+    42,
+    Math.min(
+      168,
+      Math.floor((availableTableHeight - panelHeaderHeight) / Math.max(rowsPerColumn, 5))
+    )
   );
+  const renderedTableHeight = panelHeaderHeight + rowsPerColumn * rowHeight;
+  const tableTop =
+    contentTop + Math.max(0, Math.floor((availableTableHeight - renderedTableHeight) / 2));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -81,16 +99,16 @@ export const downloadInvoiceFollowUpImage = ({ rows = [], date, summary = {}, bo
   );
   panels.forEach((panelRows, panelIndex) => {
     const x = margin + panelIndex * (panelWidth + gap);
-    drawRoundedRect(context, x, 280, panelWidth, 38, 7, "#315f50");
+    drawRoundedRect(context, x, tableTop, panelWidth, panelHeaderHeight, 8, "#315f50");
     context.fillStyle = "#ffffff";
-    context.font = "800 14px Arial, sans-serif";
+    context.font = `800 ${columns <= 2 ? 17 : 14}px Arial, sans-serif`;
     context.fillText(
       fitText(context, "KHÁCH HÀNG · KÊNH · HÓA ĐƠN · TƯƠNG TÁC", panelWidth - 24),
       x + 12,
-      305
+      tableTop + 30
     );
     panelRows.forEach((row, index) => {
-      const y = contentTop + index * rowHeight;
+      const y = tableTop + panelHeaderHeight + index * rowHeight;
       context.fillStyle = row.difficultCustomer ? "#fff0f0" : index % 2 ? "#f8fafc" : "#ffffff";
       context.fillRect(x, y, panelWidth, rowHeight);
       context.strokeStyle = "#dbe3ec";
@@ -99,15 +117,34 @@ export const downloadInvoiceFollowUpImage = ({ rows = [], date, summary = {}, bo
         [row.customerCode, row.customerName].filter(Boolean).join(" · ") ||
         "Khách mới / chưa định danh";
       context.fillStyle = row.difficultCustomer ? "#b71c1c" : "#172033";
-      const compact = rowHeight < 50 || columns >= 5;
-      context.font = `800 ${compact ? 14 : 17}px Arial, sans-serif`;
-      context.fillText(fitText(context, customer, panelWidth - 24), x + 12, y + 21);
+      const compact = rowHeight < 64 || columns >= 5;
+      const horizontalPadding = columns <= 2 ? 18 : 12;
+      const customerFontSize = Math.max(
+        15,
+        Math.min(columns <= 2 ? 27 : 20, Math.round(rowHeight * 0.2))
+      );
+      const statusFontSize = Math.max(
+        13,
+        Math.min(columns <= 2 ? 20 : 16, Math.round(rowHeight * 0.14))
+      );
+      const detailFontSize = Math.max(12, Math.min(18, Math.round(rowHeight * 0.12)));
+      const customerY = y + Math.max(23, Math.round(rowHeight * 0.24));
+      const statusY = y + Math.max(35, Math.round(rowHeight * 0.53));
+      const detailY = y + Math.max(62, Math.round(rowHeight * 0.86));
+      context.font = `800 ${customerFontSize}px Arial, sans-serif`;
+      context.fillText(
+        fitText(context, customer, panelWidth - horizontalPadding * 2),
+        x + horizontalPadding,
+        customerY
+      );
       context.fillStyle = row.difficultCustomer
         ? "#c62828"
         : row.zaloStatus === "CONNECTED"
         ? "#1b5e20"
         : "#c62828";
-      context.font = `800 ${compact ? 12 : 15}px Arial, sans-serif`;
+      context.font = `800 ${
+        compact ? Math.min(statusFontSize, 14) : statusFontSize
+      }px Arial, sans-serif`;
       const interactionChannel =
         { ZALO: "Zalo", PHONE: "Gọi điện", SMS: "SMS" }[row.interactionChannel] || "Zalo";
       const invoiceStatus =
@@ -116,27 +153,42 @@ export const downloadInvoiceFollowUpImage = ({ rows = [], date, summary = {}, bo
         ] || "Chưa gửi HĐ";
       const statuses = `${row.difficultCustomer ? "★ KHÁCH HÀNG KHÓ · " : ""}ZALO: ${
         row.zaloStatus === "CONNECTED" ? "ĐÃ KẾT BẠN" : "CHƯA KẾT BẠN"
-      } · KÊNH: ${interactionChannel.toUpperCase()} · ${invoiceStatus.toUpperCase()} · ${
+      } · KÊNH: ${interactionChannel.toUpperCase()} · ${invoiceStatus.toUpperCase()}`;
+      const interaction = `${
         {
           INVOICE: "HĐ bán hàng",
           DEBT_PAYMENT: "Thu công nợ",
           CUSTOMER_RETURN: "Hoàn hàng",
         }[row.documentType] || "Dòng tạm"
       } · TƯƠNG TÁC: ${(row.interaction || "Chưa cập nhật").toUpperCase()}`;
-      context.fillText(fitText(context, statuses, panelWidth - 24), x + 12, y + 43);
-      if (rowHeight >= 62) {
+      const statusText = rowHeight >= 92 ? statuses : `${statuses} · ${interaction}`;
+      context.fillText(
+        fitText(context, statusText, panelWidth - horizontalPadding * 2),
+        x + horizontalPadding,
+        statusY
+      );
+      if (rowHeight >= 92) {
+        context.fillStyle = "#315f50";
+        context.font = `700 ${detailFontSize}px Arial, sans-serif`;
+        context.fillText(
+          fitText(context, interaction, panelWidth - horizontalPadding * 2),
+          x + horizontalPadding,
+          y + Math.round(rowHeight * 0.7)
+        );
+      }
+      if (rowHeight >= 66) {
         context.fillStyle = row.difficultCustomer || row.needsFollowUp ? "#c62828" : "#64748b";
-        context.font = `${row.difficultCustomer ? "800" : "500"} 14px Arial, sans-serif`;
+        context.font = `${row.difficultCustomer ? "800" : "500"} ${detailFontSize}px Arial, sans-serif`;
         context.fillText(
           fitText(
             context,
             [row.difficultCustomer ? "KHÁCH HÀNG KHÓ - SALE LÀM VIỆC" : "", row.phone, row.note]
               .filter(Boolean)
               .join(" · ") || "—",
-            panelWidth - 24
+            panelWidth - horizontalPadding * 2
           ),
-          x + 12,
-          y + 61
+          x + horizontalPadding,
+          detailY
         );
       }
     });
