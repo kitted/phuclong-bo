@@ -35,7 +35,6 @@ import { debtPaymentToInvoice, moneyInWords, printInvoice } from "utils/invoiceP
 import { downloadBlob } from "utils/excel";
 import { mergeUniqueItems } from "utils/infiniteList";
 import CustomerReturnModal, { InvoiceBusinessTypeSwitch } from "./customer-return-form";
-import CustomerReturnService from "services/customerReturnService";
 import EntityThumbnail from "components/EntityThumbnail";
 import { formatBusinessDateTime, toBusinessDateTime, vietnamToday } from "utils/businessDate";
 
@@ -4533,6 +4532,8 @@ export default function HoaDon() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [salespersonId, setSalespersonId] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
+  const [documentType, setDocumentType] = useState("");
+  const [sortOrder, setSortOrder] = useState("desc");
   const [period, setPeriod] = useState("MONTH");
   const [anchor, setAnchor] = useState(today());
   const [customFrom, setCustomFrom] = useState(() => `${today().slice(0, 7)}-01`);
@@ -4569,7 +4570,17 @@ export default function HoaDon() {
   }, [isStaff]);
   useEffect(
     () => setPage(1),
-    [debouncedSearch, salespersonId, paymentStatus, period, anchor, customFrom, customTo]
+    [
+      debouncedSearch,
+      salespersonId,
+      paymentStatus,
+      documentType,
+      sortOrder,
+      period,
+      anchor,
+      customFrom,
+      customTo,
+    ]
   );
   const selectedRange = useMemo(
     () => invoicePeriodRange(period, anchor, customFrom, customTo),
@@ -4579,50 +4590,28 @@ export default function HoaDon() {
     return {
       salespersonId: salespersonId || undefined,
       paymentStatus: paymentStatus || undefined,
+      documentType: documentType || undefined,
+      sortOrder,
       search: debouncedSearch || undefined,
       from: selectedRange.from || undefined,
       to: selectedRange.to || undefined,
     };
-  }, [selectedRange, salespersonId, paymentStatus, debouncedSearch]);
+  }, [selectedRange, salespersonId, paymentStatus, documentType, sortOrder, debouncedSearch]);
   const load = useCallback(() => {
     setLoading(true);
-    const customerReturnRequest = CustomerReturnService.getAll({
-      search: filters.search,
-      from: filters.from,
-      to: filters.to,
-      page,
-      limit: 20,
-    }).catch(() => null);
     Promise.all([
       InvoiceService.getTimeline({ ...filters, page, limit: 20 }),
       InvoiceService.getSummary(filters),
-      customerReturnRequest,
     ])
-      .then(([listResponse, summaryResponse, returnResponse]) => {
-        const invoiceDocuments = listOf(listResponse).map(normalizeInvoiceDocument).filter(Boolean);
-        const returnDocuments = returnResponse
-          ? listOf(returnResponse).map(customerReturnToInvoice).filter(Boolean)
-          : [];
-        const nextInvoices = [...invoiceDocuments, ...returnDocuments].sort(
-          (left, right) =>
-            new Date(documentOccurredAt(right) || 0).getTime() -
-            new Date(documentOccurredAt(left) || 0).getTime()
-        );
+      .then(([listResponse, summaryResponse]) => {
+        const nextInvoices = listOf(listResponse)
+          .map(normalizeInvoiceDocument)
+          .filter(Boolean);
         setInvoices((current) =>
           page > 1 ? mergeUniqueItems(current, nextInvoices) : nextInvoices
         );
         const invoiceMeta = listResponse.data?.meta || {};
-        const returnMeta = returnResponse?.data?.meta || {};
-        setMeta({
-          ...invoiceMeta,
-          totalPages: Math.max(
-            Number(invoiceMeta.totalPages || 1),
-            Number(returnMeta.totalPages || 1)
-          ),
-          total:
-            Number(invoiceMeta.total || invoiceMeta.totalItems || 0) +
-            Number(returnMeta.total || returnMeta.totalItems || 0),
-        });
+        setMeta(invoiceMeta);
         setSummary(summaryResponse.data?.data || {});
       })
       .catch((error) => toast.error(errorMessage(error, "Không thể tải hóa đơn")))
@@ -4768,17 +4757,28 @@ export default function HoaDon() {
                 display: "grid",
                 gridTemplateColumns: {
                   xs: "repeat(2, minmax(0, 1fr))",
-                  md: isStaff ? "minmax(260px, 1fr) 220px" : "minmax(260px, 1fr) 220px 220px",
+                  md: "repeat(2, minmax(0, 1fr))",
+                  lg: isStaff
+                    ? "minmax(280px, 1.5fr) repeat(2, minmax(180px, 1fr))"
+                    : "repeat(3, minmax(0, 1fr))",
+                  xl: isStaff
+                    ? "minmax(320px, 1.5fr) repeat(2, minmax(190px, 1fr))"
+                    : "minmax(300px, 1.6fr) repeat(4, minmax(170px, 1fr))",
                 },
                 gap: { xs: 1, md: 1.5 },
                 alignItems: "center",
               }}
             >
-              <SoftBox sx={{ gridColumn: { xs: "1 / -1", md: "auto" }, minWidth: 0 }}>
+              <SoftBox
+                sx={{
+                  gridColumn: { xs: "1 / -1", md: "1 / -1", lg: "auto" },
+                  minWidth: 0,
+                }}
+              >
                 <SoftInput
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Tìm hóa đơn, khách hàng, mã kích hoạt..."
+                  placeholder="Tìm mã chứng từ, mã/tên/SĐT khách hàng..."
                   icon={{ component: "search", direction: "left" }}
                 />
               </SoftBox>
@@ -4798,6 +4798,22 @@ export default function HoaDon() {
                   </Select>
                 </FormControl>
               )}
+              <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
+                <Select
+                  displayEmpty
+                  value={documentType}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setDocumentType(value);
+                    if (value && value !== "INVOICE") setPaymentStatus("");
+                  }}
+                >
+                  <MenuItem value="">Tất cả chứng từ</MenuItem>
+                  <MenuItem value="INVOICE">Hóa đơn bán hàng</MenuItem>
+                  <MenuItem value="DEBT_PAYMENT">Phiếu thu công nợ</MenuItem>
+                  <MenuItem value="CUSTOMER_RETURN">Phiếu hoàn hàng</MenuItem>
+                </Select>
+              </FormControl>
               <FormControl
                 size="small"
                 fullWidth
@@ -4809,12 +4825,19 @@ export default function HoaDon() {
                 <Select
                   displayEmpty
                   value={paymentStatus}
+                  disabled={Boolean(documentType && documentType !== "INVOICE")}
                   onChange={(event) => setPaymentStatus(event.target.value)}
                 >
                   <MenuItem value="">Mọi trạng thái thanh toán</MenuItem>
                   <MenuItem value="PAID">Đã thanh toán</MenuItem>
                   <MenuItem value="PARTIAL">Thanh toán một phần</MenuItem>
                   <MenuItem value="UNPAID">Chưa thanh toán</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
+                <Select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
+                  <MenuItem value="desc">Mới nhất trước</MenuItem>
+                  <MenuItem value="asc">Cũ nhất trước</MenuItem>
                 </Select>
               </FormControl>
             </SoftBox>
